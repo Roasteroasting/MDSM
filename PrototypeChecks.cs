@@ -12,6 +12,7 @@ internal static class PrototypeChecks
         {
             ("Terrain layers, bounds, and edit revisions", CheckWorld),
             ("Camera direction and pitch limits", CheckCamera),
+            ("Atlas rows, texel centers, orientation, and index bounds", CheckAtlas),
             ("Exposed-face mesh, winding, atlas coordinates, and edit rebuilds", CheckMesh),
             ("Raycast faces, distance, boundaries, and misses", CheckRaycast),
             ("Safe placement and block breaking", CheckPlacement),
@@ -100,6 +101,30 @@ internal static class PrototypeChecks
         Require(diagonal.HasValue && diagonal.Value.Cell == new Point3(12, 8, 12), "Diagonal grid traversal missed block.");
         BlockHit? outside = BlockRaycaster.Cast(world, new Vector3(-2, 4.5f, 10.5f), Vector3.Right);
         Require(outside.HasValue && outside.Value.Cell.X == 0 && Near(outside.Value.Distance, 2), "Ray entering world failed.");
+    }
+
+    private static void CheckAtlas()
+    {
+        Require(TextureAtlas.TileCount == 256 && TextureAtlas.AtlasSize == 256, "Atlas must provide 256 slots in a 256x256 image.");
+        Require(TextureAtlas.Source(0) == new Rectangle(0, 0, 16, 16), "First tile is not at the upper left.");
+        Require(TextureAtlas.Source(3) == new Rectangle(48, 0, 16, 16), "Existing stone tile moved.");
+        Require(TextureAtlas.Source(15) == new Rectangle(240, 0, 16, 16), "Last tile in first row is incorrect.");
+        Require(TextureAtlas.Source(16) == new Rectangle(0, 16, 16, 16), "Tile indices do not wrap to the next row.");
+        Require(TextureAtlas.Source(17) == new Rectangle(16, 16, 16, 16), "Second row column is incorrect.");
+        Require(TextureAtlas.Source(255) == new Rectangle(240, 240, 16, 16), "Last tile is incorrect.");
+
+        Require(Vector2.Distance(TextureAtlas.Uv(0, 0, 0), new Vector2(0.5f / 256, 0.5f / 256)) < 0.000001f, "First texel center is incorrect.");
+        Require(Vector2.Distance(TextureAtlas.Uv(17, 1, 0), new Vector2(31.5f / 256, 16.5f / 256)) < 0.000001f, "Local upper-right UV orientation changed.");
+        Require(Vector2.Distance(TextureAtlas.Uv(17, 0, 1), new Vector2(16.5f / 256, 31.5f / 256)) < 0.000001f, "Local lower-left UV orientation changed.");
+        Require(Vector2.Distance(TextureAtlas.Uv(255, 1, 1), new Vector2(255.5f / 256)) < 0.000001f, "Last texel center is incorrect.");
+
+        foreach (int invalid in new[] { -1, 256 })
+        {
+            bool rejected = false;
+            try { TextureAtlas.Source(invalid); }
+            catch (ArgumentOutOfRangeException) { rejected = true; }
+            Require(rejected, "Out-of-range tile index accepted.");
+        }
     }
 
     private static void CheckMesh()

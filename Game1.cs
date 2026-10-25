@@ -39,7 +39,7 @@ public class Game1 : Game
 
     protected override void LoadContent()
     {
-        _atlas = new TextureAtlas(GraphicsDevice);
+        _atlas = new TextureAtlas(Content);
         _renderer = new WorldRenderer(GraphicsDevice, _atlas);
         _hud = new Hud(GraphicsDevice, _atlas);
         _camera.Position = _player.EyePosition;
@@ -136,7 +136,7 @@ public class Game1 : Game
     {
         _hud?.Dispose();
         _renderer?.Dispose();
-        _atlas?.Dispose();
+        // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();
     }
 }
