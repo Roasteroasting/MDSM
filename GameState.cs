@@ -8,6 +8,7 @@ public enum GameState
     WorldRename,
     WorldDeleteConfirmation,
     Playing,
+    Inventory,
     Paused
 }
 

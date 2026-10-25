@@ -25,7 +25,7 @@ public enum BlockType : byte
 public enum BlockShape { None, Cube, Cross }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
-    BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true)
+    BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2)
 {
     public bool Renderable => Shape != BlockShape.None;
     public bool NeedsGrass => Shape == BlockShape.Cross;
@@ -37,20 +37,20 @@ public static class Blocks
 {
     private static readonly BlockDefinition[] Definitions =
     {
-        new("AIR", false, false, BlockShape.None, 0, Placeable: false),
-        new("GRASS", true, true, BlockShape.Cube, 1, 0, 2),
-        new("DIRT", true, true, BlockShape.Cube, 2),
-        new("STONE", true, true, BlockShape.Cube, 3),
-        new("WOOD LOG", true, true, BlockShape.Cube, 4, 5, 5),
-        new("LEAVES", true, false, BlockShape.Cube, 6),
-        new("WOODEN PLANKS", true, true, BlockShape.Cube, 7),
-        new("COBBLESTONE", true, true, BlockShape.Cube, 8),
-        new("SAND", true, true, BlockShape.Cube, 9),
-        new("GRAVEL", true, true, BlockShape.Cube, 10),
-        new("BEDROCK", true, true, BlockShape.Cube, 11),
-        new("TALL GRASS", false, false, BlockShape.Cross, 12),
-        new("RED FLOWER", false, false, BlockShape.Cross, 13),
-        new("YELLOW FLOWER", false, false, BlockShape.Cross, 14)
+        new("AIR", false, false, BlockShape.None, 0, Placeable: false, MiningSeconds: -1),
+        new("GRASS", true, true, BlockShape.Cube, 1, 0, 2, MiningSeconds: 1.25f),
+        new("DIRT", true, true, BlockShape.Cube, 2, MiningSeconds: 1.25f),
+        new("STONE", true, true, BlockShape.Cube, 3, MiningSeconds: 3),
+        new("WOOD LOG", true, true, BlockShape.Cube, 4, 5, 5, MiningSeconds: 2.5f),
+        new("LEAVES", true, false, BlockShape.Cube, 6, MiningSeconds: 0.4f),
+        new("WOODEN PLANKS", true, true, BlockShape.Cube, 7, MiningSeconds: 1.5f),
+        new("COBBLESTONE", true, true, BlockShape.Cube, 8, MiningSeconds: 3),
+        new("SAND", true, true, BlockShape.Cube, 9, MiningSeconds: 1),
+        new("GRAVEL", true, true, BlockShape.Cube, 10, MiningSeconds: 1),
+        new("BEDROCK", true, true, BlockShape.Cube, 11, MiningSeconds: -1),
+        new("TALL GRASS", false, false, BlockShape.Cross, 12, MiningSeconds: 0),
+        new("RED FLOWER", false, false, BlockShape.Cross, 13, MiningSeconds: 0),
+        new("YELLOW FLOWER", false, false, BlockShape.Cross, 14, MiningSeconds: 0)
     };
     private static readonly BlockType[] Palette =
     {

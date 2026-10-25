@@ -11,8 +11,9 @@ public readonly record struct BlockHit(Point3 Cell, Point3 Normal, float Distanc
 
 public static class BlockRaycaster
 {
+    public const float Reach = 6f;
     // Amanatides-Woo grid traversal visits every voxel crossed by the ray.
-    public static BlockHit? Cast(World world, Vector3 origin, Vector3 direction, float reach = 6f)
+    public static BlockHit? Cast(World world, Vector3 origin, Vector3 direction, float reach = Reach)
     {
         if (direction.LengthSquared() < 0.000001f || reach < 0)
             return null;

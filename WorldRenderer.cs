@@ -11,6 +11,7 @@ public sealed class WorldRenderer : IDisposable
     private readonly AlphaTestEffect _terrainEffect;
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
+    private readonly DroppedItemRenderer _items;
     private readonly ChunkMesh[] _meshes;
     private readonly ChunkMesh[] _visible;
     private readonly ChunkMeshBuilder _builder = new();
@@ -25,6 +26,7 @@ public sealed class WorldRenderer : IDisposable
     {
         _device = device;
         _world = world;
+        _items = new DroppedItemRenderer(device, atlas);
         _meshes = new ChunkMesh[world.ChunkCount];
         _visible = new ChunkMesh[world.ChunkCount];
         for (int i = 0; i < _meshes.Length; i++)
@@ -48,7 +50,7 @@ public sealed class WorldRenderer : IDisposable
         };
     }
 
-    public void Draw(Camera camera, BlockHit? selection)
+    public void Draw(Camera camera, BlockHit? selection, DroppedItems items = null, float miningProgress = 0)
     {
         Matrix view = camera.View;
         Matrix projection = camera.Projection(_device.Viewport.AspectRatio);
@@ -78,18 +80,19 @@ public sealed class WorldRenderer : IDisposable
                 _visible[i].Draw();
         }
 
+        _items.Draw(camera, items);
         if (selection is BlockHit hit)
-            DrawSelection(hit, camera);
+            DrawSelection(hit, camera, miningProgress);
     }
 
-    private void DrawSelection(BlockHit hit, Camera camera)
+    private void DrawSelection(BlockHit hit, Camera camera, float miningProgress)
     {
         BoundingBox box = World.Bounds(hit.Cell);
         box.Min -= new Vector3(0.003f);
         box.Max += new Vector3(0.003f);
         box.GetCorners(_corners);
         for (int i = 0; i < OutlineEdges.Length; i++)
-            _outline[i] = new VertexPositionColor(_corners[OutlineEdges[i]], new Color(25, 30, 35));
+            _outline[i] = new VertexPositionColor(_corners[OutlineEdges[i]], miningProgress > 0 ? Color.Orange : new Color(25, 30, 35));
 
         _selectionEffect.View = camera.View;
         _selectionEffect.Projection = camera.Projection(_device.Viewport.AspectRatio);
@@ -106,5 +109,6 @@ public sealed class WorldRenderer : IDisposable
             mesh.Dispose();
         _terrainEffect.Dispose();
         _selectionEffect.Dispose();
+        _items.Dispose();
     }
 }

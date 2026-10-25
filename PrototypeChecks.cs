@@ -32,7 +32,7 @@ internal static class PrototypeChecks
             ("Save checksums, headers, dimensions, and corrupt data", PersistenceChecks.CorruptData),
             ("Multiple world directories, safe names, and unreadable saves", PersistenceChecks.WorldDirectories),
             ("Atomic saving and preservation after write/replace failures", PersistenceChecks.AtomicSaving),
-            ("Stable expanded block definitions and paged hotbar", DecorationChecks.Definitions),
+            ("Stable expanded block definitions and starter palette order", DecorationChecks.Definitions),
             ("Deterministic trees/plants with unchanged base terrain", DecorationChecks.Determinism),
             ("Tree boundary validation and cross-chunk canopies", DecorationChecks.TreeBoundaries),
             ("Leaf occlusion, cutout vertex alpha, and plant quads", DecorationChecks.Meshes),
@@ -42,7 +42,15 @@ internal static class PrototypeChecks
             ("All sizes: deterministic decorations, spawn, and single bedrock layer", WorldManagementChecks.Generation),
             ("Maximum 5x5 canopies with height and shape variation", WorldManagementChecks.Canopies),
             ("All sizes: complete save restoration and header-only metadata", WorldManagementChecks.PersistenceAndMetadata),
-            ("Safe rename/delete, active-world guards, and filesystem failures", WorldManagementChecks.Management)
+            ("Safe rename/delete, active-world guards, and filesystem failures", WorldManagementChecks.Management),
+            ("Starter inventory, compatible stacks, overflow, and 64-item limits", InventoryChecks.Stacking),
+            ("Left/right inventory clicks, odd splitting, merging, and swapping", InventoryChecks.MouseOperations),
+            ("5000 cursor operations conserve items and blocked closing is safe", InventoryChecks.AccountingAndClosing),
+            ("Timed/instant mining, resets, continuous mining, bedrock, and drops", InventoryChecks.Mining),
+            ("Item gravity, terrain collision, pickup, and full-inventory remainders", InventoryChecks.PhysicsAndPickup),
+            ("Inventory-based placement and independent sessions across all sizes", InventoryChecks.PlacementAndIsolation),
+            ("All-size inventory/drop persistence and one-time legacy inventory", InventoryChecks.Persistence),
+            ("Invalid inventory/drop data is rejected safely", InventoryChecks.Validation)
         };
 
         int failures = 0;

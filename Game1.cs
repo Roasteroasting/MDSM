@@ -17,12 +17,13 @@ public class Game1 : Game
     private WorldRenderer _renderer;
     private Hud _hud;
     private MenuController _menu;
+    private InventoryScreen _inventoryScreen;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private bool _previousBack;
     private BlockHit? _selection;
     private bool _ignoreMouseDelta;
-    private readonly BlockPalette _palette = new();
+    private bool _awaitMouseRelease;
     private bool _showDebug;
     private double _autosaveElapsed;
     private double _noticeSeconds;
@@ -57,6 +58,7 @@ public class Game1 : Game
         _atlas = new TextureAtlas(Content);
         _hud = new Hud(GraphicsDevice, _atlas);
         _menu = new MenuController(GraphicsDevice, _atlas);
+        _inventoryScreen = new InventoryScreen(GraphicsDevice, _atlas);
         _previousKeyboard = Keyboard.GetState();
         _previousMouse = Mouse.GetState();
         SetState(GameState.MainMenu);
@@ -67,6 +69,12 @@ public class Game1 : Game
         KeyboardState keyboard = Keyboard.GetState();
         MouseState mouse = Mouse.GetState();
         bool back = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
+        ProcessInput(keyboard, mouse, back, gameTime);
+        base.Update(gameTime);
+    }
+
+    private void ProcessInput(KeyboardState keyboard, MouseState mouse, bool back, GameTime gameTime)
+    {
         bool quit = Pressed(keyboard, Keys.F10) || (back && !_previousBack);
         _previousBack = back;
         if (quit)
@@ -84,6 +92,8 @@ public class Game1 : Game
         {
             if (Pressed(keyboard, Keys.Escape))
                 Pause();
+            else if (Pressed(keyboard, Keys.E))
+                SetState(GameState.Inventory);
             else
             {
                 UpdateGameplay(keyboard, mouse, gameTime);
@@ -93,11 +103,19 @@ public class Game1 : Game
                 if (_autosaveElapsed >= AutosaveInterval) SaveCurrentWorld();
             }
         }
+        else if (State == GameState.Inventory)
+        {
+            if (Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
+            {
+                if (_session.InventoryInteraction.TryReturnCursor()) SetState(GameState.Playing);
+                else _inventoryScreen.CannotClose();
+            }
+            else _inventoryScreen.Update(_session.InventoryInteraction, mouse, _previousMouse, GraphicsDevice.Viewport);
+        }
         else
             HandleMenuAction(_menu.Update(keyboard, _previousKeyboard, mouse, _previousMouse, GraphicsDevice.Viewport));
 
         RememberInput(keyboard, mouse);
-        base.Update(gameTime);
     }
 
     private void UpdateGameplay(KeyboardState keyboard, MouseState mouse, GameTime gameTime)
@@ -116,19 +134,25 @@ public class Game1 : Game
         if (keyboard.IsKeyDown(Keys.A)) movement -= camera.Right;
         player.Update(world, movement, Pressed(keyboard, Keys.Space), (float)gameTime.ElapsedGameTime.TotalSeconds);
         camera.Position = player.EyePosition;
-        if (Pressed(keyboard, Keys.Tab)) _palette.NextPage();
-        for (int i = 0; i < BlockPalette.SlotsPerPage; i++)
+        for (int i = 0; i < Inventory.HotbarSlots; i++)
             if (keyboard.IsKeyDown((Keys)((int)Keys.D1 + i)) || keyboard.IsKeyDown((Keys)((int)Keys.NumPad1 + i)))
-                _palette.SelectSlot(i);
+                _session.Inventory.SelectedSlot = i;
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+        bool held = mouse.LeftButton == ButtonState.Pressed;
+        if (_awaitMouseRelease)
+        {
+            if (mouse.LeftButton == ButtonState.Released && mouse.RightButton == ButtonState.Released) _awaitMouseRelease = false;
+            held = false;
+        }
+        _session.Mining.Update(world, _session.Items, _selection, held, (float)gameTime.ElapsedGameTime.TotalSeconds);
         if (_selection is BlockHit hit)
         {
-            if (mouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released)
-                world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air);
-            else if (mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
-                world.TryPlace(hit.PlacementCell, _palette.Selected, player.Bounds);
+            if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
+                && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
+                BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
+        _session.Items.Update(player, _session.Inventory, (float)gameTime.ElapsedGameTime.TotalSeconds);
     }
 
     private void HandleMenuAction(MenuAction action)
@@ -151,7 +175,7 @@ public class Game1 : Game
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
                     var world = new World(seed, _menu.SelectedSize);
                     var camera = new Camera();
-                    var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch);
+                    var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateStarter());
                     BeginWorld(_saves.Create(save), save);
                     break;
                 case MenuAction.LoadWorld:
@@ -229,7 +253,6 @@ public class Game1 : Game
         _renderer = renderer;
         _session = session;
         _saves.SetActiveWorld(id);
-        _palette.Reset();
         _hud.InvalidateDebug();
         _selection = null;
         _notice = null;
@@ -240,6 +263,12 @@ public class Game1 : Game
     private bool SaveCurrentWorld()
     {
         if (_session == null) return true;
+        if (!_session.InventoryInteraction.TryReturnCursor())
+        {
+            SetState(GameState.Inventory);
+            _inventoryScreen.CannotClose();
+            return false;
+        }
         try
         {
             _saves.Save(_session.Id, _session.Capture());
@@ -252,7 +281,8 @@ public class Game1 : Game
         catch (Exception exception) when (IsStorageError(exception))
         {
             _autosaveElapsed = 0;
-            Pause();
+            if (State == GameState.Inventory) SetState(GameState.Paused);
+            else Pause();
             _menu.Message("WORLD NOT SAVED. " + exception.Message, true);
             return false;
         }
@@ -270,13 +300,18 @@ public class Game1 : Game
 
     private void SetState(GameState state)
     {
+        _session?.Mining.Reset();
         State = state;
         IsMouseVisible = state != GameState.Playing;
         if (state == GameState.Playing)
         {
             _ignoreMouseDelta = true;
+            MouseState mouse = Mouse.GetState();
+            _awaitMouseRelease = mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed;
             Mouse.SetPosition(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height / 2);
         }
+        else if (state == GameState.Inventory)
+            _inventoryScreen.Open();
         else
             _menu?.Open(state);
     }
@@ -300,9 +335,11 @@ public class Game1 : Game
         if (_session != null)
         {
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
-            _renderer.Draw(_session.Camera, State == GameState.Playing ? _selection : null);
-            _hud.Draw(GraphicsDevice.Viewport, _palette, State == GameState.Playing, _showDebug,
-                _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null);
+            float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
+            _renderer.Draw(_session.Camera, State == GameState.Playing ? _selection : null, _session.Items, progress);
+            _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _showDebug,
+                _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress);
+            if (State == GameState.Inventory) _inventoryScreen.Draw(_session.InventoryInteraction, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State == GameState.Paused) _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }
         else
@@ -319,6 +356,7 @@ public class Game1 : Game
         _renderer = null;
         _saves.SetActiveWorld(null);
         _menu?.Dispose();
+        _inventoryScreen?.Dispose();
         _hud?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();

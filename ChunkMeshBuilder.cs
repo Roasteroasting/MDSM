@@ -10,6 +10,25 @@ internal sealed class ChunkMeshBuilder
     private VertexPositionColorTexture[] _vertices = new VertexPositionColorTexture[4096];
     public VertexPositionColorTexture[] Vertices => _vertices;
     public int VertexCount { get; private set; }
+    public void Clear() => VertexCount = 0;
+
+    public void AppendItem(BlockType block, Vector3 center)
+    {
+        float size = DroppedItem.Radius * 2;
+        Vector3 origin = center - new Vector3(DroppedItem.Radius);
+        BlockDefinition definition = Blocks.Get(block);
+        if (definition.Shape == BlockShape.Cross)
+        {
+            AddQuad(origin, origin + new Vector3(size, 0, size), origin + new Vector3(size, size, size),
+                origin + new Vector3(0, size, 0), definition.SideTile, Color.White, true);
+            AddQuad(origin + new Vector3(size, 0, 0), origin + new Vector3(0, 0, size),
+                origin + new Vector3(0, size, size), origin + new Vector3(size, size, 0), definition.SideTile, Color.White, true);
+        }
+        else
+            foreach (Face face in Faces)
+                AddQuad(origin + face.A * size, origin + face.B * size, origin + face.C * size, origin + face.D * size,
+                    definition.Tile(face.Normal), new Color(new Vector3(face.Shade)), false);
+    }
 
     // Corners follow the geometric normal; emitted triangles use XNA's clockwise front faces.
     private static readonly Face[] Faces =

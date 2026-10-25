@@ -24,22 +24,11 @@ internal static class DecorationChecks
         Require(!Blocks.IsDefined((BlockType)255) && !Blocks.IsRenderable((BlockType)255), "Unknown block ID is usable.");
         Require(Blocks.Tile(BlockType.WoodLog, Vector3.Up) == 5 && Blocks.Tile(BlockType.WoodLog, Vector3.Down) == 5
             && Blocks.Tile(BlockType.WoodLog, Vector3.Right) == 4, "Log end and bark textures are incorrect.");
-        var palette = new BlockPalette();
-        Require(palette.Selected == BlockType.Grass && palette.PageCount == 2, "Initial hotbar changed.");
-        var seen = new HashSet<BlockType>();
-        for (int page = 0; page < palette.PageCount; page++)
-        {
-            for (int slot = 0; slot < BlockPalette.SlotsPerPage; slot++)
-            {
-                BlockType block = palette.AtSlot(slot);
-                if (block == BlockType.Air) continue;
-                palette.SelectSlot(slot);
-                Require(palette.Selected == block, "Hotbar selection failed.");
-                seen.Add(block);
-            }
-            palette.NextPage();
-        }
-        Require(seen.Count == 13 && palette.Selected == BlockType.Grass, "Not all blocks are accessible or page wrap failed.");
+        Inventory inventory = Inventory.CreateStarter();
+        int index = 0;
+        foreach (BlockType block in Blocks.Selection)
+            Require(inventory[index++] == new ItemStack(Items.FromBlock(block), 64), "Starter palette order changed.");
+        Require(index == 13 && inventory.Selected.Item == Items.FromBlock(BlockType.Grass), "Initial item selection changed.");
     }
 
     public static void Determinism()
@@ -208,7 +197,7 @@ internal static class DecorationChecks
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
         WorldSave restored = WorldSerializer.Read(oldFile);
-        Require(WorldSerializer.FormatVersion == 1 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
+        Require(WorldSerializer.FormatVersion == 2 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
         for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");
