@@ -67,7 +67,10 @@ internal static class PrototypeChecks
             ("Render-independent physics/mining/item clocks, jumps, mouse look, and crouch camera", PresentationChecks.SimulationRates),
             ("Empty-slot suppression, selected cube/plant geometry, menu visibility, and HUD clearance", PresentationChecks.ViewModels),
             ("Stationary and moving relative mouse input at 60-2000 updates/second", MouseInputChecks.Motion),
-            ("Mouse capture/release flushes transition motion without delaying real input", MouseInputChecks.CaptureTransitions)
+            ("Mouse capture/release flushes transition motion without delaying real input", MouseInputChecks.CaptureTransitions),
+            ("F1/F3 independence and F2 press edges at high update rates", InterfaceChecks.PresentationKeys),
+            ("Screenshot directory, PNG bytes, unique names, and write failures", InterfaceChecks.ScreenshotFiles),
+            ("Accurate Controls/About information and responsive menu layouts", InterfaceChecks.InformationAndLayouts)
         };
 
         int failures = 0;

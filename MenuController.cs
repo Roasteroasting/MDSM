@@ -19,6 +19,9 @@ internal sealed class MenuController : IDisposable
     private int _focus;
     private int _selected;
     private int _scroll;
+    private int _informationScroll;
+    private Point _informationSize;
+    private string[] _informationLines = Array.Empty<string>();
     private bool _selectAll;
     private Point _mouse;
     private IReadOnlyList<WorldEntry> _worlds = Array.Empty<WorldEntry>();
@@ -43,7 +46,11 @@ internal sealed class MenuController : IDisposable
         new("SETTINGS", MenuAction.OpenSettings)
     };
     private static readonly Button[] DeathButtons = { new("RESPAWN", MenuAction.Respawn), new("MAIN MENU", MenuAction.SaveAndReturn) };
-    private static readonly Button[] SettingsButtons = { new("BACK", MenuAction.Back) };
+    private static readonly Button[] SettingsButtons =
+    {
+        new("CONTROLS", MenuAction.OpenControls), new("ABOUT", MenuAction.OpenAbout), new("BACK", MenuAction.Back)
+    };
+    private static readonly Button[] InformationButtons = { new("BACK", MenuAction.Back) };
     private static readonly Button[] CreateButtons = { new("CREATE", MenuAction.CreateWorld), new("BACK", MenuAction.Back) };
     private static readonly Button[] SelectButtons =
     {
@@ -58,6 +65,7 @@ internal sealed class MenuController : IDisposable
         GameState.Paused => PauseButtons,
         GameState.Death => DeathButtons,
         GameState.Settings => SettingsButtons,
+        GameState.Controls or GameState.About => InformationButtons,
         GameState.WorldCreation => CreateButtons,
         GameState.WorldSelection => SelectButtons,
         GameState.WorldRename => RenameButtons,
@@ -83,6 +91,8 @@ internal sealed class MenuController : IDisposable
         _selectAll = false;
         _draggingSlider = false;
         _message = "";
+        _informationScroll = 0;
+        _informationSize = Point.Zero;
         if (screen == GameState.WorldCreation)
         {
             NameText = "";
@@ -148,6 +158,20 @@ internal sealed class MenuController : IDisposable
         if (IsTextField && Pressed(Keys.A)
             && (keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl)))
             _selectAll = true;
+
+        if (MenuInformation.IsInformation(_screen))
+        {
+            EnsureInformation(viewport);
+            int rows = MenuInformation.VisibleRows(viewport);
+            int movement = -(int)(((long)mouse.ScrollWheelValue - previousMouse.ScrollWheelValue) / 120);
+            if (Pressed(Keys.Up)) movement--;
+            if (Pressed(Keys.Down)) movement++;
+            if (Pressed(Keys.PageUp)) movement -= rows;
+            if (Pressed(Keys.PageDown)) movement += rows;
+            _informationScroll = Math.Clamp(_informationScroll + movement, 0, Math.Max(0, _informationLines.Length - rows));
+            if (Pressed(Keys.Home)) _informationScroll = 0;
+            if (Pressed(Keys.End)) _informationScroll = Math.Max(0, _informationLines.Length - rows);
+        }
 
         int direction = Pressed(Keys.Up) ? -1 : Pressed(Keys.Down) ? 1 : 0;
         if (Pressed(Keys.Tab))
@@ -254,7 +278,8 @@ internal sealed class MenuController : IDisposable
 
     private Rectangle ButtonBounds(Viewport viewport, int index)
     {
-        if (_screen == GameState.Settings) return SettingsLayout.Back(viewport);
+        if (_screen == GameState.Settings) return index < 2 ? SettingsLayout.Information(viewport, index) : SettingsLayout.Back(viewport);
+        if (MenuInformation.IsInformation(_screen)) return MenuInformation.Back(viewport);
         if (_screen is GameState.MainMenu or GameState.Paused or GameState.Death)
         {
             int buttonWidth = Math.Min(380, viewport.Width - 32);
@@ -281,7 +306,8 @@ internal sealed class MenuController : IDisposable
         int scale = viewport.Width >= 900 ? 2 : 1;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
-        if (_screen is GameState.Paused or GameState.Death || (_screen == GameState.Settings && worldName != null))
+        if (_screen is GameState.Paused or GameState.Death
+            || ((_screen == GameState.Settings || MenuInformation.IsInformation(_screen)) && worldName != null))
             Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.7f);
         else
         {
@@ -301,11 +327,14 @@ internal sealed class MenuController : IDisposable
             GameState.Paused => "PAUSED",
             GameState.Death => "You died!",
             GameState.Settings => "SETTINGS",
+            GameState.Controls => "CONTROLS",
+            GameState.About => "ABOUT",
             _ => "MDSM"
         };
         int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12)
             : _screen == GameState.Death && viewport.Width >= 900 ? 5 : 3;
-        int titleY = _screen == GameState.WorldSelection ? 38 : Math.Max(20, viewport.Height / 2 - 210);
+        int titleY = MenuInformation.IsInformation(_screen) ? 20
+            : _screen == GameState.WorldSelection ? 38 : Math.Max(20, viewport.Height / 2 - 210);
         Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
         Center(title, viewport, titleY, titleScale, Color.White);
         if (_screen == GameState.Paused)
@@ -324,6 +353,19 @@ internal sealed class MenuController : IDisposable
             Fill(new Rectangle(toggle.X + 10, toggle.Y + 10, 16, 16), new Color(24, 29, 35));
             if (_settings.UncappedFps) Text("X", toggle.X + 12, toggle.Y + 11, 2, Color.LightGoldenrodYellow);
             Text("UNCAPPED FPS", toggle.X + 38, toggle.Center.Y - 3 * scale, scale, Color.White);
+        }
+
+        if (MenuInformation.IsInformation(_screen))
+        {
+            EnsureInformation(viewport);
+            Rectangle area = MenuInformation.Content(viewport);
+            Fill(area, Color.Black * 0.45f);
+            int rows = MenuInformation.VisibleRows(viewport);
+            for (int row = 0; row < rows && row + _informationScroll < _informationLines.Length; row++)
+                Text(_informationLines[row + _informationScroll], area.X + 8,
+                    area.Y + row * MenuInformation.LineHeight(viewport), scale, Color.White);
+            if (_informationLines.Length > rows)
+                Center("SCROLL: WHEEL / UP / DOWN / PAGE UP / DOWN", viewport, area.Bottom + 8, 1, Color.LightGray);
         }
 
         if (_screen == GameState.WorldCreation)
@@ -395,6 +437,16 @@ internal sealed class MenuController : IDisposable
         Text(display, bounds.X + 8, bounds.Y + 13, scale, value.Length == 0 ? Color.Gray : Color.White);
         if (_focus == index && index < 2)
             Fill(new Rectangle(bounds.X + 8 + (value.Length == 0 ? 0 : display.Length) * 6 * scale, bounds.Y + 10, scale, 18), Color.White);
+    }
+
+    private void EnsureInformation(Viewport viewport)
+    {
+        var size = new Point(viewport.Width, viewport.Height);
+        if (_informationSize == size) return;
+        _informationSize = size;
+        _informationLines = MenuInformation.Lines(_screen, viewport);
+        _informationScroll = Math.Clamp(_informationScroll, 0,
+            Math.Max(0, _informationLines.Length - MenuInformation.VisibleRows(viewport)));
     }
 
     private void Center(string text, Viewport viewport, int y, int scale, Color color) =>

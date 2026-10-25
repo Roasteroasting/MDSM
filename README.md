@@ -17,6 +17,8 @@ The MonoGame build task restores the MGCB tool from the existing local tool mani
 
 Choose **Settings** from the main menu or the pause menu. Both entry points share the same preferences. **Back** or Escape returns to the screen that opened Settings; returning to the pause menu keeps gameplay suspended and the mouse cursor available.
 
+Settings also contains **Controls** and **About**. Controls lists the implemented gameplay, inventory, and menu bindings; it does not change them. About identifies MDSM (Mojang Don't Sue Me), its author Mark Arnold (Roasteroasting), and explicitly acknowledges that the codebase was written using GPT-6.1 Sol and the game textures were AI-generated. Each screen's Back button or Escape returns to Settings, preserving its main-menu or pause-menu origin and all FPS preferences. Text wraps with the window; use the mouse wheel, Up/Down, Page Up/Page Down, or Home/End to scroll longer information screens.
+
 The **FPS Cap** slider supports every whole number from **5 to 360**, defaulting to **60**. Click or drag it, or focus it with Tab/Up/Down and use Left/Right for one-FPS changes; Home/End select the endpoints. The current numerical value is shown above the slider. **Uncapped FPS** defaults off and can be clicked or toggled with Space/Enter when focused. Changes apply immediately in gameplay and every menu. While uncapped, the slider remains editable and retains its value, but does not limit rendering until uncapped is turned off.
 
 Preferences are application-wide in `%LOCALAPPDATA%/MDSM/settings.json` on Windows, alongside the existing `Worlds` directory. The equivalent per-user application-data location is used elsewhere. They are independent of world saves and survive world switches and application restarts. Missing settings use defaults; malformed/oversized files fall back safely, and out-of-range integers are clamped. Changes save after a short idle delay and on Back/exit using a temporary file and atomic replacement. Write failures keep the selected preferences active for the current session and display an error without replacing the previous valid file.
@@ -24,6 +26,16 @@ Preferences are application-wide in `%LOCALAPPDATA%/MDSM/settings.json` on Windo
 [FrameTiming.cs](./FrameTiming.cs) separates rendering from a **120 Hz fixed simulation clock**. The render limiter uses stopwatch deadlines and sleeping, compensating for small timer overshoots without busy-waiting and rebasing after slow frames. Uncapped mode skips the limiter. MonoGame's outer fixed-step timing and presentation synchronization are disabled so they do not impose the former 60 FPS ceiling; its inactive sleep is also disabled so the same preference applies throughout menus and focus changes. See [MonoGame's timing loop](https://github.com/MonoGame/MonoGame/blob/v3.8.6/MonoGame.Framework/Game.cs) for the outer-loop behavior. There is no additional VSync setting.
 
 The simulation consumes elapsed time in fixed steps, including multiple steps per rendered frame at low FPS. Player physics, fall tracking, mining, item motion, pickup delays, and merging therefore use the same simulation rate at every render cap. Autosave remains based on active elapsed time. Jump presses are retained until the next simulation step; mouse look uses mouse displacement once per rendered frame. Menus clear fractional simulation time without resetting an in-progress fall. MonoGame's existing half-second maximum elapsed-time safeguard remains in place for exceptional stalls. A chosen cap is a rendering target/upper limit, not a promise of hardware performance; operating-system scheduling, drivers, and world complexity affect achieved FPS.
+
+## Screenshots and HUD visibility
+
+Press **F2** once to save a lossless PNG of the final composed frame, including whichever world, held item, HUD, debug overlay, inventory, or menu is visible. Holding F2 does not repeat captures. Screenshots use the actual rendered client-area resolution, without scaling, cropping, filtering, or color changes. Capture runs after all draw passes, before presentation, using MonoGame's backbuffer readback and PNG encoder. It does not reconstruct the scene or temporarily enable hidden HUD elements.
+
+Screenshots are stored in **`%LOCALAPPDATA%/MDSM/screenshots/`** on Windows, alongside `Worlds` and `settings.json`; the equivalent per-user application-data location is used elsewhere. The directory is created on the first capture. Filenames use `yyyy-MM-dd_HH-mm-ss_fff.png`, with numbered suffixes for collisions and exclusive file creation to prevent overwriting. Write failures display an error using the existing menu/gameplay notification and leave gameplay running; an incomplete file from a failed encoding is removed. GPU readback and PNG writing are synchronous only when requested, so taking a screenshot can briefly pause rendering at large resolutions.
+
+Press **F1** to hide or restore the gameplay HUD: hotbar, selected-item name, hearts, crosshair, targeting/mining feedback, held-item model, notifications, and debug overlay. This changes rendering only; movement, mining, placement, and hotbar selection remain active. Inventory and menu interfaces remain usable and visible. HUD visibility resets to visible on application launch and is not saved.
+
+**F3** retains its independent debug toggle. Hiding the HUD preserves the F3 state; restoring it reveals debug again if enabled. F3 can also change that state while the HUD is hidden. The former permanent upper-left controls panel is removed; bindings are available in **Settings → Controls** instead.
 
 ## Finite world and seed
 
@@ -202,7 +214,7 @@ The eye height is 1.62 blocks while standing and **1.50 while crouching**, a sub
 
 During gameplay, an empty selected hotbar slot renders **nothing**. Occupied slots show the actual selected item: ordinary blocks are textured 3D cubes, while flowers/tall grass use transparent crossed planes. Number keys and the mouse wheel update the model immediately. The empty-hand model and its texture have been removed. There is no separate held-item selection or inventory copy, player body, third-person mode, or animation.
 
-[FirstPersonRenderer.cs](./FirstPersonRenderer.cs) reuses the existing cube/plant geometry and block atlas, caches geometry/uploads until the selected item changes, and draws one small camera-space model after the world and before the HUD. A depth reset keeps nearby terrain from clipping it while preserving the world color; the model uses its own perspective, depth testing, backface culling, alpha testing, and point sampling. Its viewport is restored before the HUD. The existing held-item scale, rotation, perspective, and responsive lower-right placement are unchanged. Models are suppressed in every menu, inventory, and death screen, and whenever the selected slot is empty. The atlas, world generation, world save format, and FPS preferences are unchanged by this correction.
+[FirstPersonRenderer.cs](./FirstPersonRenderer.cs) reuses the existing cube/plant geometry and block atlas, caches geometry/uploads until the selected item changes, and draws one small camera-space model after the world and before the HUD. A depth reset keeps nearby terrain from clipping it while preserving the world color; the model uses its own perspective, depth testing, backface culling, alpha testing, and point sampling. Its viewport is restored before the HUD. The existing held-item scale, rotation, perspective, and responsive lower-right placement are unchanged. Models are suppressed in every menu, inventory, and death screen, whenever the selected slot is empty, and when F1 hides the HUD. The atlas, world generation, world save format, and FPS preferences are unchanged by this update.
 
 [MouseLookInput.cs](./MouseLookInput.cs) captures native relative motion through **SDL2 already shipped by MonoGame DesktopGL**, without an extra package. The previous loop repeatedly read an absolute OS cursor position, subtracted the window center, and called `Mouse.SetPosition` every frame. [MonoGame 3.8.6's implementation](https://github.com/MonoGame/MonoGame/blob/v3.8.6/MonoGame.Framework/Platform/Input/Mouse.SDL.cs) reads global OS position even after setting its cached window coordinates, leaving cursor warps and subsequent polls as separate operations. A stale or warp-induced non-center sample could therefore be applied as genuine movement at high rendering rates. A baseline run reproduced small rightward jumps at 240/360/uncapped FPS.
 
@@ -223,10 +235,13 @@ Gameplay now uses [SDL_GetRelativeMouseState](https://wiki.libsdl.org/SDL2/SDL_G
 | E | Open / close inventory |
 | Left / right click in inventory | Move whole stacks / split or place one item |
 | Left click outside inventory panel while holding items | Drop the entire held stack; inventory stays open |
+| F1 | Hide / restore the gameplay HUD and held item, preserving the F3 state |
+| F2 | Save the final rendered frame as a PNG in the application's screenshots directory |
 | F3 | Toggle player coordinates, chunk coordinates, approximate FPS, seed, chunk count, and dimensions |
 | Escape | Open pause / resume; close inventory if its held stack can return safely |
 | Pause menu Resume | Resume and capture the mouse |
-| Main/pause menu Settings | Open the shared FPS slider and Uncapped FPS toggle |
+| Main/pause menu Settings | Open the shared FPS preferences, Controls, and About options |
+| Controls / About wheel, Up/Down, Page Up/Down, Home/End | Scroll informational text; Back or Escape returns to Settings |
 | Settings Left/Right, Home/End | Change the focused FPS slider by one / select its minimum or maximum |
 | F10 or gamepad Back | Save the active world and quit |
 
@@ -242,9 +257,12 @@ Block edits, health, collected inventory, and uncollected items persist together
 | [GameSettings.cs](./GameSettings.cs) | Shared FPS preferences, bounded loading, and atomic application-settings persistence |
 | [FrameTiming.cs](./FrameTiming.cs) | Sleeping render limiter and independent fixed simulation clock |
 | [SettingsLayout.cs](./SettingsLayout.cs) | Responsive slider/toggle/Back geometry and integer slider conversion |
+| [PresentationInput.cs](./PresentationInput.cs) | Independent F1/F3 visibility and single-press F2 requests |
+| [ScreenshotCapture.cs](./ScreenshotCapture.cs) | Final backbuffer PNG capture, exclusive filenames, and failed-write cleanup |
+| [MenuInformation.cs](./MenuInformation.cs) | Controls/About text, responsive wrapping, and scroll layout |
 | [FirstPersonRenderer.cs](./FirstPersonRenderer.cs) | Inventory-driven cube/plant selection, empty-slot suppression, cached geometry, and isolated camera-space rendering |
 | [MouseLookInput.cs](./MouseLookInput.cs) | Consumed SDL relative deltas and capture-transition flushing using the existing native SDL library |
-| [GameState.cs](./GameState.cs) | Main menu, creation, selection, rename, deletion confirmation, gameplay, inventory, pause, and death states |
+| [GameState.cs](./GameState.cs) | Main menu, world management, gameplay, inventory, pause, death, Settings, Controls, and About states |
 | [MenuController.cs](./MenuController.cs) | Atlas dirt background, title, size selector, world management layouts, navigation, and feedback |
 | [WorldSave.cs](./WorldSave.cs) | Saved state and isolated session, one-time death transfers, respawn, and manual drop orchestration |
 | [WorldSerializer.cs](./WorldSerializer.cs) | Versioned binary format, validation, and checksums |
@@ -272,7 +290,7 @@ Block edits, health, collected inventory, and uncollected items persist together
 | [ChunkMeshBuilder.cs](./ChunkMeshBuilder.cs) | Shared cube/cross geometry for chunks and small items, with chunk opacity checks |
 | [ChunkMesh.cs](./ChunkMesh.cs) | Per-chunk GPU buffer, revision tracking, uploads, and disposal |
 | [WorldRenderer.cs](./WorldRenderer.cs) | Chunk frustum culling, alpha testing, depth testing, backface culling, fog, and selection outline |
-| [Hud.cs](./Hud.cs) | Crosshair, hotbar, controls, save confirmation, and cached F3 debug text |
+| [Hud.cs](./Hud.cs) | Visibility-aware crosshair, hotbar, health, notifications, and cached F3 debug text |
 | [PixelFont.cs](./PixelFont.cs) | Shared bitmap lettering for the HUD and menus |
 | [PrototypeChecks.cs](./PrototypeChecks.cs) | Automated checks that run without a graphics device |
 | [PersistenceChecks.cs](./PersistenceChecks.cs) | Edited-world restoration, corruption validation, safe paths, and failed-save checks |
@@ -282,6 +300,8 @@ Block edits, health, collected inventory, and uncollected items persist together
 | [SurvivalChecks.cs](./SurvivalChecks.cs) | Health/hearts, fall distances, death accounting, respawn, deliberate drops, delays/merges, v1/v2 compatibility, crouching, and wheel checks |
 | [PresentationChecks.cs](./PresentationChecks.cs) | FPS range/override, settings persistence/corruption, render-rate independence, crouch camera, and model geometry/visibility/layout checks |
 | [MouseInputChecks.cs](./MouseInputChecks.cs) | Stationary/moving high-frequency input, unchanged sensitivity, consumed deltas, and capture/release resets |
+| [InterfaceChecks.cs](./InterfaceChecks.cs) | F1/F3/F2 input edges, screenshot storage/failures, and information text/layout checks |
+| [InterfaceGraphicsChecks.cs](./InterfaceGraphicsChecks.cs) | Optional real DesktopGL PNG pixel comparisons, HUD states, resizing, menu navigation, and failure recovery |
 
 All chunks remain loaded for the active world. There is no chunk streaming, multithreaded generation, water, ores, crafting, tools, armor, tree growth, or vegetation growth.
 
@@ -291,7 +311,17 @@ All chunks remain loaded for the active world. There is no chunk streaming, mult
 dotnet run --no-build -- --self-test
 ```
 
-The **56 check groups** include FPS defaults and all integer slider values, uncapped override/value retention, settings reload/validation/write failures, identical fixed simulation outcomes at 5/30/60/144/240/360/997 rendered FPS, reduced crouch camera height, and selected cube/plant geometry, empty-slot suppression/switching, menu visibility, UVs, and layout. Mouse regressions check zero stationary rotation at 60-2000 updates/second, identical movement/sensitivity across rates, no replayed deltas, one-unit motion without a dead zone, and capture/release/resize flushing without first-sample latency. Health, fall tracking, death/respawn, dropped items, inventory accounting/placement, persistence, v1/v2 compatibility, crouch support/jumps, generation/restoration, geometry, atlas, checksums, atomic saving, management, and world-size checks remain included. A bounded non-seekable stream verifies that metadata reading stops before block data. Persistence fixtures stay under the test build and are cleaned up; they never touch real saves. A failing check returns a nonzero exit code. These checks do not open a window or exercise operating-system input.
+The **59 check groups** include independent F1/F3 state, repeated F2 input without duplicate captures, screenshot directory creation, collision-safe filenames and write failures, accurate Controls/About acknowledgements, and responsive information layouts. Existing coverage includes FPS defaults and all integer slider values, uncapped override/value retention, settings reload/validation/write failures, identical fixed simulation outcomes at 5/30/60/144/240/360/997 rendered FPS, reduced crouch camera height, and selected cube/plant geometry, empty-slot suppression/switching, menu visibility, UVs, and layout. Mouse regressions check zero stationary rotation at 60-2000 updates/second, identical movement/sensitivity across rates, no replayed deltas, one-unit motion without a dead zone, and capture/release/resize flushing without first-sample latency. Health, fall tracking, death/respawn, dropped items, inventory accounting/placement, persistence, v1/v2 compatibility, crouch support/jumps, generation/restoration, geometry, atlas, checksums, atomic saving, management, and world-size checks remain included. A bounded non-seekable stream verifies that metadata reading stops before block data. Persistence fixtures stay under the test build and are cleaned up; they never touch real saves. A failing check returns a nonzero exit code. These checks do not open a window or exercise operating-system input.
+
+Optional graphics verification opens a real DesktopGL window and requires focus and an OpenGL-capable desktop:
+
+```powershell
+dotnet run --no-build -- --graphics-test
+```
+
+This check uses synthetic input and temporary saves/preferences/screenshots under the build directory, cleaned up afterward. It verified 13 PNG captures at 1280x720, 801x603, and 320x240 against the final backbuffer, pixel-for-pixel. Asymmetric corners and a final-pass frame marker detect inverted/aligned rows, stale frames, missing draw passes, and changed pixels. Coverage includes HUD shown/hidden with independent debug states, occupied/empty selected slots, resizing, inventory/death screens, main/pause Settings navigation through Controls/About, scrolling, persistent FPS preferences, captures at 60/144/240/360/uncapped configurations, and an injected screenshot directory failure followed by recovery. It also checks removal of the permanent controls panel and hotbar selection while the HUD is hidden. It does not measure sustained FPS or exercise physical keys/mice.
+
+An additional screenshot regression compares consecutive frames before and after repeated captures, alternating HUD visibility, resizing, and a failed write. It disables the test's SpriteBatch markers and defers PNG decoding until after the comparisons: both operations change texture bindings and could mask the black-texture bug. Before the correction, the first hidden-HUD frame after capture failed; with the correction, world pixels remain identical and all eight additional PNGs match their original resolution and pixel data. [ScreenshotCapture.cs](./ScreenshotCapture.cs) restores and invalidates the previous texture binding in a `finally` block so DesktopGL's temporary screenshot texture cannot leave MonoGame's binding cache stale, including when writing fails.
 
 A separate scripted DesktopGL run verified actual GPU heart states at 1280x720, 640x480, and 320x240; cube/plant item cutouts and terrain depth; input-path inventory drops and wheel selection; diagonal crouch edges and jumping; fatal falls, death input suspension and cursor transfers; respawn; failed/successful death saves and automatic respawn on reload; a real pre-Milestone-6 v2 save; autosaving health; and world creation, selection, renaming, and confirmed deletion. It used isolated temporary saves and synthetic input, rather than physical keyboard/mouse playtesting.
 
@@ -299,5 +329,5 @@ The FPS update's scripted DesktopGL checks covered Settings entry/Back, every ke
 
 The corrective update compared cube/log/leaf/plant renders pixel-for-pixel against pre-correction images at 320x240, 640x480, 1280x720, and 2560x1080. Empty slots draw no pixels, switching back restores the same item render, and all menus suppress models. A native Windows/SDL run verified zero stationary rotation and exact rotation from injected movement at 60, 144, 240, 360, and uncapped (roughly 2800 achieved) FPS. It also rejected 10,000 stale absolute-position samples and exercised inventory, pause, Settings, injected SDL focus events, death, and respawn capture transitions. An isolated run of the previous build reproduced stationary rightward jumps at 240/360/uncapped, while 60/144 stayed still during that sample.
 
-Manual testing is still needed with physical mice at different polling rates/DPI, real Alt-Tab/focus changes and cursor restoration, Linux/macOS relative capture, and sustained high-FPS play in all sizes. Also exercise slider/mouse-wheel controls, held-item alignment on other displays/aspect ratios, irregular crouch edges, falls across menu transitions, death-drop recovery, many simultaneous items, inventory placement/accounting, save-on-window-close, filesystem errors, and folder opening. Scripted injected input is not physical mouse playtesting. Generation, initial mesh construction, and saving remain synchronous, so Large worlds can pause briefly during those operations.
+Manual testing is still needed for physical F1/F2/F3 presses and menu scrolling, screenshots on other drivers/platforms and high-DPI displays, physical mice at different polling rates/DPI, real Alt-Tab/focus changes and cursor restoration, Linux/macOS relative capture, and sustained high-FPS play in all sizes. Also exercise slider/mouse-wheel controls, held-item alignment on other displays/aspect ratios, irregular crouch edges, falls across menu transitions, death-drop recovery, many simultaneous items, inventory placement/accounting, save-on-window-close, filesystem errors, and folder opening. Scripted injected input is not physical mouse playtesting. Generation, initial mesh construction, and saving remain synchronous, so Large worlds can pause briefly during those operations.
 

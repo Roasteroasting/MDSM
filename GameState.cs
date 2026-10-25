@@ -11,7 +11,9 @@ public enum GameState
     Inventory,
     Paused,
     Death,
-    Settings
+    Settings,
+    Controls,
+    About
 }
 
 internal enum MenuAction
@@ -33,5 +35,7 @@ internal enum MenuAction
     SaveAndReturn,
     Exit,
     OpenSettings,
-    SettingsChanged
+    SettingsChanged,
+    OpenControls,
+    OpenAbout
 }

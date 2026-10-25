@@ -16,6 +16,8 @@ public class Game1 : Game
     private readonly GameSettings _settings;
     private readonly FrameLimiter _frameLimiter = new();
     private readonly SimulationClock _simulationClock = new();
+    private readonly PresentationInput _presentation = new();
+    private readonly ScreenshotCapture _screenshots;
     private bool _pendingJump, _settingsDirty;
     private double _settingsSaveDelay;
     private GameState _settingsReturnState = GameState.MainMenu;
@@ -34,7 +36,6 @@ public class Game1 : Game
     private Point _menuCursor;
     private bool _awaitMouseRelease;
     private readonly HotbarScroll _hotbarScroll = new();
-    private bool _showDebug;
     private double _autosaveElapsed;
     private double _noticeSeconds;
     private string _notice;
@@ -45,6 +46,7 @@ public class Game1 : Game
     public Game1(WorldSaveManager saves, SettingsStore settingsStore = null)
     {
         _saves = saves ?? throw new ArgumentNullException(nameof(saves));
+        _screenshots = new ScreenshotCapture(Path.Combine(Path.GetDirectoryName(_saves.RootDirectory), "screenshots"));
         _settingsStore = settingsStore ?? new SettingsStore(Path.Combine(Path.GetDirectoryName(_saves.RootDirectory), "settings.json"));
         _settings = _settingsStore.Load();
         IsFixedTimeStep = false; // Rendering is paced separately; gameplay uses SimulationClock.
@@ -93,6 +95,7 @@ public class Game1 : Game
 
     private void ProcessInput(KeyboardState keyboard, MouseState mouse, bool back, GameTime gameTime, Point lookDelta)
     {
+        _presentation.Update(keyboard, _previousKeyboard, IsActive, _session != null);
         if (_session?.Player.IsDead == true && State != GameState.Death)
         {
             EnterDeath(); RememberInput(keyboard, mouse); return;
@@ -105,8 +108,6 @@ public class Game1 : Game
             RememberInput(keyboard, mouse);
             return;
         }
-
-        if (IsActive && _session != null && Pressed(keyboard, Keys.F3)) _showDebug = !_showDebug;
 
         if (!IsActive)
             Pause();
@@ -247,8 +248,15 @@ public class Game1 : Game
                     _settingsDirty = true;
                     _settingsSaveDelay = 0.5;
                     break;
+                case MenuAction.OpenControls when State == GameState.Settings:
+                    SetState(GameState.Controls);
+                    break;
+                case MenuAction.OpenAbout when State == GameState.Settings:
+                    SetState(GameState.About);
+                    break;
                 case MenuAction.Back:
-                    if (State == GameState.Settings)
+                    if (State is GameState.Controls or GameState.About) SetState(GameState.Settings);
+                    else if (State == GameState.Settings)
                     {
                         bool savedSettings = SaveSettings();
                         SetState(_settingsReturnState);
@@ -456,12 +464,14 @@ public class Game1 : Game
         {
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
-            _renderer.Draw(_session.Camera, State == GameState.Playing ? _selection : null, _session.Items, progress);
-            _firstPerson.Draw(State, _session.Inventory);
-            _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _showDebug,
-                _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress, _session.Player.Health);
+            _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress);
+            if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
+            _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
+                _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
+                _session.Player.Health, _presentation.HudVisible);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session.InventoryInteraction, Mouse.GetState(), GraphicsDevice.Viewport);
-            if (State is GameState.Paused or GameState.Death or GameState.Settings) _menu.Draw(GraphicsDevice.Viewport, _session.Name);
+            if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
+                _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }
         else
         {
@@ -469,6 +479,18 @@ public class Game1 : Game
             _menu.Draw(GraphicsDevice.Viewport);
         }
         base.Draw(gameTime);
+        if (_presentation.TakeScreenshotRequest())
+        {
+            try { _screenshots.Capture(GraphicsDevice); }
+            catch (Exception exception) when (IsStorageError(exception) || exception is InvalidOperationException)
+            {
+                string message = "SCREENSHOT NOT SAVED. " + exception.Message;
+                _menu.Message(message, true);
+                _notice = message;
+                _noticeSeconds = 8;
+                Console.Error.WriteLine(message);
+            }
+        }
     }
 
     protected override void UnloadContent()
