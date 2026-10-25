@@ -37,7 +37,12 @@ internal static class PrototypeChecks
             ("Tree boundary validation and cross-chunk canopies", DecorationChecks.TreeBoundaries),
             ("Leaf occlusion, cutout vertex alpha, and plant quads", DecorationChecks.Meshes),
             ("New block placement, vegetation targeting, and support", DecorationChecks.Interaction),
-            ("Legacy v1 compatibility and expanded block restoration", DecorationChecks.Persistence)
+            ("Legacy v1 compatibility and expanded block restoration", DecorationChecks.Persistence),
+            ("All world sizes, indexing, boundaries, seams, and frustum bounds", WorldManagementChecks.SizesAndBoundaries),
+            ("All sizes: deterministic decorations, spawn, and single bedrock layer", WorldManagementChecks.Generation),
+            ("Maximum 5x5 canopies with height and shape variation", WorldManagementChecks.Canopies),
+            ("All sizes: complete save restoration and header-only metadata", WorldManagementChecks.PersistenceAndMetadata),
+            ("Safe rename/delete, active-world guards, and filesystem failures", WorldManagementChecks.Management)
         };
 
         int failures = 0;
@@ -61,8 +66,8 @@ internal static class PrototypeChecks
     private static void CheckWorld()
     {
         var world = FlatWorld();
-        for (int x = 0; x < World.Width; x++)
-        for (int z = 0; z < World.Depth; z++)
+        for (int x = 0; x < world.Width; x++)
+        for (int z = 0; z < world.Depth; z++)
         {
             Require(world.GetBlock(x, 4, z) == BlockType.Grass, "Grass surface missing.");
             Require(world.GetBlock(x, 3, z) == BlockType.Dirt && world.GetBlock(x, 2, z) == BlockType.Dirt, "Dirt layers missing.");
@@ -70,7 +75,7 @@ internal static class PrototypeChecks
             Require(world.GetBlock(x, 5, z) == BlockType.Air, "Space above terrain must be air.");
         }
         Require(world.GetBlock(-1, 4, 0) == BlockType.Air, "Outside the world must be empty.");
-        Require(!world.SetBlock(World.Width, 5, 0, BlockType.Stone), "Out-of-bounds edit accepted.");
+        Require(!world.SetBlock(world.Width, 5, 0, BlockType.Stone), "Out-of-bounds edit accepted.");
         Require(!world.SetBlock(0, 5, 0, (BlockType)99), "Invalid block accepted.");
         Require(world.SetBlock(0, 5, 0, BlockType.Stone) && world.Revision == 1, "Edit revision not updated.");
         Require(!world.SetBlock(0, 5, 0, BlockType.Stone) && world.Revision == 1, "Unchanged edit modified revision.");
@@ -299,7 +304,7 @@ internal static class PrototypeChecks
     private static void CheckCoordinates()
     {
         var world = new World(0, false);
-        Require(World.Width == 256 && World.Height == 64 && World.Depth == 256, "World dimensions changed.");
+        Require(world.Width == 256 && World.Height == 64 && world.Depth == 256, "World dimensions changed.");
         Require(world.Chunks.Length == 256, "Expected exactly 256 chunks.");
         int storedBytes = 0;
         foreach (Chunk chunk in world.Chunks)
@@ -315,7 +320,7 @@ internal static class PrototypeChecks
                     "World-to-local coordinate conversion failed.");
             }
         }
-        Require(storedBytes == 4 * 1024 * 1024 && storedBytes == World.BlockCount, "Raw storage must be exactly 4 MiB.");
+        Require(storedBytes == 4 * 1024 * 1024 && storedBytes == world.BlockCount, "Raw storage must be exactly 4 MiB.");
         Require(world.GetChunk(15, 15).Bounds.Max == new Vector3(256, 64, 256), "Last chunk bounds are incorrect.");
         Point3[] invalid = { new(-1, 0, 0), new(256, 0, 0), new(0, -1, 0), new(0, 64, 0),
             new(0, 0, -1), new(0, 0, 256), new(int.MinValue, 0, 0), new(0, int.MaxValue, 0) };
@@ -335,7 +340,7 @@ internal static class PrototypeChecks
         var same = BaseTerrain(173);
         var other = BaseTerrain(174);
         bool seedChangedTerrain = false;
-        for (int i = 0; i < World.ChunkCount; i++)
+        for (int i = 0; i < world.ChunkCount; i++)
         {
             Require(world.Chunks[i].Blocks.SequenceEqual(same.Chunks[i].Blocks), "Identical seeds produced different terrain.");
             seedChangedTerrain |= !world.Chunks[i].Blocks.SequenceEqual(other.Chunks[i].Blocks);
@@ -344,22 +349,22 @@ internal static class PrototypeChecks
 
         var generator = new TerrainGenerator(173);
         int min = 64, max = 0;
-        var heights = new int[World.Width * World.Depth];
-        for (int z = 0; z < World.Depth; z++)
-        for (int x = 0; x < World.Width; x++)
+        var heights = new int[world.Width * world.Depth];
+        for (int z = 0; z < world.Depth; z++)
+        for (int x = 0; x < world.Width; x++)
         {
             int top = world.SurfaceY(x, z), dirt = generator.DirtDepth(x, z);
             Require(top == generator.SurfaceY(x, z) && top >= 16 && top <= 44, "Surface height is unsafe or differs from generator.");
             Require(dirt >= 3 && dirt <= 5, "Dirt thickness must be 3-5 blocks.");
             for (int y = 0; y < World.Height; y++)
             {
-                BlockType expected = y > top ? BlockType.Air : y == top ? BlockType.Grass
+                BlockType expected = y == 0 ? BlockType.Bedrock : y > top ? BlockType.Air : y == top ? BlockType.Grass
                     : y >= top - dirt ? BlockType.Dirt : BlockType.Stone;
                 Require(world.GetBlock(x, y, z) == expected, "Generated column has incorrect layers or holes.");
             }
-            heights[z * World.Width + x] = top;
-            if (x > 0) Require(Math.Abs(top - heights[z * World.Width + x - 1]) <= 2, "Discontinuity along X, including chunk seams.");
-            if (z > 0) Require(Math.Abs(top - heights[(z - 1) * World.Width + x]) <= 2, "Discontinuity along Z, including chunk seams.");
+            heights[z * world.Width + x] = top;
+            if (x > 0) Require(Math.Abs(top - heights[z * world.Width + x - 1]) <= 2, "Discontinuity along X, including chunk seams.");
+            if (z > 0) Require(Math.Abs(top - heights[(z - 1) * world.Width + x]) <= 2, "Discontinuity along Z, including chunk seams.");
             min = Math.Min(min, top);
             max = Math.Max(max, top);
         }
@@ -368,7 +373,7 @@ internal static class PrototypeChecks
         Require(!world.IntersectsSolid(player.Bounds) && player.Bounds.Max.Y < World.Height, "Generated spawn is obstructed or too high.");
         Step(player, world, 90);
         Require(player.Grounded && !world.IntersectsSolid(player.Bounds), "Player failed to land at generated spawn.");
-        Console.WriteLine($"  Seed 173 surface range: Y {min}-{max}; raw storage {World.BlockCount} bytes.");
+        Console.WriteLine($"  Seed 173 surface range: Y {min}-{max}; raw storage {world.BlockCount} bytes.");
     }
 
     private static void CheckChunkRevisions()
@@ -385,7 +390,7 @@ internal static class PrototypeChecks
 
     private static void CheckEdit(World world, Point3 cell, params (int X, int Z)[] expected)
     {
-        var before = new int[World.ChunkCount];
+        var before = new int[world.ChunkCount];
         for (int i = 0; i < before.Length; i++)
             before[i] = world.Chunks[i].Revision;
         Require(world.SetBlock(cell.X, cell.Y, cell.Z, BlockType.Stone), "Test edit failed.");
@@ -446,7 +451,7 @@ internal static class PrototypeChecks
             for (int i = 0; i < 120; i++)
                 player.Update(world, edge.Direction, false, 1f / 60);
             Require(player.Bounds.Min.X >= -0.0001f && player.Bounds.Min.Z >= -0.0001f
-                && player.Bounds.Max.X <= World.Width + 0.0001f && player.Bounds.Max.Z <= World.Depth + 0.0001f,
+                && player.Bounds.Max.X <= world.Width + 0.0001f && player.Bounds.Max.Z <= world.Depth + 0.0001f,
                 "Player crossed a horizontal world boundary.");
         }
         Require(world.SetBlock(10, 63, 10, BlockType.Stone), "Top valid block rejected.");

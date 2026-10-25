@@ -28,7 +28,7 @@ internal static class PersistenceChecks
         WorldSave restored = WorldSerializer.Read(new MemoryStream(bytes));
         Require(restored.Name == original.Name && restored.World.Seed == original.World.Seed, "World metadata changed.");
         Require(restored.PlayerPosition == original.PlayerPosition && restored.Yaw == original.Yaw && restored.Pitch == original.Pitch, "Player pose changed.");
-        for (int i = 0; i < World.ChunkCount; i++)
+        for (int i = 0; i < world.ChunkCount; i++)
             Require(world.Chunks[i].Blocks.SequenceEqual(restored.World.Chunks[i].Blocks), "Edited block bytes changed or were regenerated.");
         Require(bytes.AsSpan().SequenceEqual(Encode(restored)), "Restoring and reserializing was not deterministic.");
         var session = new GameSession(Guid.NewGuid().ToString("N"), restored);
@@ -57,7 +57,7 @@ internal static class PersistenceChecks
         ChangeInt(original, 28 + nameLength, BitConverter.SingleToInt32Bits(float.NaN));
         ChangeInt(original, 40 + nameLength, BitConverter.SingleToInt32Bits(float.PositiveInfinity));
         ChangeInt(original, 44 + nameLength, BitConverter.SingleToInt32Bits(2));
-        ChangeInt(original, 48 + nameLength, World.BlockCount - 1);
+        ChangeInt(original, 48 + nameLength, WorldSize.Normal.BlockCount() - 1);
         damaged = (byte[])original.Clone();
         damaged[52 + nameLength] = 255;
         Sign(damaged);

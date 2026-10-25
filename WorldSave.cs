@@ -4,7 +4,8 @@ namespace MDSM;
 
 public sealed record WorldSave(World World, string Name, Vector3 PlayerPosition, float Yaw, float Pitch);
 
-public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch);
+public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch,
+    WorldSize Size = WorldSize.Normal);
 
 // A session has no GPU resources. The renderer is replaced/disposed by Game1.
 public sealed class GameSession

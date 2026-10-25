@@ -48,7 +48,7 @@ internal static class DecorationChecks
         var same = new World(173);
         var other = new World(174);
         bool changed = false;
-        for (int i = 0; i < World.ChunkCount; i++)
+        for (int i = 0; i < world.ChunkCount; i++)
         {
             Require(world.Chunks[i].Blocks.SequenceEqual(same.Chunks[i].Blocks), "Decorations changed for the same seed.");
             changed |= !world.Chunks[i].Blocks.SequenceEqual(other.Chunks[i].Blocks);
@@ -58,13 +58,13 @@ internal static class DecorationChecks
         var terrain = new TerrainGenerator(173);
         int roots = 0, leaves = 0, plants = 0;
         var trunkHeights = new HashSet<int>();
-        for (int z = 0; z < World.Depth; z++)
-        for (int x = 0; x < World.Width; x++)
+        for (int z = 0; z < world.Depth; z++)
+        for (int x = 0; x < world.Width; x++)
         {
             int ground = terrain.SurfaceY(x, z), dirt = terrain.DirtDepth(x, z);
             for (int y = 0; y <= ground; y++)
             {
-                BlockType expected = y == ground ? BlockType.Grass : y >= ground - dirt ? BlockType.Dirt : BlockType.Stone;
+                BlockType expected = y == 0 ? BlockType.Bedrock : y == ground ? BlockType.Grass : y >= ground - dirt ? BlockType.Dirt : BlockType.Stone;
                 Require(world.GetBlock(x, y, z) == expected, "Decoration modified base terrain.");
             }
             for (int y = ground + 1; y < World.Height; y++)
@@ -86,7 +86,7 @@ internal static class DecorationChecks
                 while (world.GetBlock(x, ground + height + 1, z) == BlockType.WoodLog) height++;
                 Require(height >= 4 && height <= 6 && ground + height + 1 < World.Height, "Tree height is invalid.");
                 trunkHeights.Add(height);
-                Require(x >= 3 && x < World.Width - 3 && z >= 3 && z < World.Depth - 3, "Trunk is too near an edge.");
+                Require(x >= 3 && x < world.Width - 3 && z >= 3 && z < world.Depth - 3, "Trunk is too near an edge.");
                 int min = ground, max = ground;
                 for (int dz = -1; dz <= 1; dz++)
                 for (int dx = -1; dx <= 1; dx++)
@@ -189,6 +189,9 @@ internal static class DecorationChecks
         // Independent v1 writer restricted to Milestone 3's original IDs.
         var legacy = new World(173, false);
         new TerrainGenerator(173).Generate(legacy);
+        // Milestone 3 used stone at the bottom and IDs 0-3 only.
+        for (int z = 0; z < legacy.Depth; z++)
+        for (int x = 0; x < legacy.Width; x++) legacy.SetGeneratedBlock(x, 0, z, BlockType.Stone);
         legacy.SetBlock(15, 63, 15, BlockType.Stone);
         legacy.SetBlock(128, legacy.SurfaceY(128, 128), 128, BlockType.Air);
         using var oldFile = new MemoryStream();
@@ -207,7 +210,7 @@ internal static class DecorationChecks
         WorldSave restored = WorldSerializer.Read(oldFile);
         Require(WorldSerializer.FormatVersion == 1 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
-        for (int i = 0; i < World.ChunkCount; i++)
+        for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");
         Require(restored.PlayerPosition == new Vector3(128.5f, 60, 128.5f) && restored.Yaw == -0.4f && restored.Pitch == 0.2f,
             "Legacy pose changed.");
@@ -217,11 +220,14 @@ internal static class DecorationChecks
             restored.World.SetBlock(x, 59, 16, BlockType.Grass);
             restored.World.SetBlock(x, 60, 16, block);
         }
+        // Loading must retain even canopies wider than the new generation rule.
+        restored.World.SetBlock(48, 55, 48, BlockType.WoodLog);
+        restored.World.SetBlock(51, 55, 48, BlockType.Leaves);
         using var newFile = new MemoryStream();
         WorldSerializer.Write(newFile, restored);
         newFile.Position = 0;
         WorldSave expanded = WorldSerializer.Read(newFile);
-        for (int i = 0; i < World.ChunkCount; i++)
+        for (int i = 0; i < restored.World.ChunkCount; i++)
             Require(expanded.World.Chunks[i].Blocks.SequenceEqual(restored.World.Chunks[i].Blocks), "New block IDs were not saved/restored exactly.");
     }
 

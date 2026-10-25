@@ -31,7 +31,7 @@ public sealed class TerrainGenerator
             int top = SurfaceY(worldX, worldZ);
             int dirt = DirtDepth(worldX, worldZ);
             for (int y = 0; y <= top; y++)
-                chunk.SetBlock(x, y, z, y == top ? BlockType.Grass
+                chunk.SetBlock(x, y, z, y == 0 ? BlockType.Bedrock : y == top ? BlockType.Grass
                     : y >= top - dirt ? BlockType.Dirt : BlockType.Stone);
         }
     }

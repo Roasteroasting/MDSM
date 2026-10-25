@@ -11,42 +11,42 @@ public sealed class WorldDecorator
 
     internal void Decorate(World world)
     {
-        var heights = new int[World.Width * World.Depth];
+        var heights = new int[world.Width * world.Depth];
         var roots = new bool[heights.Length];
-        for (int z = 0; z < World.Depth; z++)
-        for (int x = 0; x < World.Width; x++)
-            heights[z * World.Width + x] = world.SurfaceY(x, z);
+        for (int z = 0; z < world.Depth; z++)
+        for (int x = 0; x < world.Width; x++)
+            heights[z * world.Width + x] = world.SurfaceY(x, z);
 
-        for (int z = 3; z < World.Depth - 3; z++)
-        for (int x = 3; x < World.Width - 3; x++)
+        for (int z = 3; z < world.Depth - 3; z++)
+        for (int x = 3; x < world.Width - 3; x++)
         {
-            if (NearSpawn(x, z, SpawnClearRadius)) continue;
+            if (NearSpawn(world, x, z, SpawnClearRadius)) continue;
             float density = Density(x, z);
             float chance = density < 0.4f ? 0.0004f : 0.002f + (density - 0.4f) * 0.015f;
-            if (Unit(Hash(x, z, 1)) >= chance || HasNearbyRoot(roots, x, z)) continue;
-            int ground = heights[z * World.Width + x];
+            if (Unit(Hash(x, z, 1)) >= chance || HasNearbyRoot(world, roots, x, z)) continue;
+            int ground = heights[z * world.Width + x];
             int minimum = ground, maximum = ground;
             for (int dz = -1; dz <= 1; dz++)
             for (int dx = -1; dx <= 1; dx++)
             {
-                int height = heights[(z + dz) * World.Width + x + dx];
+                int height = heights[(z + dz) * world.Width + x + dx];
                 minimum = Math.Min(minimum, height);
                 maximum = Math.Max(maximum, height);
             }
             if (maximum - minimum > 2) continue;
             uint shape = Hash(x, z, 2);
             int trunkHeight = 4 + (int)(shape % 3);
-            int radius = (shape & 12) == 0 ? 3 : 2;
+            int radius = 2;
             if (TryTree(world, x, ground, z, trunkHeight, radius, shape))
-                roots[z * World.Width + x] = true;
+                roots[z * world.Width + x] = true;
         }
 
         // Plants are placed last and never overwrite a trunk, leaf, or other plant.
-        for (int z = 0; z < World.Depth; z++)
-        for (int x = 0; x < World.Width; x++)
+        for (int z = 0; z < world.Depth; z++)
+        for (int x = 0; x < world.Width; x++)
         {
-            if (NearSpawn(x, z, 3)) continue;
-            int ground = heights[z * World.Width + x];
+            if (NearSpawn(world, x, z, 3)) continue;
+            int ground = heights[z * world.Width + x];
             if (!Blocks.SupportsPlant(world.GetBlock(x, ground, z))
                 || world.GetBlock(x, ground + 1, z) != BlockType.Air) continue;
             float choice = Unit(Hash(x, z, 3));
@@ -59,8 +59,8 @@ public sealed class WorldDecorator
     // Checks every affected cell before writing, so rejected candidates leave no partial tree.
     internal static bool TryTree(World world, int x, int ground, int z, int trunkHeight, int radius, uint shape)
     {
-        if (trunkHeight < 4 || trunkHeight > 6 || radius < 2 || radius > 3
-            || x - radius < 0 || x + radius >= World.Width || z - radius < 0 || z + radius >= World.Depth
+        if (trunkHeight < 4 || trunkHeight > 6 || radius != 2
+            || x - radius < 0 || x + radius >= world.Width || z - radius < 0 || z + radius >= world.Depth
             || ground < 0 || ground + trunkHeight + 1 >= World.Height
             || world.GetBlock(x, ground, z) != BlockType.Grass)
             return false;
@@ -94,18 +94,18 @@ public sealed class WorldDecorator
         return Math.Abs(dx) + Math.Abs(dz) <= rounding;
     }
 
-    private static bool HasNearbyRoot(bool[] roots, int x, int z)
+    private static bool HasNearbyRoot(World world, bool[] roots, int x, int z)
     {
         for (int dz = -4; dz <= 4; dz++)
         for (int dx = -4; dx <= 4; dx++)
-            if (dx * dx + dz * dz < 25 && (uint)(x + dx) < World.Width && (uint)(z + dz) < World.Depth
-                && roots[(z + dz) * World.Width + x + dx]) return true;
+            if (dx * dx + dz * dz < 25 && (uint)(x + dx) < world.Width && (uint)(z + dz) < world.Depth
+                && roots[(z + dz) * world.Width + x + dx]) return true;
         return false;
     }
 
-    private static bool NearSpawn(int x, int z, int radius)
+    private static bool NearSpawn(World world, int x, int z, int radius)
     {
-        int dx = x - World.Width / 2, dz = z - World.Depth / 2;
+        int dx = x - world.Width / 2, dz = z - world.Depth / 2;
         return dx * dx + dz * dz < radius * radius;
     }
 

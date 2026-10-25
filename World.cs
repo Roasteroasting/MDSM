@@ -5,27 +5,33 @@ namespace MDSM;
 
 public sealed class World
 {
-    public const int Width = 256;
     public const int Height = 64;
-    public const int Depth = 256;
-    public const int ChunksX = Width / Chunk.Size;
-    public const int ChunksZ = Depth / Chunk.Size;
-    public const int ChunkCount = ChunksX * ChunksZ;
-    public const int BlockCount = Width * Height * Depth;
+    public WorldSize Size { get; }
+    public int Width => Size.Width();
+    public int Depth => Width;
+    public int ChunksX => Width / Chunk.Size;
+    public int ChunksZ => Depth / Chunk.Size;
+    public int ChunkCount => ChunksX * ChunksZ;
+    public int BlockCount => Width * Height * Depth;
     public const int DefaultSeed = 173;
 
-    private readonly Chunk[] _chunks = new Chunk[ChunkCount];
+    private readonly Chunk[] _chunks;
     public ReadOnlySpan<Chunk> Chunks => _chunks;
     public int Seed { get; }
     public int Revision { get; private set; }
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
-    public World(int seed = DefaultSeed) : this(seed, true) { }
+    public World(int seed = DefaultSeed, WorldSize size = WorldSize.Normal) : this(seed, size, true) { }
 
     // Loading and test fixtures fill empty storage directly without generating terrain.
-    internal World(int seed, bool generateTerrain)
+    internal World(int seed, bool generateTerrain) : this(seed, WorldSize.Normal, generateTerrain) { }
+
+    internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        _ = size.Width(); // Validate before allocating storage.
+        Size = size;
+        _chunks = new Chunk[ChunkCount];
         for (int z = 0; z < ChunksZ; z++)
         for (int x = 0; x < ChunksX; x++)
             _chunks[z * ChunksX + x] = new Chunk(x, z);
@@ -40,7 +46,7 @@ public sealed class World
     public Chunk GetChunk(int x, int z)
     {
         if ((uint)x >= ChunksX || (uint)z >= ChunksZ)
-            throw new ArgumentOutOfRangeException(nameof(x), "Chunk coordinates must be between 0 and 15.");
+            throw new ArgumentOutOfRangeException(nameof(x), "Chunk coordinates must be inside this world.");
         return _chunks[z * ChunksX + x];
     }
 

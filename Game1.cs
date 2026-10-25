@@ -47,7 +47,7 @@ public class Game1 : Game
         Window.ClientSizeChanged += (_, _) => _ignoreMouseDelta = true;
         Window.TextInput += (_, e) =>
         {
-            if (IsActive && State == GameState.WorldCreation) _menu?.TextInput(e.Character);
+            if (IsActive && (State is GameState.WorldCreation or GameState.WorldRename)) _menu?.TextInput(e.Character);
         };
         Deactivated += (_, _) => Pause();
     }
@@ -56,7 +56,7 @@ public class Game1 : Game
     {
         _atlas = new TextureAtlas(Content);
         _hud = new Hud(GraphicsDevice, _atlas);
-        _menu = new MenuController(GraphicsDevice);
+        _menu = new MenuController(GraphicsDevice, _atlas);
         _previousKeyboard = Keyboard.GetState();
         _previousMouse = Mouse.GetState();
         SetState(GameState.MainMenu);
@@ -141,9 +141,7 @@ public class Game1 : Game
                     SetState(GameState.WorldCreation);
                     break;
                 case MenuAction.SelectWorld:
-                    SetState(GameState.WorldSelection);
-                    _menu.SetWorlds(Array.Empty<WorldEntry>());
-                    _menu.SetWorlds(_saves.ListWorlds());
+                    RefreshWorlds();
                     break;
                 case MenuAction.CreateWorld:
                     string name = WorldSerializer.ValidateName(_menu.NameText);
@@ -151,7 +149,7 @@ public class Game1 : Game
                     if (string.IsNullOrWhiteSpace(_menu.SeedText)) seed = Random.Shared.Next();
                     else if (!int.TryParse(_menu.SeedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out seed))
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
-                    var world = new World(seed);
+                    var world = new World(seed, _menu.SelectedSize);
                     var camera = new Camera();
                     var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch);
                     BeginWorld(_saves.Create(save), save);
@@ -160,8 +158,32 @@ public class Game1 : Game
                     WorldEntry entry = _menu.SelectedWorld;
                     if (entry != null) BeginWorld(entry.Id, _saves.Load(entry.Id));
                     break;
+                case MenuAction.RenameWorld:
+                case MenuAction.DeleteWorld:
+                    if (_menu.SelectedWorld is WorldEntry selected)
+                    {
+                        _menu.BeginManage(selected);
+                        SetState(action == MenuAction.RenameWorld ? GameState.WorldRename : GameState.WorldDeleteConfirmation);
+                    }
+                    break;
+                case MenuAction.ConfirmRename when State == GameState.WorldRename:
+                    string renamedId = _menu.ManagedWorld.Id;
+                    _saves.Rename(renamedId, _menu.NameText);
+                    RefreshWorlds(renamedId);
+                    _menu.Message("WORLD RENAMED.");
+                    break;
+                case MenuAction.ConfirmDelete when State == GameState.WorldDeleteConfirmation:
+                    _saves.Delete(_menu.ManagedWorld.Id);
+                    RefreshWorlds();
+                    _menu.Message("WORLD DELETED PERMANENTLY.");
+                    break;
+                case MenuAction.OpenSavesFolder:
+                    _saves.OpenSavesFolder();
+                    break;
                 case MenuAction.Back:
-                    SetState(GameState.MainMenu);
+                    if (State is GameState.WorldRename or GameState.WorldDeleteConfirmation)
+                        RefreshWorlds(_menu.ManagedWorld.Id);
+                    else SetState(GameState.MainMenu);
                     break;
                 case MenuAction.Resume:
                     SetState(GameState.Playing);
@@ -175,6 +197,7 @@ public class Game1 : Game
                         _renderer.Dispose();
                         _renderer = null;
                         _session = null;
+                        _saves.SetActiveWorld(null);
                         _selection = null;
                         SetState(GameState.MainMenu);
                         _menu.Message("WORLD SAVED.");
@@ -191,6 +214,13 @@ public class Game1 : Game
         }
     }
 
+    private void RefreshWorlds(string selectedId = null)
+    {
+        SetState(GameState.WorldSelection);
+        _menu.SetWorlds(Array.Empty<WorldEntry>());
+        _menu.SetWorlds(_saves.ListWorlds(), selectedId);
+    }
+
     private void BeginWorld(string id, WorldSave save)
     {
         var session = new GameSession(id, save);
@@ -198,7 +228,9 @@ public class Game1 : Game
         _renderer?.Dispose();
         _renderer = renderer;
         _session = session;
+        _saves.SetActiveWorld(id);
         _palette.Reset();
+        _hud.InvalidateDebug();
         _selection = null;
         _notice = null;
         _autosaveElapsed = 0;
@@ -227,7 +259,8 @@ public class Game1 : Game
     }
 
     private static bool IsStorageError(Exception exception) =>
-        exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
+        exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or NotSupportedException
+            or System.ComponentModel.Win32Exception or System.Security.SecurityException;
 
     private void Pause()
     {
@@ -269,7 +302,7 @@ public class Game1 : Game
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             _renderer.Draw(_session.Camera, State == GameState.Playing ? _selection : null);
             _hud.Draw(GraphicsDevice.Viewport, _palette, State == GameState.Playing, _showDebug,
-                _session.Player.Position, _session.World.Seed, gameTime, State == GameState.Playing ? _notice : null);
+                _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null);
             if (State == GameState.Paused) _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }
         else
@@ -284,6 +317,7 @@ public class Game1 : Game
     {
         _renderer?.Dispose();
         _renderer = null;
+        _saves.SetActiveWorld(null);
         _menu?.Dispose();
         _hud?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.

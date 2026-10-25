@@ -12,6 +12,7 @@ internal sealed class MenuController : IDisposable
 {
     private readonly SpriteBatch _sprites;
     private readonly Texture2D _pixel;
+    private readonly TextureAtlas _atlas;
     private GameState _screen;
     private int _focus;
     private int _selected;
@@ -24,7 +25,9 @@ internal sealed class MenuController : IDisposable
     private bool _messageIsError;
     public string NameText { get; private set; } = "";
     public string SeedText { get; private set; } = "";
+    public WorldSize SelectedSize { get; private set; } = WorldSize.Normal;
     public WorldEntry SelectedWorld => _worlds.Count == 0 ? null : _worlds[_selected];
+    public WorldEntry ManagedWorld { get; private set; }
 
     private readonly record struct Button(string Text, MenuAction Action);
     private static readonly Button[] MainButtons =
@@ -36,18 +39,29 @@ internal sealed class MenuController : IDisposable
         new("RESUME", MenuAction.Resume), new("SAVE WORLD", MenuAction.Save), new("SAVE AND MAIN MENU", MenuAction.SaveAndReturn)
     };
     private static readonly Button[] CreateButtons = { new("CREATE", MenuAction.CreateWorld), new("BACK", MenuAction.Back) };
-    private static readonly Button[] SelectButtons = { new("LOAD WORLD", MenuAction.LoadWorld), new("BACK", MenuAction.Back) };
+    private static readonly Button[] SelectButtons =
+    {
+        new("LOAD WORLD", MenuAction.LoadWorld), new("RENAME WORLD", MenuAction.RenameWorld),
+        new("DELETE WORLD", MenuAction.DeleteWorld), new("OPEN SAVES FOLDER", MenuAction.OpenSavesFolder), new("BACK", MenuAction.Back)
+    };
+    private static readonly Button[] RenameButtons = { new("RENAME", MenuAction.ConfirmRename), new("CANCEL", MenuAction.Back) };
+    // Cancel has initial keyboard focus. Deletion always requires a separate explicit action.
+    private static readonly Button[] DeleteButtons = { new("CANCEL", MenuAction.Back), new("DELETE PERMANENTLY", MenuAction.ConfirmDelete) };
     private Button[] Buttons => _screen switch
     {
         GameState.Paused => PauseButtons,
         GameState.WorldCreation => CreateButtons,
         GameState.WorldSelection => SelectButtons,
+        GameState.WorldRename => RenameButtons,
+        GameState.WorldDeleteConfirmation => DeleteButtons,
         _ => MainButtons
     };
-    private int FocusOffset => _screen == GameState.WorldCreation ? 2 : _screen == GameState.WorldSelection ? 1 : 0;
+    private int FocusOffset => _screen == GameState.WorldCreation ? 3
+        : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
-    public MenuController(GraphicsDevice device)
+    public MenuController(GraphicsDevice device, TextureAtlas atlas)
     {
+        _atlas = atlas;
         _sprites = new SpriteBatch(device);
         _pixel = new Texture2D(device, 1, 1);
         _pixel.SetData(new[] { Color.White });
@@ -63,18 +77,26 @@ internal sealed class MenuController : IDisposable
         {
             NameText = "";
             SeedText = "";
+            SelectedSize = WorldSize.Normal;
         }
+        if (screen == GameState.WorldRename) NameText = ManagedWorld.Name;
     }
 
-    public void SetWorlds(IReadOnlyList<WorldEntry> worlds)
+    public void BeginManage(WorldEntry entry) => ManagedWorld = entry;
+
+    public void SetWorlds(IReadOnlyList<WorldEntry> worlds, string selectedId = null)
     {
         _worlds = worlds;
         _worldDetails = new string[worlds.Count];
         _selected = _scroll = 0;
         for (int i = 0; i < worlds.Count; i++)
+        {
+            if (worlds[i].Id == selectedId) _selected = i;
             _worldDetails[i] = worlds[i].Error == null
-                ? $"SEED {worlds[i].Seed} / {worlds[i].ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
+                ? $"{worlds[i].Size ?? WorldSize.Normal} / SEED {worlds[i].Seed} / {worlds[i].ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
                 : "UNAVAILABLE - SELECT LOAD FOR DETAILS";
+        }
+        _scroll = _selected;
     }
 
     public void Message(string text, bool error = false)
@@ -85,7 +107,7 @@ internal sealed class MenuController : IDisposable
 
     public void TextInput(char character)
     {
-        if (_screen != GameState.WorldCreation || _focus > 1)
+        if (!IsTextField)
             return;
         string current = _focus == 0 ? NameText : SeedText;
         if (character == '\b')
@@ -112,7 +134,7 @@ internal sealed class MenuController : IDisposable
         bool click = mouse.LeftButton == ButtonState.Pressed && previousMouse.LeftButton == ButtonState.Released;
         if (Pressed(Keys.Escape))
             return _screen == GameState.Paused ? MenuAction.Resume : _screen == GameState.MainMenu ? MenuAction.None : MenuAction.Back;
-        if (_screen == GameState.WorldCreation && _focus < 2 && Pressed(Keys.A)
+        if (IsTextField && Pressed(Keys.A)
             && (keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl)))
             _selectAll = true;
 
@@ -131,13 +153,23 @@ internal sealed class MenuController : IDisposable
             _selectAll = false;
         }
 
-        if (_screen == GameState.WorldCreation && click)
-            for (int i = 0; i < 2; i++)
-                if (FieldBounds(viewport, i).Contains(_mouse)) { _focus = i; _selectAll = false; }
+        if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
+            for (int i = 0; i < (_screen == GameState.WorldCreation ? 3 : 1); i++)
+                if (FieldBounds(viewport, i).Contains(_mouse))
+                {
+                    _focus = i; _selectAll = false;
+                    if (i == 2) CycleSize(1);
+                }
+        if (_screen == GameState.WorldCreation && _focus == 2)
+        {
+            if (Pressed(Keys.Left)) CycleSize(-1);
+            if (Pressed(Keys.Right)) CycleSize(1);
+        }
         if (_screen == GameState.WorldSelection)
         {
             Rectangle area = ListBounds(viewport);
             int rows = area.Height / 60;
+            _scroll = Math.Clamp(_scroll, 0, Math.Max(0, _worlds.Count - rows));
             if (area.Contains(_mouse))
             {
                 _scroll = Math.Clamp(_scroll - (mouse.ScrollWheelValue - previousMouse.ScrollWheelValue) / 120,
@@ -156,6 +188,8 @@ internal sealed class MenuController : IDisposable
         if (Pressed(Keys.Enter))
         {
             if (_screen == GameState.WorldCreation && _focus < 2) return MenuAction.CreateWorld;
+            if (_screen == GameState.WorldCreation && _focus == 2) { CycleSize(1); return MenuAction.None; }
+            if (_screen == GameState.WorldRename && _focus == 0) return MenuAction.ConfirmRename;
             if (_screen == GameState.WorldSelection && _focus == 0)
                 return _worlds.Count > 0 ? MenuAction.LoadWorld : MenuAction.None;
             return CanActivate(Buttons[_focus - FocusOffset].Action) ? Buttons[_focus - FocusOffset].Action : MenuAction.None;
@@ -163,7 +197,15 @@ internal sealed class MenuController : IDisposable
         return MenuAction.None;
     }
 
-    private bool CanActivate(MenuAction action) => action != MenuAction.LoadWorld || _worlds.Count > 0;
+    private bool IsTextField => (_screen == GameState.WorldCreation && _focus < 2)
+        || (_screen == GameState.WorldRename && _focus == 0);
+    private void CycleSize(int direction) => SelectedSize = (WorldSize)(((int)SelectedSize + direction + 3) % 3);
+    private bool CanActivate(MenuAction action) => action switch
+    {
+        MenuAction.LoadWorld or MenuAction.DeleteWorld => _worlds.Count > 0,
+        MenuAction.RenameWorld => SelectedWorld != null && SelectedWorld.Error == null,
+        _ => true
+    };
 
     private void EnsureVisible(Viewport viewport)
     {
@@ -173,18 +215,27 @@ internal sealed class MenuController : IDisposable
 
     private static Rectangle ListBounds(Viewport viewport) => new(
         Math.Max(16, (viewport.Width - 620) / 2), 110, Math.Min(620, viewport.Width - 32),
-        Math.Max(60, Math.Min(360, (viewport.Height - 300) / 60 * 60)));
+        Math.Max(60, Math.Min(360, (viewport.Height - 390) / 60 * 60)));
 
     private static Rectangle FieldBounds(Viewport viewport, int index) =>
-        new((viewport.Width - Math.Min(520, viewport.Width - 32)) / 2, viewport.Height / 2 - 95 + index * 80,
+        new((viewport.Width - Math.Min(520, viewport.Width - 32)) / 2, viewport.Height / 2 - 110 + index * 70,
             Math.Min(520, viewport.Width - 32), 42);
 
     private Rectangle ButtonBounds(Viewport viewport, int index)
     {
         if (_screen is GameState.MainMenu or GameState.Paused)
-            return new Rectangle((viewport.Width - 380) / 2, viewport.Height / 2 - 50 + index * 58, 380, 46);
+        {
+            int buttonWidth = Math.Min(380, viewport.Width - 32);
+            return new Rectangle((viewport.Width - buttonWidth) / 2, viewport.Height / 2 - 50 + index * 58, buttonWidth, 46);
+        }
         int width = Math.Min(250, (viewport.Width - 48) / 2);
-        int y = _screen == GameState.WorldSelection ? ListBounds(viewport).Bottom + 20 : viewport.Height / 2 + 65;
+        if (_screen == GameState.WorldSelection)
+        {
+            int row = index / 2, column = index % 2;
+            int x = index == 4 ? (viewport.Width - width) / 2 : viewport.Width / 2 - width - 8 + column * (width + 16);
+            return new Rectangle(x, ListBounds(viewport).Bottom + 16 + row * 54, width, 44);
+        }
+        int y = _screen == GameState.WorldCreation ? viewport.Height / 2 + 112 : viewport.Height / 2 + 65;
         return new Rectangle(viewport.Width / 2 - width - 8 + index * (width + 16), y, width, 46);
     }
 
@@ -195,16 +246,28 @@ internal sealed class MenuController : IDisposable
             DepthStencilState.None, RasterizerState.CullNone);
         if (_screen == GameState.Paused)
             Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.7f);
+        else
+        {
+            const int tileSize = 64;
+            Rectangle dirt = TextureAtlas.Source(Blocks.Tile(BlockType.Dirt, Vector3.Up));
+            for (int y = 0; y < viewport.Height; y += tileSize)
+            for (int x = 0; x < viewport.Width; x += tileSize)
+                _sprites.Draw(_atlas.Texture, new Rectangle(x, y, tileSize, tileSize), dirt, Color.White);
+            Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.5f);
+        }
         string title = _screen switch
         {
             GameState.WorldCreation => "CREATE WORLD",
             GameState.WorldSelection => "SELECT WORLD",
+            GameState.WorldRename => "RENAME WORLD",
+            GameState.WorldDeleteConfirmation => "DELETE WORLD?",
             GameState.Paused => "PAUSED",
             _ => "MDSM"
         };
-        Center(title, viewport, _screen == GameState.WorldSelection ? 38 : viewport.Height / 2 - 190, 3, Color.White);
-        if (_screen == GameState.MainMenu)
-            Center("FINITE WORLDS / INDEV INSPIRED", viewport, viewport.Height / 2 - 140, scale, Color.LightGray);
+        int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12) : 3;
+        int titleY = _screen == GameState.WorldSelection ? 38 : Math.Max(20, viewport.Height / 2 - 210);
+        Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
+        Center(title, viewport, titleY, titleScale, Color.White);
         if (_screen == GameState.Paused)
             Center(PixelFont.Fit(worldName ?? "", 44), viewport, viewport.Height / 2 - 140, scale, Color.LightGray);
 
@@ -212,6 +275,19 @@ internal sealed class MenuController : IDisposable
         {
             DrawField(viewport, 0, "WORLD NAME", NameText, "ENTER A NAME", scale);
             DrawField(viewport, 1, "OPTIONAL INTEGER SEED", SeedText, "RANDOM", scale);
+            DrawField(viewport, 2, "WORLD SIZE - CLICK OR LEFT/RIGHT",
+                $"{SelectedSize} / {SelectedSize.Width()} X 64 X {SelectedSize.Width()}", "", scale);
+        }
+        if (_screen == GameState.WorldRename)
+        {
+            Center(PixelFont.Fit(ManagedWorld.Name, 48), viewport, viewport.Height / 2 - 160, scale, Color.LightGray);
+            DrawField(viewport, 0, "NEW WORLD NAME", NameText, "ENTER A NAME", scale);
+        }
+        if (_screen == GameState.WorldDeleteConfirmation)
+        {
+            Center("PERMANENTLY DELETE THIS WORLD?", viewport, viewport.Height / 2 - 110, scale, Color.White);
+            Center(ManagedWorld.Name, viewport, viewport.Height / 2 - 65, scale, Color.LightGoldenrodYellow);
+            Center("THIS CANNOT BE UNDONE.", viewport, viewport.Height / 2 - 20, scale, Color.Salmon);
         }
         if (_screen == GameState.WorldSelection)
         {
@@ -262,7 +338,7 @@ internal sealed class MenuController : IDisposable
         string display = value.Length == 0 ? placeholder : value;
         display = PixelFont.Fit(display, (bounds.Width - 28) / (6 * scale));
         Text(display, bounds.X + 8, bounds.Y + 13, scale, value.Length == 0 ? Color.Gray : Color.White);
-        if (_focus == index)
+        if (_focus == index && index < 2)
             Fill(new Rectangle(bounds.X + 8 + (value.Length == 0 ? 0 : display.Length) * 6 * scale, bounds.Y + 10, scale, 18), Color.White);
     }
 

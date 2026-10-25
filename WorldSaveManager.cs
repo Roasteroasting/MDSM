@@ -1,15 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 
 namespace MDSM;
 
-public sealed record WorldEntry(string Id, string Name, int? Seed, DateTime ModifiedUtc, string Error);
+public sealed record WorldEntry(string Id, string Name, int? Seed, DateTime ModifiedUtc, string Error,
+    WorldSize? Size = null);
 
 public sealed class WorldSaveManager
 {
     public const string FileName = "world.dat";
     public string RootDirectory { get; }
+    internal string ActiveWorldId { get; private set; }
 
     public WorldSaveManager(string rootDirectory = null)
     {
@@ -77,6 +80,67 @@ public sealed class WorldSaveManager
         return WorldSerializer.Read(stream);
     }
 
+    internal void SetActiveWorld(string id)
+    {
+        if (id != null) _ = WorldDirectory(id);
+        ActiveWorldId = id;
+    }
+
+    public void Rename(string id, string name)
+    {
+        RequireInactive(id);
+        name = WorldSerializer.ValidateName(name);
+        WorldSave save = Load(id);
+        Save(id, save with { Name = name });
+    }
+
+    public void Delete(string id)
+    {
+        RequireInactive(id);
+        string directory = WorldDirectory(id);
+        // Preflight every entry without following links. Only a validated direct child
+        // of RootDirectory is eligible for recursive deletion.
+        var pending = new Stack<string>();
+        pending.Push(directory);
+        while (pending.TryPop(out string current))
+        {
+            RejectLink(current);
+            foreach (string path in Directory.EnumerateFileSystemEntries(current))
+            {
+                FileAttributes attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("World directory contains a symbolic link or junction; deletion was canceled.");
+                if ((attributes & FileAttributes.Directory) != 0) pending.Push(path);
+            }
+        }
+        Directory.Delete(directory, true);
+    }
+
+    public void OpenSavesFolder()
+    {
+        Directory.CreateDirectory(RootDirectory);
+        ProcessStartInfo start;
+        if (OperatingSystem.IsWindows())
+            start = new ProcessStartInfo(RootDirectory) { UseShellExecute = true };
+        else if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+        {
+            start = new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open")
+                { UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add(RootDirectory);
+        }
+        else throw new NotSupportedException("Opening the saves folder is unsupported on this platform.");
+        using Process process = Process.Start(start);
+        if (!OperatingSystem.IsWindows() && process != null && process.WaitForExit(1000) && process.ExitCode != 0)
+            throw new IOException("The desktop could not open the saves folder. Check the system's default file manager.");
+    }
+
+    private void RequireInactive(string id)
+    {
+        _ = WorldDirectory(id);
+        if (string.Equals(id, ActiveWorldId, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("Close the currently loaded world before managing it.");
+    }
+
     public IReadOnlyList<WorldEntry> ListWorlds()
     {
         var entries = new List<WorldEntry>();
@@ -90,9 +154,11 @@ public sealed class WorldSaveManager
             string path = Path.Combine(directory, FileName);
             try
             {
+                _ = WorldDirectory(id);
+                RejectLink(path);
                 using var stream = File.OpenRead(path);
                 WorldMetadata metadata = WorldSerializer.ReadMetadata(stream);
-                entries.Add(new WorldEntry(id, metadata.Name, metadata.Seed, File.GetLastWriteTimeUtc(path), null));
+                entries.Add(new WorldEntry(id, metadata.Name, metadata.Seed, File.GetLastWriteTimeUtc(path), null, metadata.Size));
             }
             catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
             {
@@ -108,6 +174,24 @@ public sealed class WorldSaveManager
     {
         if (!Guid.TryParseExact(id, "N", out _))
             throw new ArgumentException("Invalid world directory ID.", nameof(id));
-        return Path.Combine(RootDirectory, id);
+        string directory = Path.GetFullPath(Path.Combine(RootDirectory, id));
+        StringComparison comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!string.Equals(Path.GetDirectoryName(directory), Path.TrimEndingDirectorySeparator(RootDirectory), comparison))
+            throw new ArgumentException("World directory must be directly inside the saves folder.", nameof(id));
+        RejectLink(RootDirectory);
+        RejectLink(directory);
+        RejectLink(Path.Combine(directory, FileName));
+        return directory;
+    }
+
+    private static void RejectLink(string path)
+    {
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Symbolic links and junctions are not allowed in world save paths.");
+        }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
     }
 }

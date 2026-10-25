@@ -62,15 +62,15 @@ public sealed class Player
             return false;
 
         Vector3 next = Position;
-        if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, World.Width - HalfWidth);
+        if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, world.Width - HalfWidth);
         else if (axis == 1) next.Y += amount;
-        else next.Z = Math.Clamp(next.Z + amount, HalfWidth, World.Depth - HalfWidth);
+        else next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
 
         BoundingBox bounds = BoundsAt(next);
         bool collided = false;
-        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(World.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(World.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
             if (!world.IsSolid(x, y, z) || !World.Overlaps(bounds, World.Bounds(new Point3(x, y, z))))
                 continue;

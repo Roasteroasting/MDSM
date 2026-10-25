@@ -5,6 +5,8 @@ public enum GameState
     MainMenu,
     WorldCreation,
     WorldSelection,
+    WorldRename,
+    WorldDeleteConfirmation,
     Playing,
     Paused
 }
@@ -16,6 +18,11 @@ internal enum MenuAction
     SelectWorld,
     CreateWorld,
     LoadWorld,
+    RenameWorld,
+    ConfirmRename,
+    DeleteWorld,
+    ConfirmDelete,
+    OpenSavesFolder,
     Back,
     Resume,
     Save,

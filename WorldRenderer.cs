@@ -11,8 +11,8 @@ public sealed class WorldRenderer : IDisposable
     private readonly AlphaTestEffect _terrainEffect;
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
-    private readonly ChunkMesh[] _meshes = new ChunkMesh[World.ChunkCount];
-    private readonly ChunkMesh[] _visible = new ChunkMesh[World.ChunkCount];
+    private readonly ChunkMesh[] _meshes;
+    private readonly ChunkMesh[] _visible;
     private readonly ChunkMeshBuilder _builder = new();
     private readonly BoundingFrustum _frustum = new(Matrix.Identity);
     private readonly VertexPositionColor[] _outline = new VertexPositionColor[24];
@@ -25,6 +25,8 @@ public sealed class WorldRenderer : IDisposable
     {
         _device = device;
         _world = world;
+        _meshes = new ChunkMesh[world.ChunkCount];
+        _visible = new ChunkMesh[world.ChunkCount];
         for (int i = 0; i < _meshes.Length; i++)
             _meshes[i] = new ChunkMesh(device, world.Chunks[i]);
         _terrainEffect = new AlphaTestEffect(device)

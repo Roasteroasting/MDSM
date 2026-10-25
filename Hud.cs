@@ -25,10 +25,12 @@ public sealed class Hud : IDisposable
         _atlas = atlas;
     }
 
+    public void InvalidateDebug() => _debugElapsed = 0.2;
+
     public void Draw(Viewport viewport, BlockPalette palette, bool captured, bool showDebug,
-        Vector3 playerPosition, int seed, GameTime gameTime, string notification = null)
+        Vector3 playerPosition, World world, GameTime gameTime, string notification = null)
     {
-        UpdateDebug(showDebug, playerPosition, seed, gameTime.ElapsedGameTime.TotalSeconds);
+        UpdateDebug(showDebug, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds);
         int width = viewport.Width, height = viewport.Height;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
@@ -81,7 +83,7 @@ public sealed class Hud : IDisposable
         _sprites.End();
     }
 
-    private void UpdateDebug(bool visible, Vector3 position, int seed, double elapsed)
+    private void UpdateDebug(bool visible, Vector3 position, World world, double elapsed)
     {
         _frameCount++;
         _fpsElapsed += elapsed;
@@ -100,9 +102,9 @@ public sealed class Hud : IDisposable
         _debugLines[0] = FormattableString.Invariant($"X {position.X:0.0} Y {position.Y:0.0} Z {position.Z:0.0}");
         _debugLines[1] = $"CHUNK {(int)MathF.Floor(position.X) / Chunk.Size} {(int)MathF.Floor(position.Z) / Chunk.Size}";
         _debugLines[2] = $"FPS {_fps}";
-        _debugLines[3] = $"SEED {seed}";
-        _debugLines[4] = $"CHUNKS {World.ChunkCount}";
-        _debugLines[5] = $"WORLD {World.Width} X {World.Height} X {World.Depth}";
+        _debugLines[3] = $"SEED {world.Seed}";
+        _debugLines[4] = $"CHUNKS {world.ChunkCount}";
+        _debugLines[5] = $"WORLD {world.Width} X {World.Height} X {world.Depth}";
     }
 
     private void Fill(Rectangle rectangle, Color color) => _sprites.Draw(_pixel, rectangle, color);
