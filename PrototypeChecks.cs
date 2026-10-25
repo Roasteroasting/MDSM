@@ -27,7 +27,11 @@ internal static class PrototypeChecks
             ("Ground contact, jump, gravity, and landing", CheckJump),
             ("Wall collision, sliding, and diagonal speed", CheckMovement),
             ("Ceiling collision and fast falling", CheckVerticalCollision),
-            ("Falling off the world and safe respawn", CheckRespawn)
+            ("Falling off the world and safe respawn", CheckRespawn),
+            ("Edited world and player pose serialization round-trip", PersistenceChecks.RoundTrip),
+            ("Save checksums, headers, dimensions, and corrupt data", PersistenceChecks.CorruptData),
+            ("Multiple world directories, safe names, and unreadable saves", PersistenceChecks.WorldDirectories),
+            ("Atomic saving and preservation after write/replace failures", PersistenceChecks.AtomicSaving)
         };
 
         int failures = 0;

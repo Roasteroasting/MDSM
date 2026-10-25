@@ -28,4 +28,12 @@ public sealed class Chunk
     internal BlockType GetBlock(int x, int y, int z) => (BlockType)_blocks[(y * Size + z) * Size + x];
     internal void SetBlock(int x, int y, int z, BlockType block) => _blocks[(y * Size + z) * Size + x] = (byte)block;
     internal void MarkDirty() => Revision++;
+
+    internal void RestoreBlocks(System.ReadOnlySpan<byte> blocks)
+    {
+        if (blocks.Length != BlockCount)
+            throw new System.ArgumentException("Incorrect chunk data length.", nameof(blocks));
+        blocks.CopyTo(_blocks);
+        MarkDirty();
+    }
 }

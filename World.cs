@@ -22,7 +22,7 @@ public sealed class World
 
     public World(int seed = DefaultSeed) : this(seed, true) { }
 
-    // Empty storage is used by the deterministic test fixtures, not by gameplay.
+    // Loading and test fixtures fill empty storage directly without generating terrain.
     internal World(int seed, bool generateTerrain)
     {
         Seed = seed;
