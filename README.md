@@ -23,7 +23,7 @@ The **FPS Cap** slider supports every whole number from **5 to 360**, defaulting
 
 Preferences are application-wide in `%LOCALAPPDATA%/MDSM/settings.json` on Windows, alongside the existing `Worlds` directory. The equivalent per-user application-data location is used elsewhere. They are independent of world saves and survive world switches and application restarts. Missing settings use defaults; malformed/oversized files fall back safely, and out-of-range integers are clamped. Changes save after a short idle delay and on Back/exit using a temporary file and atomic replacement. Write failures keep the selected preferences active for the current session and display an error without replacing the previous valid file.
 
-[FrameTiming.cs](./FrameTiming.cs) separates rendering from a **120 Hz fixed simulation clock**. The render limiter uses stopwatch deadlines and sleeping, compensating for small timer overshoots without busy-waiting and rebasing after slow frames. Uncapped mode skips the limiter. MonoGame's outer fixed-step timing and presentation synchronization are disabled so they do not impose the former 60 FPS ceiling; its inactive sleep is also disabled so the same preference applies throughout menus and focus changes. See [MonoGame's timing loop](https://github.com/MonoGame/MonoGame/blob/v3.8.6/MonoGame.Framework/Game.cs) for the outer-loop behavior. There is no additional VSync setting.
+[FrameTiming.cs](./Core/FrameTiming.cs) separates rendering from a **120 Hz fixed simulation clock**. The render limiter uses stopwatch deadlines and sleeping, compensating for small timer overshoots without busy-waiting and rebasing after slow frames. Uncapped mode skips the limiter. MonoGame's outer fixed-step timing and presentation synchronization are disabled so they do not impose the former 60 FPS ceiling; its inactive sleep is also disabled so the same preference applies throughout menus and focus changes. See [MonoGame's timing loop](https://github.com/MonoGame/MonoGame/blob/v3.8.6/MonoGame.Framework/Game.cs) for the outer-loop behavior. There is no additional VSync setting.
 
 The simulation consumes elapsed time in fixed steps, including multiple steps per rendered frame at low FPS. Player physics, fall tracking, mining, item motion, pickup delays, and merging therefore use the same simulation rate at every render cap. Autosave remains based on active elapsed time. Jump presses are retained until the next simulation step; mouse look uses mouse displacement once per rendered frame. Menus clear fractional simulation time without resetting an in-progress fall. MonoGame's existing half-second maximum elapsed-time safeguard remains in place for exceptional stalls. A chosen cap is a rendering target/upper limit, not a promise of hardware performance; operating-system scheduling, drivers, and world complexity affect achieved FPS.
 
@@ -49,9 +49,9 @@ Each world keeps its own size, selected during creation. **Normal** is the defau
 
 Valid X/Z coordinates run from zero through the selected width/depth minus one. Y remains 0-63 for every size. Storage, player bounds, spawn, decorations, rendering, and F3 dimensions/chunk counts use the active world's size, rather than a global selection.
 
-Choose **Create New World** from the main menu, enter a name, and optionally enter a signed 32-bit integer seed. Leaving the seed blank chooses a random seed. The same seed and size produce the same complete world. The code-level `World` constructor defaults to seed 173 and Normal size; the creation menu passes its selections explicitly. [TerrainGenerator.cs](./TerrainGenerator.cs) combines coherent 2D gradient noise at several scales using global coordinates, so hills and valleys continue across chunk boundaries. Surfaces stay within Y 16-44, with grass on top, 3-5 dirt blocks below, and stone underneath. The height-generation algorithm remains unchanged from Milestone 2. New worlds replace stone at Y=0 with exactly one complete bedrock layer, without adding bedrock above it.
+Choose **Create New World** from the main menu, enter a name, and optionally enter a signed 32-bit integer seed. Leaving the seed blank chooses a random seed. The same seed and size produce the same complete world. The code-level `World` constructor defaults to seed 173 and Normal size; the creation menu passes its selections explicitly. [TerrainGenerator.cs](./Worlds/TerrainGenerator.cs) combines coherent 2D gradient noise at several scales using global coordinates, so hills and valleys continue across chunk boundaries. Surfaces stay within Y 16-44, with grass on top, 3-5 dirt blocks below, and stone underneath. The height-generation algorithm remains unchanged from Milestone 2. New worlds replace stone at Y=0 with exactly one complete bedrock layer, without adding bedrock above it.
 
-After base terrain generation, [WorldDecorator.cs](./WorldDecorator.cs) places oak-style trees, then sparse tall grass and red/yellow flowers. Seeded world-coordinate hashes and slowly varying density noise create open areas and wooded patches, with density scaling across the selected area. Trunks vary from 4 to 6 blocks high, with layered canopies and varying top shapes. Leaves extend at most two blocks from the trunk on either horizontal axis, within a 5 x 5 footprint. Candidates require grass, gentle slopes, sufficient clearance, and spacing between trunks. Canopies can cross chunk boundaries but never world boundaries. Decorations are written before meshes are built, without repeated mesh invalidation. Existing saves keep their original trees and bottom layer; generation corrections apply only to new worlds.
+After base terrain generation, [WorldDecorator.cs](./Worlds/WorldDecorator.cs) places oak-style trees, then sparse tall grass and red/yellow flowers. Seeded world-coordinate hashes and slowly varying density noise create open areas and wooded patches, with density scaling across the selected area. Trunks vary from 4 to 6 blocks high, with layered canopies and varying top shapes. Leaves extend at most two blocks from the trunk on either horizontal axis, within a 5 x 5 footprint. Candidates require grass, gentle slopes, sufficient clearance, and spacing between trunks. Canopies can cross chunk boundaries but never world boundaries. Decorations are written before meshes are built, without repeated mesh invalidation. Existing saves keep their original trees and bottom layer; generation corrections apply only to new worlds.
 
 The player spawns above the surface near the center, with a clear area around the initial spawn. Horizontal player bounds stop at the finite edges, where terrain ends visibly. Block reads outside the world return air; edits outside it are rejected. Space above Y=63 remains open for movement, with no blocks stored above the limit. Existing void recovery below Y=-16 returns the player above the current center surface, resetting movement/fall tracking while preserving health; it is not an additional damage or healing source.
 
@@ -81,7 +81,7 @@ Each world has an independent generated directory ID. Display names are metadata
 
 ### Binary format, version 3
 
-[WorldSerializer.cs](./WorldSerializer.cs) uses little-endian fields and no compression. Each save contains 1, 4, or 16 MiB of block data, depending on size, plus its header, inventory, dropped items, and checksum:
+[WorldSerializer.cs](./Persistence/WorldSerializer.cs) uses little-endian fields and no compression. Each save contains 1, 4, or 16 MiB of block data, depending on size, plus its header, inventory, dropped items, and checksum:
 
 | Field | Representation |
 | --- | --- |
@@ -106,7 +106,7 @@ Loading validates the signature, version, supported dimensions, name, finite pla
 
 Milestone 6 writes **format version 3**, appending health after the existing version-2 inventory/item records and before the checksum. Versions 1 and 2 default to 20 health. Version 2 retains its exact inventory and dropped items; it receives no testing-stock refill. Version 1 has the same header and raw block layout, followed immediately by its checksum. Such worlds receive one starter inventory and no dropped items on first load. After their next save (including rename), version 3 persists these normally without replenishment. Milestone 3/4 saves display as Normal; later Small/Large saves retain their own dimensions. All older terrain, seed, names, player pose, canopies, and bottom layers are preserved. Block IDs, GUID directories, and world generation are unchanged. Earlier game builds cannot read version-3 saves.
 
-[WorldSaveManager.cs](./WorldSaveManager.cs) writes `world.dat.<random GUID>.tmp` in the same world directory, flushes it to disk, then atomically replaces `world.dat` (or renames it for the first save). Failed writes leave the previous valid save intact. Temporary files left by an interrupted process are ignored. No background save thread is used: save/load and generation can briefly pause the UI. Player position/orientation, health, all 36 inventory slots, selected hotbar slot, and uncollected items including remaining pickup delays persist per world. Partial mining progress, player velocity/fall tracking, F3 visibility, and cursor UI state are not serialized; cursor items must return safely before saving. Loading a save with zero health respawns the player with full health and its saved empty inventory, retaining the already-saved death drops without creating them again.
+[WorldSaveManager.cs](./Persistence/WorldSaveManager.cs) writes `world.dat.<random GUID>.tmp` in the same world directory, flushes it to disk, then atomically replaces `world.dat` (or renames it for the first save). Failed writes leave the previous valid save intact. Temporary files left by an interrupted process are ignored. No background save thread is used: save/load and generation can briefly pause the UI. Player position/orientation, health, all 36 inventory slots, selected hotbar slot, and uncollected items including remaining pickup delays persist per world. Partial mining progress, player velocity/fall tracking, F3 visibility, and cursor UI state are not serialized; cursor items must return safely before saving. Loading a save with zero health respawns the player with full health and its saved empty inventory, retaining the already-saved death drops without creating them again.
 
 ## Editing block textures
 
@@ -133,7 +133,7 @@ Open [Content/terrain.png](./Content/terrain.png) in an ordinary image editor. K
 
 The first four tiles were exported once from the original seed-173 algorithm and remain pixel-for-pixel unchanged. New artwork occupies tiles 4-14; its generation prompt and one-time preparation are recorded in [Content/texture-artwork.md](./Content/texture-artwork.md). The PNG is the source artwork; builds and game launches never regenerate or overwrite it. Edit a tile, save the PNG, then run `dotnet build` followed by `dotnet run --no-build` (or simply `dotnet run`, which builds first). Restarting an existing build without rebuilding will continue to use its previously compiled texture. Replacing existing textures requires no C# changes.
 
-For a future material, draw its texture in an unused slot and assign that index in the centralized [block definitions](./Blocks.cs). Each definition owns its name, collision solidity, opacity, mesh shape, placement eligibility, and side/top/bottom tiles. Grass retains its existing face mappings; logs use end grain on top/bottom and bark on their sides. Both world rendering and the hotbar use point sampling, with mipmaps disabled and world UVs inset to texel centers to prevent tile bleeding. For leaves and plants, use alpha 0 for holes/backgrounds and alpha 255 for visible pixels; intermediate alpha is treated as a binary cutout rather than translucency.
+For a future material, draw its texture in an unused slot and assign that index in the centralized [block definitions](./Worlds/Blocks.cs). Each definition owns its name, collision solidity, opacity, mesh shape, placement eligibility, and side/top/bottom tiles. Grass retains its existing face mappings; logs use end grain on top/bottom and bark on their sides. Both world rendering and the hotbar use point sampling, with mipmaps disabled and world UVs inset to texel centers to prevent tile bleeding. For leaves and plants, use alpha 0 for holes/backgrounds and alpha 255 for visible pixels; intermediate alpha is treated as a binary cutout rather than translucency.
 
 ## Block identifiers
 
@@ -160,7 +160,7 @@ Every current non-air block has a corresponding item and remains placeable when 
 
 ## Mining and dropped items
 
-Hold **LMB** on a block within six blocks to mine it. An orange outline and a progress bar below the crosshair indicate progress, without a numerical percentage. Releasing LMB, changing targets or block types, losing reach, or opening a menu discards progress immediately. Holding LMB continues onto the next target after a break. Mining uses elapsed time and these centralized placeholder durations in [Blocks.cs](./Blocks.cs):
+Hold **LMB** on a block within six blocks to mine it. An orange outline and a progress bar below the crosshair indicate progress, without a numerical percentage. Releasing LMB, changing targets or block types, losing reach, or opening a menu discards progress immediately. Holding LMB continues onto the next target after a break. Mining uses elapsed time and these centralized placeholder durations in [Blocks.cs](./Worlds/Blocks.cs):
 
 | Block | Seconds |
 | --- | --- |
@@ -214,9 +214,9 @@ The eye height is 1.62 blocks while standing and **1.50 while crouching**, a sub
 
 During gameplay, an empty selected hotbar slot renders **nothing**. Occupied slots show the actual selected item: ordinary blocks are textured 3D cubes, while flowers/tall grass use transparent crossed planes. Number keys and the mouse wheel update the model immediately. The empty-hand model and its texture have been removed. There is no separate held-item selection or inventory copy, player body, third-person mode, or animation.
 
-[FirstPersonRenderer.cs](./FirstPersonRenderer.cs) reuses the existing cube/plant geometry and block atlas, caches geometry/uploads until the selected item changes, and draws one small camera-space model after the world and before the HUD. A depth reset keeps nearby terrain from clipping it while preserving the world color; the model uses its own perspective, depth testing, backface culling, alpha testing, and point sampling. Its viewport is restored before the HUD. The existing held-item scale, rotation, perspective, and responsive lower-right placement are unchanged. Models are suppressed in every menu, inventory, and death screen, whenever the selected slot is empty, and when F1 hides the HUD. The atlas, world generation, world save format, and FPS preferences are unchanged by this update.
+[FirstPersonRenderer.cs](./Rendering/FirstPersonRenderer.cs) reuses the existing cube/plant geometry and block atlas, caches geometry/uploads until the selected item changes, and draws one small camera-space model after the world and before the HUD. A depth reset keeps nearby terrain from clipping it while preserving the world color; the model uses its own perspective, depth testing, backface culling, alpha testing, and point sampling. Its viewport is restored before the HUD. The existing held-item scale, rotation, perspective, and responsive lower-right placement are unchanged. Models are suppressed in every menu, inventory, and death screen, whenever the selected slot is empty, and when F1 hides the HUD. The atlas, world generation, world save format, and FPS preferences are unchanged by this update.
 
-[MouseLookInput.cs](./MouseLookInput.cs) captures native relative motion through **SDL2 already shipped by MonoGame DesktopGL**, without an extra package. The previous loop repeatedly read an absolute OS cursor position, subtracted the window center, and called `Mouse.SetPosition` every frame. [MonoGame 3.8.6's implementation](https://github.com/MonoGame/MonoGame/blob/v3.8.6/MonoGame.Framework/Platform/Input/Mouse.SDL.cs) reads global OS position even after setting its cached window coordinates, leaving cursor warps and subsequent polls as separate operations. A stale or warp-induced non-center sample could therefore be applied as genuine movement at high rendering rates. A baseline run reproduced small rightward jumps at 240/360/uncapped FPS.
+[MouseLookInput.cs](./Input/MouseLookInput.cs) captures native relative motion through **SDL2 already shipped by MonoGame DesktopGL**, without an extra package. The previous loop repeatedly read an absolute OS cursor position, subtracted the window center, and called `Mouse.SetPosition` every frame. [MonoGame 3.8.6's implementation](https://github.com/MonoGame/MonoGame/blob/v3.8.6/MonoGame.Framework/Platform/Input/Mouse.SDL.cs) reads global OS position even after setting its cached window coordinates, leaving cursor warps and subsequent polls as separate operations. A stale or warp-induced non-center sample could therefore be applied as genuine movement at high rendering rates. A baseline run reproduced small rightward jumps at 240/360/uncapped FPS.
 
 Gameplay now uses [SDL_GetRelativeMouseState](https://wiki.libsdl.org/SDL2/SDL_GetRelativeMouseState) once per input update: it returns accumulated motion since the previous read, and repeated reads without new motion return zero. [SDL relative mode](https://wiki.libsdl.org/SDL2/SDL_SetRelativeMouseMode) hides/confines the pointer without the game's per-frame recentering. Menus, inventory, focus loss, death, and exit release it and restore the prior menu cursor position. Capturing/releasing and window resizing discard transition motion; the first subsequent genuine movement is processed immediately. Buttons and scrolling retain MonoGame's existing input path. Angular sensitivity stays at 0.0025 radians per delta unit, with no dead zone, smoothing, elapsed-time multiplier, or FPS restriction.
 
@@ -251,57 +251,74 @@ Block edits, health, collected inventory, and uncollected items persist together
 
 ## Code layout
 
+Source files use file-scoped namespaces matching their directories, rooted at `MDSM`. The plural `Worlds` and `Inventories` and the `Gameplay` grouping avoid collisions with the existing `World`, `Inventory`, and `Player` class names. Existing companion types remain together in their original files.
+
+| Directory / namespace | Responsibility |
+| --- | --- |
+| [Core/](./Core/) — `MDSM.Core` | Game coordination, application state, frame timing, and application settings |
+| [Worlds/](./Worlds/) — `MDSM.Worlds` | World/chunk storage, block definitions, sizes, terrain, and decoration |
+| [Rendering/](./Rendering/) — `MDSM.Rendering` | World/item rendering, meshes, atlas loading, held models, and screenshots |
+| [Gameplay/](./Gameplay/) — `MDSM.Gameplay` | Player/camera state, movement, fall tracking, mining, placement, and raycasting |
+| [Inventories/](./Inventories/) — `MDSM.Inventories` | Item definitions, stacks, inventory operations, and hotbar selection |
+| [Entities/](./Entities/) — `MDSM.Entities` | Dropped-item state/physics and drop-position checks |
+| [UI/](./UI/) — `MDSM.UI` | HUD, inventory interface, menus, layouts, and pixel font |
+| [Input/](./Input/) — `MDSM.Input` | Relative mouse capture and presentation shortcuts |
+| [Persistence/](./Persistence/) — `MDSM.Persistence` | World serialization, save management, and saved/session state |
+| [Testing/](./Testing/) — `MDSM.Testing` | All existing headless checks and optional DesktopGL regression checks |
+
+[Program.cs](./Program.cs) remains at the project root as the application/check-runner entry point, alongside [MDSM.csproj](./MDSM.csproj) and the existing configuration, documentation, and icon files. SDK recursive source inclusion compiles the organized directories without explicit compile entries. [Content/](./Content/), content asset names, application-data locations, and save/settings formats are unchanged. Build and check commands still run from the project root.
+
 | File | Responsibility |
 | --- | --- |
-| [Game1.cs](./Game1.cs) | Lifecycle, state transitions, save/autosave/exit orchestration, input, and renderer lifetime |
-| [GameSettings.cs](./GameSettings.cs) | Shared FPS preferences, bounded loading, and atomic application-settings persistence |
-| [FrameTiming.cs](./FrameTiming.cs) | Sleeping render limiter and independent fixed simulation clock |
-| [SettingsLayout.cs](./SettingsLayout.cs) | Responsive slider/toggle/Back geometry and integer slider conversion |
-| [PresentationInput.cs](./PresentationInput.cs) | Independent F1/F3 visibility and single-press F2 requests |
-| [ScreenshotCapture.cs](./ScreenshotCapture.cs) | Final backbuffer PNG capture, exclusive filenames, and failed-write cleanup |
-| [MenuInformation.cs](./MenuInformation.cs) | Controls/About text, responsive wrapping, and scroll layout |
-| [FirstPersonRenderer.cs](./FirstPersonRenderer.cs) | Inventory-driven cube/plant selection, empty-slot suppression, cached geometry, and isolated camera-space rendering |
-| [MouseLookInput.cs](./MouseLookInput.cs) | Consumed SDL relative deltas and capture-transition flushing using the existing native SDL library |
-| [GameState.cs](./GameState.cs) | Main menu, world management, gameplay, inventory, pause, death, Settings, Controls, and About states |
-| [MenuController.cs](./MenuController.cs) | Atlas dirt background, title, size selector, world management layouts, navigation, and feedback |
-| [WorldSave.cs](./WorldSave.cs) | Saved state and isolated session, one-time death transfers, respawn, and manual drop orchestration |
-| [WorldSerializer.cs](./WorldSerializer.cs) | Versioned binary format, validation, and checksums |
-| [WorldSaveManager.cs](./WorldSaveManager.cs) | Per-user world directories, header listing, safe rename/deletion, folder opening, and atomic replacement |
-| [Camera.cs](./Camera.cs) | First-person orientation, view, and perspective projection |
-| [Player.cs](./Player.cs) | Health, player bounds, movement, crouch support checks, gravity, jump, collision, and respawn |
-| [FallTracker.cs](./FallTracker.cs) | Vertical apex/landing tracking and distance-only fall damage |
-| [HealthHud.cs](./HealthHud.cs) | Pixel-art full/half/empty hearts above the hotbar |
-| [Blocks.cs](./Blocks.cs) | Stable IDs, centralized block properties, mining durations, shapes, and face textures |
-| [Items.cs](./Items.cs) | Item IDs, block-item mapping, and validated immutable stacks |
-| [Inventory.cs](./Inventory.cs) | 36-slot storage, stacking, cursor operations/safe transfers, and accumulated wheel selection |
-| [InventoryScreen.cs](./InventoryScreen.cs) | Scaled slot layout, point-sampled icons/counts, and mouse interface |
-| [MiningController.cs](./MiningController.cs) | Target-bound elapsed mining, drops, resets, and inventory placement |
-| [DroppedItems.cs](./DroppedItems.cs) | Entity state, gravity/collision, pickup delays, spatial merging, insertion remainders, and validation |
-| [DropPlacement.cs](./DropPlacement.cs) | Nearby clear spawn positions for deliberate item drops |
-| [DroppedItemRenderer.cs](./DroppedItemRenderer.cs) | Batched cube/cutout item rendering with reusable GPU capacity |
-| [World.cs](./World.cs) | Finite world, chunk lookup/invalidation, safe reads/edits, placement, and collision queries |
-| [WorldSize.cs](./WorldSize.cs) | Supported per-world size options and dimension validation |
-| [Chunk.cs](./Chunk.cs) | Compact local block storage, world bounds, and mesh revision |
-| [TerrainGenerator.cs](./TerrainGenerator.cs) | Unchanged seeded height generation, grass/dirt/stone layering, and a single bedrock layer |
-| [WorldDecorator.cs](./WorldDecorator.cs) | Deterministic trees and plants after base terrain generation |
-| [BlockRaycaster.cs](./BlockRaycaster.cs) | Voxel grid traversal and hit-face selection |
-| [TextureAtlas.cs](./TextureAtlas.cs) | ContentManager atlas loading, grid tile rectangles, and texel-center UVs |
+| [Game1.cs](./Core/Game1.cs) | Lifecycle, state transitions, save/autosave/exit orchestration, input, and renderer lifetime |
+| [GameSettings.cs](./Core/GameSettings.cs) | Shared FPS preferences, bounded loading, and atomic application-settings persistence |
+| [FrameTiming.cs](./Core/FrameTiming.cs) | Sleeping render limiter and independent fixed simulation clock |
+| [SettingsLayout.cs](./UI/SettingsLayout.cs) | Responsive slider/toggle/Back geometry and integer slider conversion |
+| [PresentationInput.cs](./Input/PresentationInput.cs) | Independent F1/F3 visibility and single-press F2 requests |
+| [ScreenshotCapture.cs](./Rendering/ScreenshotCapture.cs) | Final backbuffer PNG capture, exclusive filenames, and failed-write cleanup |
+| [MenuInformation.cs](./UI/MenuInformation.cs) | Controls/About text, responsive wrapping, and scroll layout |
+| [FirstPersonRenderer.cs](./Rendering/FirstPersonRenderer.cs) | Inventory-driven cube/plant selection, empty-slot suppression, cached geometry, and isolated camera-space rendering |
+| [MouseLookInput.cs](./Input/MouseLookInput.cs) | Consumed SDL relative deltas and capture-transition flushing using the existing native SDL library |
+| [GameState.cs](./Core/GameState.cs) | Main menu, world management, gameplay, inventory, pause, death, Settings, Controls, and About states |
+| [MenuController.cs](./UI/MenuController.cs) | Atlas dirt background, title, size selector, world management layouts, navigation, and feedback |
+| [WorldSave.cs](./Persistence/WorldSave.cs) | Saved state and isolated session, one-time death transfers, respawn, and manual drop orchestration |
+| [WorldSerializer.cs](./Persistence/WorldSerializer.cs) | Versioned binary format, validation, and checksums |
+| [WorldSaveManager.cs](./Persistence/WorldSaveManager.cs) | Per-user world directories, header listing, safe rename/deletion, folder opening, and atomic replacement |
+| [Camera.cs](./Gameplay/Camera.cs) | First-person orientation, view, and perspective projection |
+| [Player.cs](./Gameplay/Player.cs) | Health, player bounds, movement, crouch support checks, gravity, jump, collision, and respawn |
+| [FallTracker.cs](./Gameplay/FallTracker.cs) | Vertical apex/landing tracking and distance-only fall damage |
+| [HealthHud.cs](./UI/HealthHud.cs) | Pixel-art full/half/empty hearts above the hotbar |
+| [Blocks.cs](./Worlds/Blocks.cs) | Stable IDs, centralized block properties, mining durations, shapes, and face textures |
+| [Items.cs](./Inventories/Items.cs) | Item IDs, block-item mapping, and validated immutable stacks |
+| [Inventory.cs](./Inventories/Inventory.cs) | 36-slot storage, stacking, cursor operations/safe transfers, and accumulated wheel selection |
+| [InventoryScreen.cs](./UI/InventoryScreen.cs) | Scaled slot layout, point-sampled icons/counts, and mouse interface |
+| [MiningController.cs](./Gameplay/MiningController.cs) | Target-bound elapsed mining, drops, resets, and inventory placement |
+| [DroppedItems.cs](./Entities/DroppedItems.cs) | Entity state, gravity/collision, pickup delays, spatial merging, insertion remainders, and validation |
+| [DropPlacement.cs](./Entities/DropPlacement.cs) | Nearby clear spawn positions for deliberate item drops |
+| [DroppedItemRenderer.cs](./Rendering/DroppedItemRenderer.cs) | Batched cube/cutout item rendering with reusable GPU capacity |
+| [World.cs](./Worlds/World.cs) | Finite world, chunk lookup/invalidation, safe reads/edits, placement, and collision queries |
+| [WorldSize.cs](./Worlds/WorldSize.cs) | Supported per-world size options and dimension validation |
+| [Chunk.cs](./Worlds/Chunk.cs) | Compact local block storage, world bounds, and mesh revision |
+| [TerrainGenerator.cs](./Worlds/TerrainGenerator.cs) | Unchanged seeded height generation, grass/dirt/stone layering, and a single bedrock layer |
+| [WorldDecorator.cs](./Worlds/WorldDecorator.cs) | Deterministic trees and plants after base terrain generation |
+| [BlockRaycaster.cs](./Gameplay/BlockRaycaster.cs) | Voxel grid traversal and hit-face selection |
+| [TextureAtlas.cs](./Rendering/TextureAtlas.cs) | ContentManager atlas loading, grid tile rectangles, and texel-center UVs |
 | [Content/terrain.png](./Content/terrain.png) | Editable 256 x 256 block texture atlas |
-| [ChunkMeshBuilder.cs](./ChunkMeshBuilder.cs) | Shared cube/cross geometry for chunks and small items, with chunk opacity checks |
-| [ChunkMesh.cs](./ChunkMesh.cs) | Per-chunk GPU buffer, revision tracking, uploads, and disposal |
-| [WorldRenderer.cs](./WorldRenderer.cs) | Chunk frustum culling, alpha testing, depth testing, backface culling, fog, and selection outline |
-| [Hud.cs](./Hud.cs) | Visibility-aware crosshair, hotbar, health, notifications, and cached F3 debug text |
-| [PixelFont.cs](./PixelFont.cs) | Shared bitmap lettering for the HUD and menus |
-| [PrototypeChecks.cs](./PrototypeChecks.cs) | Automated checks that run without a graphics device |
-| [PersistenceChecks.cs](./PersistenceChecks.cs) | Edited-world restoration, corruption validation, safe paths, and failed-save checks |
-| [DecorationChecks.cs](./DecorationChecks.cs) | Block definitions, deterministic decorations, bounds, cutout geometry, interactions, and legacy/new save restoration |
-| [WorldManagementChecks.cs](./WorldManagementChecks.cs) | All-size generation, indexing, bounds, canopies, restoration, header-only metadata, and safe management |
-| [InventoryChecks.cs](./InventoryChecks.cs) | Mining, item physics/pickup, accounting, mouse operations, placement, migration, and persistence checks |
-| [SurvivalChecks.cs](./SurvivalChecks.cs) | Health/hearts, fall distances, death accounting, respawn, deliberate drops, delays/merges, v1/v2 compatibility, crouching, and wheel checks |
-| [PresentationChecks.cs](./PresentationChecks.cs) | FPS range/override, settings persistence/corruption, render-rate independence, crouch camera, and model geometry/visibility/layout checks |
-| [MouseInputChecks.cs](./MouseInputChecks.cs) | Stationary/moving high-frequency input, unchanged sensitivity, consumed deltas, and capture/release resets |
-| [InterfaceChecks.cs](./InterfaceChecks.cs) | F1/F3/F2 input edges, screenshot storage/failures, and information text/layout checks |
-| [InterfaceGraphicsChecks.cs](./InterfaceGraphicsChecks.cs) | Optional real DesktopGL PNG pixel comparisons, HUD states, resizing, menu navigation, and failure recovery |
+| [ChunkMeshBuilder.cs](./Rendering/ChunkMeshBuilder.cs) | Shared cube/cross geometry for chunks and small items, with chunk opacity checks |
+| [ChunkMesh.cs](./Rendering/ChunkMesh.cs) | Per-chunk GPU buffer, revision tracking, uploads, and disposal |
+| [WorldRenderer.cs](./Rendering/WorldRenderer.cs) | Chunk frustum culling, alpha testing, depth testing, backface culling, fog, and selection outline |
+| [Hud.cs](./UI/Hud.cs) | Visibility-aware crosshair, hotbar, health, notifications, and cached F3 debug text |
+| [PixelFont.cs](./UI/PixelFont.cs) | Shared bitmap lettering for the HUD and menus |
+| [PrototypeChecks.cs](./Testing/PrototypeChecks.cs) | Automated checks that run without a graphics device |
+| [PersistenceChecks.cs](./Testing/PersistenceChecks.cs) | Edited-world restoration, corruption validation, safe paths, and failed-save checks |
+| [DecorationChecks.cs](./Testing/DecorationChecks.cs) | Block definitions, deterministic decorations, bounds, cutout geometry, interactions, and legacy/new save restoration |
+| [WorldManagementChecks.cs](./Testing/WorldManagementChecks.cs) | All-size generation, indexing, bounds, canopies, restoration, header-only metadata, and safe management |
+| [InventoryChecks.cs](./Testing/InventoryChecks.cs) | Mining, item physics/pickup, accounting, mouse operations, placement, migration, and persistence checks |
+| [SurvivalChecks.cs](./Testing/SurvivalChecks.cs) | Health/hearts, fall distances, death accounting, respawn, deliberate drops, delays/merges, v1/v2 compatibility, crouching, and wheel checks |
+| [PresentationChecks.cs](./Testing/PresentationChecks.cs) | FPS range/override, settings persistence/corruption, render-rate independence, crouch camera, and model geometry/visibility/layout checks |
+| [MouseInputChecks.cs](./Testing/MouseInputChecks.cs) | Stationary/moving high-frequency input, unchanged sensitivity, consumed deltas, and capture/release resets |
+| [InterfaceChecks.cs](./Testing/InterfaceChecks.cs) | F1/F3/F2 input edges, screenshot storage/failures, and information text/layout checks |
+| [InterfaceGraphicsChecks.cs](./Testing/InterfaceGraphicsChecks.cs) | Optional real DesktopGL PNG pixel comparisons, HUD states, resizing, menu navigation, and failure recovery |
 
 All chunks remain loaded for the active world. There is no chunk streaming, multithreaded generation, water, ores, crafting, tools, armor, tree growth, or vegetation growth.
 
@@ -321,7 +338,7 @@ dotnet run --no-build -- --graphics-test
 
 This check uses synthetic input and temporary saves/preferences/screenshots under the build directory, cleaned up afterward. It verified 13 PNG captures at 1280x720, 801x603, and 320x240 against the final backbuffer, pixel-for-pixel. Asymmetric corners and a final-pass frame marker detect inverted/aligned rows, stale frames, missing draw passes, and changed pixels. Coverage includes HUD shown/hidden with independent debug states, occupied/empty selected slots, resizing, inventory/death screens, main/pause Settings navigation through Controls/About, scrolling, persistent FPS preferences, captures at 60/144/240/360/uncapped configurations, and an injected screenshot directory failure followed by recovery. It also checks removal of the permanent controls panel and hotbar selection while the HUD is hidden. It does not measure sustained FPS or exercise physical keys/mice.
 
-An additional screenshot regression compares consecutive frames before and after repeated captures, alternating HUD visibility, resizing, and a failed write. It disables the test's SpriteBatch markers and defers PNG decoding until after the comparisons: both operations change texture bindings and could mask the black-texture bug. Before the correction, the first hidden-HUD frame after capture failed; with the correction, world pixels remain identical and all eight additional PNGs match their original resolution and pixel data. [ScreenshotCapture.cs](./ScreenshotCapture.cs) restores and invalidates the previous texture binding in a `finally` block so DesktopGL's temporary screenshot texture cannot leave MonoGame's binding cache stale, including when writing fails.
+An additional screenshot regression compares consecutive frames before and after repeated captures, alternating HUD visibility, resizing, and a failed write. It disables the test's SpriteBatch markers and defers PNG decoding until after the comparisons: both operations change texture bindings and could mask the black-texture bug. Before the correction, the first hidden-HUD frame after capture failed; with the correction, world pixels remain identical and all eight additional PNGs match their original resolution and pixel data. [ScreenshotCapture.cs](./Rendering/ScreenshotCapture.cs) restores and invalidates the previous texture binding in a `finally` block so DesktopGL's temporary screenshot texture cannot leave MonoGame's binding cache stale, including when writing fails.
 
 A separate scripted DesktopGL run verified actual GPU heart states at 1280x720, 640x480, and 320x240; cube/plant item cutouts and terrain depth; input-path inventory drops and wheel selection; diagonal crouch edges and jumping; fatal falls, death input suspension and cursor transfers; respawn; failed/successful death saves and automatic respawn on reload; a real pre-Milestone-6 v2 save; autosaving health; and world creation, selection, renaming, and confirmed deletion. It used isolated temporary saves and synthetic input, rather than physical keyboard/mouse playtesting.
 
