@@ -9,7 +9,7 @@ namespace MDSM;
 
 public static class WorldSerializer
 {
-    public const int FormatVersion = 2;
+    public const int FormatVersion = 3;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -17,7 +17,7 @@ public static class WorldSerializer
     private const int InventoryBytes = 8 + Inventory.SlotCount * 3;
     private const int TailPrefixBytes = InventoryBytes + 4;
     private const int DropBytes = 23;
-    internal const int MaximumFileSize = 512 * World.Height * 512 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes;
+    internal const int MaximumFileSize = 512 * World.Height * 512 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes + 4;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static string ValidateName(string name)
@@ -35,6 +35,7 @@ public static class WorldSerializer
     {
         string name = ValidateName(save.Name);
         ValidatePose(save.PlayerPosition, save.Yaw, save.Pitch, save.World.Size);
+        ValidateHealth(save.Health);
         Inventory inventory = save.Inventory ?? Inventory.CreateStarter();
         DroppedItemState[] drops = save.DroppedItems ?? Array.Empty<DroppedItemState>();
         if (drops.Length > DroppedItems.MaximumEntities) throw new InvalidDataException("Too many dropped items.");
@@ -72,6 +73,7 @@ public static class WorldSerializer
                 writer.Write(drop.Position.X); writer.Write(drop.Position.Y); writer.Write(drop.Position.Z);
                 writer.Write(drop.VerticalVelocity); writer.Write(drop.PickupDelay);
             }
+            writer.Write(save.Health);
         }
         ReadOnlySpan<byte> bytes = payload.GetBuffer().AsSpan(0, (int)payload.Length);
         destination.Write(bytes);
@@ -108,7 +110,7 @@ public static class WorldSerializer
                 int dropCount = BinaryPrimitives.ReadInt32LittleEndian(prefixTail.AsSpan(InventoryBytes));
                 if (dropCount < 0 || dropCount > DroppedItems.MaximumEntities)
                     throw new InvalidDataException("Save has an invalid dropped-item count.");
-                tail = new byte[TailPrefixBytes + dropCount * DropBytes];
+                tail = new byte[TailPrefixBytes + dropCount * DropBytes + (metadata.Version >= 3 ? 4 : 0)];
                 prefixTail.CopyTo(tail, 0);
                 source.ReadExactly(tail.AsSpan(prefixTail.Length));
                 hash.AppendData(tail);
@@ -131,6 +133,7 @@ public static class WorldSerializer
             }
             Inventory inventory;
             DroppedItemState[] drops;
+            int health = Player.MaximumHealth;
             if (metadata.Version == 1)
             {
                 inventory = Inventory.CreateStarter();
@@ -160,8 +163,9 @@ public static class WorldSerializer
                     DroppedItems.Validate(drop, metadata.Size);
                     drops[i] = drop;
                 }
+                if (metadata.Version >= 3) { health = extras.ReadInt32(); ValidateHealth(health); }
             }
-            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops);
+            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health);
         }
         catch (EndOfStreamException exception)
         {
@@ -177,6 +181,7 @@ public static class WorldSerializer
         if (source.CanSeek)
         {
             long extra = source.Length - source.Position - metadata.Size.BlockCount() - ChecksumSize;
+            if (metadata.Version >= 3) extra -= 4;
             if (metadata.Version == 1 ? extra != 0 : extra < TailPrefixBytes
                 || (extra - TailPrefixBytes) % DropBytes != 0 || extra > TailPrefixBytes + (long)DroppedItems.MaximumEntities * DropBytes)
                 throw new InvalidDataException("Save file has an invalid data length.");
@@ -191,8 +196,8 @@ public static class WorldSerializer
             if (reader.ReadUInt32() != Magic)
                 throw new InvalidDataException("This is not an MDSM world save.");
             int version = reader.ReadInt32();
-            if (version is not (1 or FormatVersion))
-                throw new InvalidDataException($"Save version {version} is unsupported; expected 1 or {FormatVersion}.");
+            if (version < 1 || version > FormatVersion)
+                throw new InvalidDataException($"Save version {version} is unsupported; expected 1-{FormatVersion}.");
             WorldSize size = WorldSizes.FromDimensions(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32());
             int seed = reader.ReadInt32();
             int nameLength = reader.ReadInt32();
@@ -231,5 +236,10 @@ public static class WorldSerializer
         foreach (byte value in blocks)
             if (!Blocks.IsDefined((BlockType)value))
                 throw new InvalidDataException($"Save contains unknown block ID {value}.");
+    }
+
+    private static void ValidateHealth(int health)
+    {
+        if (health < 0 || health > Player.MaximumHealth) throw new InvalidDataException("Save health must be an integer from 0 to 20.");
     }
 }

@@ -50,7 +50,24 @@ internal static class PrototypeChecks
             ("Item gravity, terrain collision, pickup, and full-inventory remainders", InventoryChecks.PhysicsAndPickup),
             ("Inventory-based placement and independent sessions across all sizes", InventoryChecks.PlacementAndIsolation),
             ("All-size inventory/drop persistence and one-time legacy inventory", InventoryChecks.Persistence),
-            ("Invalid inventory/drop data is rejected safely", InventoryChecks.Validation)
+            ("Invalid inventory/drop data is rejected safely", InventoryChecks.Validation),
+            ("Health bounds and full/half/empty heart HUD mapping", SurvivalChecks.HealthAndHearts),
+            ("Vertical fall distance, thresholds, horizontal and velocity independence", SurvivalChecks.FallDistances),
+            ("Fall apex tracking, jumps, and independent landings", SurvivalChecks.JumpAndLanding),
+            ("Death stack accounting, idempotence, respawn, and recovery", SurvivalChecks.DeathAndRespawn),
+            ("Atomic manual drops, clear positions, and elapsed pickup delay", SurvivalChecks.ManualDropAndDelay),
+            ("Spatial item merging, overflow, unrelated types, and delay preservation", SurvivalChecks.Merging),
+            ("All-size health persistence, dead load, and v1/v2 compatibility", SurvivalChecks.HealthPersistence),
+            ("Atomic death saving, failure preservation, rename, and reload", SurvivalChecks.ManagedDeathSave),
+            ("Crouch speed/camera and unchanged one-block jump height", SurvivalChecks.CrouchMovement),
+            ("Crouch edge/corner support, jumping off, removal, and wall sliding", SurvivalChecks.CrouchEdges),
+            ("Wheel wrapping, multi/partial steps, reset, and inventory preservation", SurvivalChecks.Scrolling),
+            ("FPS defaults, integer slider range, uncapped override, and layouts", PresentationChecks.SettingsValues),
+            ("Application settings restart, invalid files, and atomic write failures", PresentationChecks.SettingsPersistence),
+            ("Render-independent physics/mining/item clocks, jumps, mouse look, and crouch camera", PresentationChecks.SimulationRates),
+            ("Empty-slot suppression, selected cube/plant geometry, menu visibility, and HUD clearance", PresentationChecks.ViewModels),
+            ("Stationary and moving relative mouse input at 60-2000 updates/second", MouseInputChecks.Motion),
+            ("Mouse capture/release flushes transition motion without delaying real input", MouseInputChecks.CaptureTransitions)
         };
 
         int failures = 0;
@@ -289,7 +306,7 @@ internal static class PrototypeChecks
             falling.Update(world, Vector3.Zero, false, 0.1f);
             Require(!world.IntersectsSolid(falling.Bounds), "Fast fall tunneled into terrain.");
         }
-        Require(falling.Grounded && Near(falling.Position.Y, 5), "Fast fall failed to land.");
+        Require(falling.IsDead && Near(falling.Position.Y, 5) && !world.IntersectsSolid(falling.Bounds), "Fatal fast fall failed to land safely.");
     }
 
     private static void CheckRespawn()

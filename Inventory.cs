@@ -100,4 +100,25 @@ public sealed class InventoryInteraction(Inventory inventory)
         _originalSlot = -1;
         return true;
     }
+
+    public bool TryDropCursor(DroppedItems items, Microsoft.Xna.Framework.Vector3 position, float delay)
+    {
+        if (Cursor.IsEmpty || !items.TrySpawn(Cursor, position, delay)) return false;
+        Cursor = default;
+        _originalSlot = -1;
+        return true;
+    }
+}
+
+public sealed class HotbarScroll
+{
+    private long _remainder;
+    public void Reset() => _remainder = 0;
+    public void Apply(Inventory inventory, long delta)
+    {
+        long total = _remainder + delta;
+        long steps = total / 120;
+        _remainder = total % 120;
+        inventory.SelectedSlot = (int)((inventory.SelectedSlot + steps % Inventory.HotbarSlots + Inventory.HotbarSlots) % Inventory.HotbarSlots);
+    }
 }

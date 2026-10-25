@@ -66,8 +66,9 @@ internal sealed class InventoryScreen : IDisposable
     }
     public void Open() => Message = "";
     public void CannotClose() => Message = "PLACE THE HELD STACK BEFORE CLOSING.";
-    public void Update(InventoryInteraction interaction, MouseState mouse, MouseState previous, Viewport viewport)
+    public void Update(GameSession session, MouseState mouse, MouseState previous, Viewport viewport)
     {
+        InventoryInteraction interaction = session.InventoryInteraction;
         bool left = mouse.LeftButton == ButtonState.Pressed && previous.LeftButton == ButtonState.Released;
         bool right = mouse.RightButton == ButtonState.Pressed && previous.RightButton == ButtonState.Released;
         if (!left && !right) return;
@@ -78,6 +79,8 @@ internal sealed class InventoryScreen : IDisposable
                 Message = "";
                 return;
             }
+        if (left && !interaction.Cursor.IsEmpty && !InventoryLayout.Panel(viewport).Contains(mouse.Position))
+            Message = session.DropCursor() ? "" : "NO ROOM TO DROP ITEMS.";
     }
     public void Draw(InventoryInteraction interaction, MouseState mouse, Viewport viewport)
     {
@@ -95,7 +98,7 @@ internal sealed class InventoryScreen : IDisposable
                 ? new Color(83, 82, 73) : new Color(32, 34, 33));
             ItemIcons.Draw(_sprites, _atlas, _pixel, interaction.Inventory[slot], bounds);
         }
-        string help = PixelFont.Fit("E / ESC CLOSE   LMB MOVE   RMB SPLIT / PLACE ONE", (panel.Width - 24) / 6);
+        string help = PixelFont.Fit("E / ESC CLOSE   LMB OUTSIDE DROPS HELD STACK", (panel.Width - 24) / 6);
         Text(help, panel.X + 12, panel.Bottom - 20, 1, Color.LightGray);
         if (Message.Length > 0) Text(Message, Math.Max(8, (viewport.Width - Message.Length * 6) / 2), panel.Bottom + 6, 1, Color.Salmon);
         ItemIcons.Draw(_sprites, _atlas, _pixel, interaction.Cursor, new Rectangle(mouse.X + 8, mouse.Y + 8, 42, 42));

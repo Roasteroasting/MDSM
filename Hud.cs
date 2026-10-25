@@ -27,7 +27,8 @@ public sealed class Hud : IDisposable
     public void InvalidateDebug() => _debugElapsed = 0.2;
 
     public void Draw(Viewport viewport, Inventory inventory, bool captured, bool showDebug,
-        Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0)
+        Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0,
+        int health = Player.MaximumHealth)
     {
         UpdateDebug(showDebug, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds);
         int width = viewport.Width, height = viewport.Height;
@@ -37,7 +38,7 @@ public sealed class Hud : IDisposable
         int textScale = width >= 900 ? 2 : 1;
         Fill(new Rectangle(8, 8, 294 * textScale, 38 * textScale), Color.Black * 0.55f);
         Text("MDSM / F3 DEBUG / E INVENTORY", 14, 14, textScale, Color.White);
-        Text("WASD MOVE / MOUSE LOOK / SPACE JUMP", 14, 14 + 11 * textScale, textScale, Color.White);
+        Text("WASD MOVE / SHIFT CROUCH / SPACE JUMP", 14, 14 + 11 * textScale, textScale, Color.White);
         Text("HOLD LMB MINE / RMB PLACE / 1-9 SLOT / ESC PAUSE", 14, 14 + 22 * textScale, textScale, Color.White);
 
         int top = InventoryLayout.HotbarSlot(viewport, 0).Top;
@@ -50,7 +51,8 @@ public sealed class Hud : IDisposable
             Text(SlotNumbers[i], bounds.X + 4, bounds.Y + 4, 1, Color.LightGray);
         }
         string name = Items.Name(inventory.Selected.Item);
-        Text(name, (width - name.Length * 12) / 2, top - 24, 2, Color.White);
+        Text(name, (width - name.Length * 12) / 2, top - 46, 2, Color.White);
+        HealthHud.Draw(_sprites, _pixel, viewport, health);
 
         if (captured)
         {

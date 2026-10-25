@@ -13,6 +13,8 @@ internal sealed class MenuController : IDisposable
     private readonly SpriteBatch _sprites;
     private readonly Texture2D _pixel;
     private readonly TextureAtlas _atlas;
+    private readonly GameSettings _settings;
+    private bool _draggingSlider;
     private GameState _screen;
     private int _focus;
     private int _selected;
@@ -32,12 +34,16 @@ internal sealed class MenuController : IDisposable
     private readonly record struct Button(string Text, MenuAction Action);
     private static readonly Button[] MainButtons =
     {
-        new("CREATE NEW WORLD", MenuAction.NewWorld), new("SELECT WORLD", MenuAction.SelectWorld), new("EXIT", MenuAction.Exit)
+        new("CREATE NEW WORLD", MenuAction.NewWorld), new("SELECT WORLD", MenuAction.SelectWorld),
+        new("SETTINGS", MenuAction.OpenSettings), new("EXIT", MenuAction.Exit)
     };
     private static readonly Button[] PauseButtons =
     {
-        new("RESUME", MenuAction.Resume), new("SAVE WORLD", MenuAction.Save), new("SAVE AND MAIN MENU", MenuAction.SaveAndReturn)
+        new("RESUME", MenuAction.Resume), new("SAVE WORLD", MenuAction.Save), new("SAVE AND MAIN MENU", MenuAction.SaveAndReturn),
+        new("SETTINGS", MenuAction.OpenSettings)
     };
+    private static readonly Button[] DeathButtons = { new("RESPAWN", MenuAction.Respawn), new("MAIN MENU", MenuAction.SaveAndReturn) };
+    private static readonly Button[] SettingsButtons = { new("BACK", MenuAction.Back) };
     private static readonly Button[] CreateButtons = { new("CREATE", MenuAction.CreateWorld), new("BACK", MenuAction.Back) };
     private static readonly Button[] SelectButtons =
     {
@@ -50,6 +56,8 @@ internal sealed class MenuController : IDisposable
     private Button[] Buttons => _screen switch
     {
         GameState.Paused => PauseButtons,
+        GameState.Death => DeathButtons,
+        GameState.Settings => SettingsButtons,
         GameState.WorldCreation => CreateButtons,
         GameState.WorldSelection => SelectButtons,
         GameState.WorldRename => RenameButtons,
@@ -57,11 +65,12 @@ internal sealed class MenuController : IDisposable
         _ => MainButtons
     };
     private int FocusOffset => _screen == GameState.WorldCreation ? 3
-        : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+        : _screen == GameState.Settings ? 2 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
-    public MenuController(GraphicsDevice device, TextureAtlas atlas)
+    public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
     {
         _atlas = atlas;
+        _settings = settings;
         _sprites = new SpriteBatch(device);
         _pixel = new Texture2D(device, 1, 1);
         _pixel.SetData(new[] { Color.White });
@@ -72,6 +81,7 @@ internal sealed class MenuController : IDisposable
         _screen = screen;
         _focus = 0;
         _selectAll = false;
+        _draggingSlider = false;
         _message = "";
         if (screen == GameState.WorldCreation)
         {
@@ -133,7 +143,8 @@ internal sealed class MenuController : IDisposable
         bool Pressed(Keys key) => keyboard.IsKeyDown(key) && previousKeyboard.IsKeyUp(key);
         bool click = mouse.LeftButton == ButtonState.Pressed && previousMouse.LeftButton == ButtonState.Released;
         if (Pressed(Keys.Escape))
-            return _screen == GameState.Paused ? MenuAction.Resume : _screen == GameState.MainMenu ? MenuAction.None : MenuAction.Back;
+            return _screen == GameState.Paused ? MenuAction.Resume
+                : _screen is GameState.MainMenu or GameState.Death ? MenuAction.None : MenuAction.Back;
         if (IsTextField && Pressed(Keys.A)
             && (keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl)))
             _selectAll = true;
@@ -151,6 +162,26 @@ internal sealed class MenuController : IDisposable
             else
                 _focus = (_focus + direction + Buttons.Length + FocusOffset) % (Buttons.Length + FocusOffset);
             _selectAll = false;
+        }
+
+        if (_screen == GameState.Settings)
+        {
+            int oldCap = _settings.FpsCap; bool oldUncapped = _settings.UncappedFps;
+            Rectangle slider = SettingsLayout.Slider(viewport), toggle = SettingsLayout.Toggle(viewport);
+            if (click && slider.Contains(_mouse)) { _focus = 0; _draggingSlider = true; }
+            if (mouse.LeftButton == ButtonState.Released) _draggingSlider = false;
+            if (_draggingSlider) _settings.FpsCap = SettingsLayout.ValueAt(slider, _mouse.X);
+            if (_focus == 0)
+            {
+                if (Pressed(Keys.Left)) _settings.FpsCap--;
+                if (Pressed(Keys.Right)) _settings.FpsCap++;
+                if (Pressed(Keys.Home)) _settings.FpsCap = GameSettings.MinimumFps;
+                if (Pressed(Keys.End)) _settings.FpsCap = GameSettings.MaximumFps;
+            }
+            if (click && toggle.Contains(_mouse)) { _focus = 1; _settings.UncappedFps = !_settings.UncappedFps; }
+            else if (_focus == 1 && (Pressed(Keys.Space) || Pressed(Keys.Enter))) _settings.UncappedFps = !_settings.UncappedFps;
+            if (oldCap != _settings.FpsCap || oldUncapped != _settings.UncappedFps) return MenuAction.SettingsChanged;
+            if (Pressed(Keys.Enter) && _focus < 2) return MenuAction.None;
         }
 
         if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
@@ -223,9 +254,15 @@ internal sealed class MenuController : IDisposable
 
     private Rectangle ButtonBounds(Viewport viewport, int index)
     {
-        if (_screen is GameState.MainMenu or GameState.Paused)
+        if (_screen == GameState.Settings) return SettingsLayout.Back(viewport);
+        if (_screen is GameState.MainMenu or GameState.Paused or GameState.Death)
         {
             int buttonWidth = Math.Min(380, viewport.Width - 32);
+            if (viewport.Height < 400 && _screen != GameState.Death)
+            {
+                int height = Math.Clamp((viewport.Height - 88) / Buttons.Length - 8, 24, 46);
+                return new Rectangle((viewport.Width - buttonWidth) / 2, 64 + index * (height + 8), buttonWidth, height);
+            }
             return new Rectangle((viewport.Width - buttonWidth) / 2, viewport.Height / 2 - 50 + index * 58, buttonWidth, 46);
         }
         int width = Math.Min(250, (viewport.Width - 48) / 2);
@@ -244,7 +281,7 @@ internal sealed class MenuController : IDisposable
         int scale = viewport.Width >= 900 ? 2 : 1;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
-        if (_screen == GameState.Paused)
+        if (_screen is GameState.Paused or GameState.Death || (_screen == GameState.Settings && worldName != null))
             Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.7f);
         else
         {
@@ -262,14 +299,32 @@ internal sealed class MenuController : IDisposable
             GameState.WorldRename => "RENAME WORLD",
             GameState.WorldDeleteConfirmation => "DELETE WORLD?",
             GameState.Paused => "PAUSED",
+            GameState.Death => "You died!",
+            GameState.Settings => "SETTINGS",
             _ => "MDSM"
         };
-        int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12) : 3;
+        int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12)
+            : _screen == GameState.Death && viewport.Width >= 900 ? 5 : 3;
         int titleY = _screen == GameState.WorldSelection ? 38 : Math.Max(20, viewport.Height / 2 - 210);
         Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
         Center(title, viewport, titleY, titleScale, Color.White);
         if (_screen == GameState.Paused)
             Center(PixelFont.Fit(worldName ?? "", 44), viewport, viewport.Height / 2 - 140, scale, Color.LightGray);
+
+        if (_screen == GameState.Settings)
+        {
+            Rectangle slider = SettingsLayout.Slider(viewport), toggle = SettingsLayout.Toggle(viewport);
+            Text($"FPS CAP: {_settings.FpsCap}", slider.X, slider.Y - 22, scale, Color.White);
+            Fill(slider, _focus == 0 ? new Color(235, 216, 135) : new Color(74, 80, 89));
+            Fill(new Rectangle(slider.X + 3, slider.Y + 3, slider.Width - 6, slider.Height - 6), new Color(24, 29, 35));
+            int thumb = SettingsLayout.ThumbX(slider, _settings.FpsCap);
+            Fill(new Rectangle(thumb - 5, slider.Y + 4, 11, slider.Height - 8), Color.LightGray);
+            Fill(toggle, _focus == 1 ? new Color(84, 91, 94) : new Color(38, 44, 52));
+            Fill(new Rectangle(toggle.X + 8, toggle.Y + 8, 20, 20), Color.LightGray);
+            Fill(new Rectangle(toggle.X + 10, toggle.Y + 10, 16, 16), new Color(24, 29, 35));
+            if (_settings.UncappedFps) Text("X", toggle.X + 12, toggle.Y + 11, 2, Color.LightGoldenrodYellow);
+            Text("UNCAPPED FPS", toggle.X + 38, toggle.Center.Y - 3 * scale, scale, Color.White);
+        }
 
         if (_screen == GameState.WorldCreation)
         {

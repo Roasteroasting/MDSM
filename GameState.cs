@@ -9,7 +9,9 @@ public enum GameState
     WorldDeleteConfirmation,
     Playing,
     Inventory,
-    Paused
+    Paused,
+    Death,
+    Settings
 }
 
 internal enum MenuAction
@@ -26,7 +28,10 @@ internal enum MenuAction
     OpenSavesFolder,
     Back,
     Resume,
+    Respawn,
     Save,
     SaveAndReturn,
-    Exit
+    Exit,
+    OpenSettings,
+    SettingsChanged
 }
