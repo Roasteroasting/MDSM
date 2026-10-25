@@ -36,28 +36,49 @@ internal sealed class ChunkMeshBuilder
         for (int x = 0; x < Chunk.Size; x++)
         {
             BlockType block = chunk.GetBlock(x, y, z);
-            if (block == BlockType.Air)
+            BlockDefinition definition = Blocks.Get(block);
+            if (!definition.Renderable)
                 continue;
 
             int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = new(worldX, y, worldZ);
+            if (definition.Shape == BlockShape.Cross)
+            {
+                AddQuad(position + new Vector3(0.1f, 0, 0.1f), position + new Vector3(0.9f, 0, 0.9f),
+                    position + new Vector3(0.9f, 1, 0.9f), position + new Vector3(0.1f, 1, 0.1f), definition.SideTile, Color.White, true);
+                AddQuad(position + new Vector3(0.9f, 0, 0.1f), position + new Vector3(0.1f, 0, 0.9f),
+                    position + new Vector3(0.1f, 1, 0.9f), position + new Vector3(0.9f, 1, 0.1f), definition.SideTile, Color.White, true);
+                continue;
+            }
             foreach (Face face in Faces)
             {
                 // World queries include adjacent chunks and return air beyond finite edges.
-                if (world.IsSolid(worldX + face.Offset.X, y + face.Offset.Y, worldZ + face.Offset.Z))
+                if (Blocks.IsOpaque(world.GetBlock(worldX + face.Offset.X, y + face.Offset.Y, worldZ + face.Offset.Z)))
                     continue;
 
-                if (VertexCount + 6 > _vertices.Length)
-                    Array.Resize(ref _vertices, _vertices.Length * 2);
                 int tile = Blocks.Tile(block, face.Normal);
-                Color color = Color.White * face.Shade;
-                var a = new VertexPositionColorTexture(position + face.A, color, TextureAtlas.Uv(tile, 0, 1));
-                var b = new VertexPositionColorTexture(position + face.B, color, TextureAtlas.Uv(tile, 1, 1));
-                var c = new VertexPositionColorTexture(position + face.C, color, TextureAtlas.Uv(tile, 1, 0));
-                var d = new VertexPositionColorTexture(position + face.D, color, TextureAtlas.Uv(tile, 0, 0));
-                _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = b;
-                _vertices[VertexCount++] = a; _vertices[VertexCount++] = d; _vertices[VertexCount++] = c;
+                // Shading changes RGB only: reducing vertex alpha would discard dark leaf faces.
+                Color color = new(new Vector3(face.Shade));
+                AddQuad(position + face.A, position + face.B, position + face.C, position + face.D, tile, color, false);
             }
+        }
+    }
+
+    private void AddQuad(Vector3 aPosition, Vector3 bPosition, Vector3 cPosition, Vector3 dPosition, int tile, Color color, bool twoSided)
+    {
+        int needed = twoSided ? 12 : 6;
+        if (VertexCount + needed > _vertices.Length)
+            Array.Resize(ref _vertices, _vertices.Length * 2);
+        var a = new VertexPositionColorTexture(aPosition, color, TextureAtlas.Uv(tile, 0, 1));
+        var b = new VertexPositionColorTexture(bPosition, color, TextureAtlas.Uv(tile, 1, 1));
+        var c = new VertexPositionColorTexture(cPosition, color, TextureAtlas.Uv(tile, 1, 0));
+        var d = new VertexPositionColorTexture(dPosition, color, TextureAtlas.Uv(tile, 0, 0));
+        _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = b;
+        _vertices[VertexCount++] = a; _vertices[VertexCount++] = d; _vertices[VertexCount++] = c;
+        if (twoSided)
+        {
+            _vertices[VertexCount++] = a; _vertices[VertexCount++] = b; _vertices[VertexCount++] = c;
+            _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = d;
         }
     }
 

@@ -22,7 +22,7 @@ public class Game1 : Game
     private bool _previousBack;
     private BlockHit? _selection;
     private bool _ignoreMouseDelta;
-    private int _selectedSlot;
+    private readonly BlockPalette _palette = new();
     private bool _showDebug;
     private double _autosaveElapsed;
     private double _noticeSeconds;
@@ -116,16 +116,17 @@ public class Game1 : Game
         if (keyboard.IsKeyDown(Keys.A)) movement -= camera.Right;
         player.Update(world, movement, Pressed(keyboard, Keys.Space), (float)gameTime.ElapsedGameTime.TotalSeconds);
         camera.Position = player.EyePosition;
-        for (int i = 0; i < 3; i++)
+        if (Pressed(keyboard, Keys.Tab)) _palette.NextPage();
+        for (int i = 0; i < BlockPalette.SlotsPerPage; i++)
             if (keyboard.IsKeyDown((Keys)((int)Keys.D1 + i)) || keyboard.IsKeyDown((Keys)((int)Keys.NumPad1 + i)))
-                _selectedSlot = i;
+                _palette.SelectSlot(i);
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         if (_selection is BlockHit hit)
         {
             if (mouse.LeftButton == ButtonState.Pressed && _previousMouse.LeftButton == ButtonState.Released)
                 world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air);
             else if (mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
-                world.TryPlace(hit.PlacementCell, (BlockType)(_selectedSlot + 1), player.Bounds);
+                world.TryPlace(hit.PlacementCell, _palette.Selected, player.Bounds);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
     }
@@ -197,7 +198,7 @@ public class Game1 : Game
         _renderer?.Dispose();
         _renderer = renderer;
         _session = session;
-        _selectedSlot = 0;
+        _palette.Reset();
         _selection = null;
         _notice = null;
         _autosaveElapsed = 0;
@@ -267,7 +268,7 @@ public class Game1 : Game
         {
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             _renderer.Draw(_session.Camera, State == GameState.Playing ? _selection : null);
-            _hud.Draw(GraphicsDevice.Viewport, _selectedSlot, State == GameState.Playing, _showDebug,
+            _hud.Draw(GraphicsDevice.Viewport, _palette, State == GameState.Playing, _showDebug,
                 _session.Player.Position, _session.World.Seed, gameTime, State == GameState.Playing ? _notice : null);
             if (State == GameState.Paused) _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }

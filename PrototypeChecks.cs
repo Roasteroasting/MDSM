@@ -31,7 +31,13 @@ internal static class PrototypeChecks
             ("Edited world and player pose serialization round-trip", PersistenceChecks.RoundTrip),
             ("Save checksums, headers, dimensions, and corrupt data", PersistenceChecks.CorruptData),
             ("Multiple world directories, safe names, and unreadable saves", PersistenceChecks.WorldDirectories),
-            ("Atomic saving and preservation after write/replace failures", PersistenceChecks.AtomicSaving)
+            ("Atomic saving and preservation after write/replace failures", PersistenceChecks.AtomicSaving),
+            ("Stable expanded block definitions and paged hotbar", DecorationChecks.Definitions),
+            ("Deterministic trees/plants with unchanged base terrain", DecorationChecks.Determinism),
+            ("Tree boundary validation and cross-chunk canopies", DecorationChecks.TreeBoundaries),
+            ("Leaf occlusion, cutout vertex alpha, and plant quads", DecorationChecks.Meshes),
+            ("New block placement, vegetation targeting, and support", DecorationChecks.Interaction),
+            ("Legacy v1 compatibility and expanded block restoration", DecorationChecks.Persistence)
         };
 
         int failures = 0;
@@ -325,9 +331,9 @@ internal static class PrototypeChecks
 
     private static void CheckTerrain()
     {
-        var world = new World(173);
-        var same = new World(173);
-        var other = new World(174);
+        var world = BaseTerrain(173);
+        var same = BaseTerrain(173);
+        var other = BaseTerrain(174);
         bool seedChangedTerrain = false;
         for (int i = 0; i < World.ChunkCount; i++)
         {
@@ -460,6 +466,13 @@ internal static class PrototypeChecks
         for (int x = 0; x < Chunk.Size; x++)
             chunk.SetBlock(x, y, z, y == TestGroundHeight - 1 ? BlockType.Grass
                 : y >= TestGroundHeight - 3 ? BlockType.Dirt : BlockType.Stone);
+        return world;
+    }
+
+    private static World BaseTerrain(int seed)
+    {
+        var world = new World(seed, false);
+        new TerrainGenerator(seed).Generate(world);
         return world;
     }
 

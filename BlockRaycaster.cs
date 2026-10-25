@@ -31,7 +31,7 @@ public static class BlockRaycaster
 
         while (distance <= reach)
         {
-            if (world.IsSolid(x, y, z))
+            if (Blocks.IsRenderable(world.GetBlock(x, y, z)))
                 return new BlockHit(new Point3(x, y, z), normal, distance);
 
             if (tx <= ty && tx <= tz)

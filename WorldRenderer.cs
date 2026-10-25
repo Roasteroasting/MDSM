@@ -8,7 +8,7 @@ public sealed class WorldRenderer : IDisposable
 {
     public static readonly Color SkyColor = new(143, 190, 232);
     private readonly GraphicsDevice _device;
-    private readonly BasicEffect _terrainEffect;
+    private readonly AlphaTestEffect _terrainEffect;
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
     private readonly ChunkMesh[] _meshes = new ChunkMesh[World.ChunkCount];
@@ -27,13 +27,13 @@ public sealed class WorldRenderer : IDisposable
         _world = world;
         for (int i = 0; i < _meshes.Length; i++)
             _meshes[i] = new ChunkMesh(device, world.Chunks[i]);
-        _terrainEffect = new BasicEffect(device)
+        _terrainEffect = new AlphaTestEffect(device)
         {
             World = Matrix.Identity,
-            TextureEnabled = true,
             Texture = atlas.Texture,
             VertexColorEnabled = true,
-            LightingEnabled = false,
+            AlphaFunction = CompareFunction.GreaterEqual,
+            ReferenceAlpha = 128,
             FogEnabled = true,
             FogColor = SkyColor.ToVector3(),
             FogStart = 80,

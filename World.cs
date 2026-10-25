@@ -31,7 +31,10 @@ public sealed class World
             _chunks[z * ChunksX + x] = new Chunk(x, z);
 
         if (generateTerrain)
+        {
             new TerrainGenerator(seed).Generate(this);
+            new WorldDecorator(seed).Decorate(this);
+        }
     }
 
     public Chunk GetChunk(int x, int z)
@@ -58,11 +61,11 @@ public sealed class World
         Contains(x, y, z) ? _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size]
             .GetBlock(x % Chunk.Size, y, z % Chunk.Size) : BlockType.Air;
 
-    public bool IsSolid(int x, int y, int z) => GetBlock(x, y, z) != BlockType.Air;
+    public bool IsSolid(int x, int y, int z) => Blocks.IsSolid(GetBlock(x, y, z));
 
     public bool SetBlock(int x, int y, int z, BlockType block)
     {
-        if (!Contains(x, y, z) || (block != BlockType.Air && !Blocks.IsPlaceable(block))
+        if (!Contains(x, y, z) || !Blocks.IsDefined(block)
             || GetBlock(x, y, z) == block)
             return false;
 
@@ -77,7 +80,16 @@ public sealed class World
         if (localZ == 0) MarkDirty(chunkX, chunkZ - 1);
         if (localZ == Chunk.Size - 1) MarkDirty(chunkX, chunkZ + 1);
         Revision++;
+        if (!Blocks.SupportsPlant(block) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
+            SetBlock(x, y + 1, z, BlockType.Air);
         return true;
+    }
+
+    // Used only before meshes exist. Decorations span chunk edges without invalidation work.
+    internal void SetGeneratedBlock(int x, int y, int z, BlockType block)
+    {
+        if (!Contains(x, y, z)) throw new ArgumentOutOfRangeException(nameof(x));
+        _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size].SetBlock(x % Chunk.Size, y, z % Chunk.Size, block);
     }
 
     private void MarkDirty(int x, int z)
@@ -88,8 +100,11 @@ public sealed class World
 
     public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds)
     {
-        if (!Blocks.IsPlaceable(block) || !Contains(cell.X, cell.Y, cell.Z)
-            || IsSolid(cell.X, cell.Y, cell.Z) || Overlaps(Bounds(cell), playerBounds))
+        BlockDefinition definition = Blocks.Get(block);
+        if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
+            || GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
+            || (definition.Solid && Overlaps(Bounds(cell), playerBounds))
+            || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z))))
             return false;
 
         return SetBlock(cell.X, cell.Y, cell.Z, block);

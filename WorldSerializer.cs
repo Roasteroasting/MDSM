@@ -140,7 +140,7 @@ public static class WorldSerializer
     private static void ValidateBlocks(ReadOnlySpan<byte> blocks)
     {
         foreach (byte value in blocks)
-            if (value != (byte)BlockType.Air && !Blocks.IsPlaceable((BlockType)value))
+            if (!Blocks.IsDefined((BlockType)value))
                 throw new InvalidDataException($"Save contains unknown block ID {value}.");
     }
 }

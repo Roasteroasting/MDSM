@@ -9,9 +9,8 @@ public sealed class Hud : IDisposable
     private readonly SpriteBatch _sprites;
     private readonly Texture2D _pixel;
     private readonly TextureAtlas _atlas;
-    private static readonly BlockType[] Slots = { BlockType.Grass, BlockType.Dirt, BlockType.Stone };
-    private static readonly string[] SlotNames = { "GRASS", "DIRT", "STONE" };
-    private static readonly string[] SlotNumbers = { "1", "2", "3" };
+    private static readonly string[] SlotNumbers = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+    private static readonly string[] PageLabels = CreatePageLabels();
     private readonly string[] _debugLines = new string[6];
     private double _fpsElapsed;
     private double _debugElapsed;
@@ -26,7 +25,7 @@ public sealed class Hud : IDisposable
         _atlas = atlas;
     }
 
-    public void Draw(Viewport viewport, int selectedSlot, bool captured, bool showDebug,
+    public void Draw(Viewport viewport, BlockPalette palette, bool captured, bool showDebug,
         Vector3 playerPosition, int seed, GameTime gameTime, string notification = null)
     {
         UpdateDebug(showDebug, playerPosition, seed, gameTime.ElapsedGameTime.TotalSeconds);
@@ -36,23 +35,27 @@ public sealed class Hud : IDisposable
 
         int textScale = width >= 900 ? 2 : 1;
         Fill(new Rectangle(8, 8, 294 * textScale, 38 * textScale), Color.Black * 0.55f);
-        Text("MDSM - VOXEL PROTOTYPE / F3 DEBUG", 14, 14, textScale, Color.White);
+        Text("MDSM / F3 DEBUG / TAB BLOCK PAGE", 14, 14, textScale, Color.White);
         Text("WASD MOVE / MOUSE LOOK / SPACE JUMP", 14, 14 + 11 * textScale, textScale, Color.White);
-        Text("LMB BREAK / RMB PLACE / 1-3 BLOCK / ESC PAUSE", 14, 14 + 22 * textScale, textScale, Color.White);
+        Text("LMB BREAK / RMB PLACE / 1-9 BLOCK / ESC PAUSE", 14, 14 + 22 * textScale, textScale, Color.White);
 
         const int slotSize = 58;
-        int start = (width - Slots.Length * slotSize) / 2;
+        int start = (width - BlockPalette.SlotsPerPage * slotSize) / 2;
         int top = height - slotSize - 18;
-        for (int i = 0; i < Slots.Length; i++)
+        for (int i = 0; i < BlockPalette.SlotsPerPage; i++)
         {
-            Fill(new Rectangle(start + i * slotSize, top, slotSize - 2, slotSize), i == selectedSlot ? new Color(235, 216, 135) : new Color(74, 80, 89));
+            BlockType block = palette.AtSlot(i);
+            Fill(new Rectangle(start + i * slotSize, top, slotSize - 2, slotSize), i == palette.SelectedSlot ? new Color(235, 216, 135) : new Color(74, 80, 89));
             Fill(new Rectangle(start + i * slotSize + 3, top + 3, slotSize - 8, slotSize - 6), new Color(31, 36, 44));
-            _sprites.Draw(_atlas.Texture, new Rectangle(start + i * slotSize + 14, top + 9, 30, 30),
-                TextureAtlas.Source(Blocks.Tile(Slots[i], Vector3.Up)), Color.White);
-            Text(SlotNumbers[i], start + i * slotSize + 6, top + 43, 1, Color.White);
+            if (block != BlockType.Air)
+                _sprites.Draw(_atlas.Texture, new Rectangle(start + i * slotSize + 14, top + 9, 30, 30),
+                    TextureAtlas.Source(Blocks.Tile(block, Vector3.Up)), Color.White);
+            Text(SlotNumbers[i], start + i * slotSize + 6, top + 43, 1, block == BlockType.Air ? Color.Gray : Color.White);
         }
-        string name = SlotNames[selectedSlot];
+        string name = Blocks.Get(palette.Selected).Name;
         Text(name, (width - name.Length * 12) / 2, top - 24, 2, Color.White);
+        string page = PageLabels[palette.Page];
+        Text(page, (width - page.Length * 6) / 2, top - 40, 1, Color.White);
 
         if (captured)
         {
@@ -103,6 +106,14 @@ public sealed class Hud : IDisposable
     }
 
     private void Fill(Rectangle rectangle, Color color) => _sprites.Draw(_pixel, rectangle, color);
+
+    private static string[] CreatePageLabels()
+    {
+        int count = (Blocks.Selection.Length + BlockPalette.SlotsPerPage - 1) / BlockPalette.SlotsPerPage;
+        var labels = new string[count];
+        for (int i = 0; i < count; i++) labels[i] = $"BLOCKS {i + 1}/{count} - TAB PAGE";
+        return labels;
+    }
 
     private void Text(string text, int x, int y, int scale, Color color) =>
         PixelFont.Draw(_sprites, _pixel, text, x, y, scale, color);
