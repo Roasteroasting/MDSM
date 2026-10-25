@@ -5,6 +5,7 @@ namespace MDSM;
 
 public sealed class Camera
 {
+    public const float FarPlane = 384f;
     private const float MouseSensitivity = 0.0025f;
     private float _yaw;
     private float _pitch = -0.3f;
@@ -16,7 +17,7 @@ public sealed class Camera
     public Matrix View => Matrix.CreateLookAt(Position, Position + Forward, Vector3.Up);
 
     public Matrix Projection(float aspectRatio) =>
-        Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(75), aspectRatio, 0.05f, 100f);
+        Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(75), aspectRatio, 0.05f, FarPlane);
 
     public void Look(int deltaX, int deltaY)
     {

@@ -62,9 +62,9 @@ public sealed class Player
             return false;
 
         Vector3 next = Position;
-        if (axis == 0) next.X += amount;
+        if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, World.Width - HalfWidth);
         else if (axis == 1) next.Y += amount;
-        else next.Z += amount;
+        else next.Z = Math.Clamp(next.Z + amount, HalfWidth, World.Depth - HalfWidth);
 
         BoundingBox bounds = BoundsAt(next);
         bool collided = false;

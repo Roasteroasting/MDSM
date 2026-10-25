@@ -19,6 +19,7 @@ public class Game1 : Game
     private bool _captured;
     private bool _ignoreMouseDelta;
     private int _selectedSlot;
+    private bool _showDebug;
 
     public Game1()
     {
@@ -40,7 +41,7 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _atlas = new TextureAtlas(Content);
-        _renderer = new WorldRenderer(GraphicsDevice, _atlas);
+        _renderer = new WorldRenderer(GraphicsDevice, _atlas, _world);
         _hud = new Hud(GraphicsDevice, _atlas);
         _camera.Position = _player.EyePosition;
         _previousKeyboard = Keyboard.GetState();
@@ -52,6 +53,8 @@ public class Game1 : Game
     {
         KeyboardState keyboard = Keyboard.GetState();
         MouseState mouse = Mouse.GetState();
+        if (IsActive && Pressed(keyboard, Keys.F3))
+            _showDebug = !_showDebug;
         if (keyboard.IsKeyDown(Keys.F10) || GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed)
         {
             Exit();
@@ -127,8 +130,8 @@ public class Game1 : Game
             return;
 
         GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
-        _renderer.Draw(_world, _camera, _captured ? _selection : null);
-        _hud.Draw(GraphicsDevice.Viewport, _selectedSlot, _captured);
+        _renderer.Draw(_camera, _captured ? _selection : null);
+        _hud.Draw(GraphicsDevice.Viewport, _selectedSlot, _captured, _showDebug, _player.Position, _world.Seed, gameTime);
         base.Draw(gameTime);
     }
 

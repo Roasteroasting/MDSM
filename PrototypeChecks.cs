@@ -6,11 +6,19 @@ namespace MDSM;
 // Run with --self-test. These checks need no window, graphics device, or test packages.
 internal static class PrototypeChecks
 {
+    private const int TestGroundHeight = 5;
+
     public static int Run()
     {
         (string Name, Action Check)[] checks =
         {
             ("Terrain layers, bounds, and edit revisions", CheckWorld),
+            ("Compact storage and world/chunk coordinate conversion", CheckCoordinates),
+            ("Seed determinism, terrain layers, and continuous hills", CheckTerrain),
+            ("Only face-sharing chunk meshes are invalidated", CheckChunkRevisions),
+            ("Chunk frustum culling", CheckFrustum),
+            ("Collision and raycasting across chunk seams", CheckChunkGameplay),
+            ("Horizontal player bounds and vertical world limits", CheckBoundaries),
             ("Camera direction and pitch limits", CheckCamera),
             ("Atlas rows, texel centers, orientation, and index bounds", CheckAtlas),
             ("Exposed-face mesh, winding, atlas coordinates, and edit rebuilds", CheckMesh),
@@ -42,7 +50,7 @@ internal static class PrototypeChecks
 
     private static void CheckWorld()
     {
-        var world = new World();
+        var world = FlatWorld();
         for (int x = 0; x < World.Width; x++)
         for (int z = 0; z < World.Depth; z++)
         {
@@ -73,7 +81,7 @@ internal static class PrototypeChecks
 
     private static void CheckRaycast()
     {
-        var world = new World();
+        var world = FlatWorld();
         BlockHit? top = BlockRaycaster.Cast(world, new Vector3(10.5f, 8, 10.5f), new Vector3(0, -4, 0));
         Require(top.HasValue && top.Value.Cell == new Point3(10, 4, 10), "Vertical ray missed grass.");
         Require(top.Value.Normal == new Point3(0, 1, 0) && Near(top.Value.Distance, 3), "Surface normal or normalized distance incorrect.");
@@ -129,32 +137,54 @@ internal static class PrototypeChecks
 
     private static void CheckMesh()
     {
-        var world = new World();
-        var vertices = WorldRenderer.BuildMesh(world);
-        int expectedFaces = 2 * (World.Width * World.Depth + World.Width * World.GroundHeight + World.Depth * World.GroundHeight);
-        Require(vertices.Length == expectedFaces * 6, "Hidden block faces were emitted or exterior faces are missing.");
-        Vector3 center = new(World.Width / 2f, World.GroundHeight / 2f, World.Depth / 2f);
-        for (int i = 0; i < vertices.Length; i += 3)
+        var world = new World(0, false);
+        var builder = new ChunkMeshBuilder();
+        world.SetBlock(15, 10, 8, BlockType.Grass);
+        builder.Build(world, world.GetChunk(0, 0));
+        Require(builder.VertexCount == 36, "Isolated block must expose six faces.");
+        Vector3 center = new(15.5f, 10.5f, 8.5f);
+        for (int i = 0; i < builder.VertexCount; i += 3)
         {
-            Vector3 normal = Vector3.Cross(vertices[i + 1].Position - vertices[i].Position, vertices[i + 2].Position - vertices[i].Position);
-            // XNA's clockwise front faces have a geometric cross product pointing inward.
-            Require(Vector3.Dot(normal, vertices[i].Position - center) < 0, "Triangle winding is inconsistent with backface culling.");
+            var vertices = builder.Vertices;
+            Vector3 inward = Vector3.Cross(vertices[i + 1].Position - vertices[i].Position, vertices[i + 2].Position - vertices[i].Position);
+            Require(Vector3.Dot(inward, vertices[i].Position - center) < 0, "Triangle winding is inconsistent with backface culling.");
+            Rectangle source = TextureAtlas.Source(Blocks.Tile(BlockType.Grass, -inward));
+            for (int j = i; j < i + 3; j++)
+            {
+                Vector2 pixel = vertices[j].TextureCoordinate * TextureAtlas.AtlasSize;
+                Require(pixel.X >= source.Left + 0.5f && pixel.X <= source.Right - 0.5f
+                    && pixel.Y >= source.Top + 0.5f && pixel.Y <= source.Bottom - 0.5f, "Face uses the wrong atlas tile.");
+            }
         }
-        foreach (var vertex in vertices)
-            Require(vertex.TextureCoordinate.X > 0 && vertex.TextureCoordinate.X < 1
-                && vertex.TextureCoordinate.Y > 0 && vertex.TextureCoordinate.Y < 1, "Atlas coordinate touches or exceeds texture boundary.");
 
-        world.SetBlock(10, 4, 10, BlockType.Air);
-        Require(WorldRenderer.BuildMesh(world).Length == vertices.Length + 24, "Breaking surface block did not expose its neighbors.");
-        world.SetBlock(10, 8, 10, BlockType.Stone);
-        Require(WorldRenderer.BuildMesh(world).Length == vertices.Length + 24 + 36, "Isolated placed block must expose six faces.");
-        Require(Blocks.Tile(BlockType.Grass, Vector3.Up) == 0 && Blocks.Tile(BlockType.Grass, Vector3.Right) == 1
-            && Blocks.Tile(BlockType.Grass, Vector3.Down) == 2, "Grass face textures are incorrect.");
+        world.SetBlock(16, 10, 8, BlockType.Stone);
+        builder.Build(world, world.GetChunk(0, 0));
+        Require(builder.VertexCount == 30, "X seam emitted an internal face.");
+        builder.Build(world, world.GetChunk(1, 0));
+        Require(builder.VertexCount == 30, "Opposite side of X seam emitted an internal face.");
+        world.SetBlock(15, 10, 8, BlockType.Air);
+        builder.Build(world, world.GetChunk(1, 0));
+        Require(builder.VertexCount == 36, "Boundary edit failed to expose neighboring block.");
+        builder.Build(world, world.GetChunk(0, 0));
+        Require(builder.VertexCount == 0, "Empty chunk retained geometry.");
+
+        world.SetBlock(8, 10, 15, BlockType.Stone);
+        world.SetBlock(8, 10, 16, BlockType.Stone);
+        builder.Build(world, world.GetChunk(0, 0));
+        Require(builder.VertexCount == 30, "Z seam emitted an internal face.");
+        builder.Build(world, world.GetChunk(0, 1));
+        Require(builder.VertexCount == 30, "Opposite side of Z seam emitted an internal face.");
+        world.SetBlock(255, 63, 255, BlockType.Stone);
+        builder.Build(world, world.GetChunk(15, 15));
+        Require(builder.VertexCount == 36, "Finite outer/top boundaries must expose faces.");
+        world.SetBlock(0, 0, 0, BlockType.Stone);
+        builder.Build(world, world.GetChunk(0, 0));
+        Require(builder.VertexCount == 66, "Finite lower boundaries must expose faces.");
     }
 
     private static void CheckPlacement()
     {
-        var world = new World();
+        var world = FlatWorld();
         var player = new Player(world.Spawn);
         Point3 feet = new((int)player.Position.X, (int)player.Position.Y, (int)player.Position.Z);
         Require(!world.TryPlace(feet, BlockType.Stone, player.Bounds), "Placement inside player accepted.");
@@ -172,12 +202,12 @@ internal static class PrototypeChecks
 
     private static void CheckJump()
     {
-        var world = new World();
+        var world = FlatWorld();
         var player = new Player(world.Spawn);
         Step(player, world, 10);
-        Require(player.Grounded && Near(player.Position.Y, World.GroundHeight), "Player did not settle on grass.");
+        Require(player.Grounded && Near(player.Position.Y, TestGroundHeight), "Player did not settle on grass.");
         player.Update(world, Vector3.Zero, true, 1f / 60);
-        Require(!player.Grounded && player.Position.Y > World.GroundHeight, "Jump did not leave the ground.");
+        Require(!player.Grounded && player.Position.Y > TestGroundHeight, "Jump did not leave the ground.");
         float peak = player.Position.Y;
         for (int i = 0; i < 100; i++)
         {
@@ -185,8 +215,8 @@ internal static class PrototypeChecks
             peak = MathF.Max(peak, player.Position.Y);
             Require(!world.IntersectsSolid(player.Bounds), "Player penetrated terrain during jump.");
         }
-        Require(peak > World.GroundHeight + 1 && peak < World.GroundHeight + 1.5f, "Unexpected jump height.");
-        Require(player.Grounded && Near(player.Position.Y, World.GroundHeight), "Player did not land.");
+        Require(peak > TestGroundHeight + 1 && peak < TestGroundHeight + 1.5f, "Unexpected jump height.");
+        Require(player.Grounded && Near(player.Position.Y, TestGroundHeight), "Player did not land.");
         // Removing the supporting block must immediately allow a fall.
         world.SetBlock((int)player.Position.X, 4, (int)player.Position.Z, BlockType.Air);
         Step(player, world, 45);
@@ -195,7 +225,7 @@ internal static class PrototypeChecks
 
     private static void CheckMovement()
     {
-        var world = new World();
+        var world = FlatWorld();
         for (int z = 5; z <= 25; z++)
         for (int y = 5; y < 9; y++)
             world.SetBlock(12, y, z, BlockType.Stone);
@@ -218,7 +248,7 @@ internal static class PrototypeChecks
 
     private static void CheckVerticalCollision()
     {
-        var world = new World();
+        var world = FlatWorld();
         var player = new Player(new Vector3(10.5f, 5, 10.5f));
         world.SetBlock(10, 7, 10, BlockType.Stone);
         Step(player, world, 1);
@@ -241,10 +271,10 @@ internal static class PrototypeChecks
 
     private static void CheckRespawn()
     {
-        var world = new World();
+        var world = FlatWorld();
         Vector3 spawn = world.Spawn;
         world.SetBlock((int)spawn.X, (int)spawn.Y, (int)spawn.Z, BlockType.Stone);
-        var player = new Player(new Vector3(-3, 5, -3));
+        var player = new Player(new Vector3(spawn.X, -20, spawn.Z));
         Step(player, world, 150);
         Require(Near(player.Position.X, spawn.X) && Near(player.Position.Z, spawn.Z), "Void fall did not respawn.");
         Require(player.Grounded && Near(player.Position.Y, 6) && !world.IntersectsSolid(player.Bounds), "Respawn did not find safe space above edited terrain.");
@@ -254,6 +284,179 @@ internal static class PrototypeChecks
     {
         for (int i = 0; i < count; i++)
             player.Update(world, Vector3.Zero, false, 1f / 60);
+    }
+
+    private static void CheckCoordinates()
+    {
+        var world = new World(0, false);
+        Require(World.Width == 256 && World.Height == 64 && World.Depth == 256, "World dimensions changed.");
+        Require(world.Chunks.Length == 256, "Expected exactly 256 chunks.");
+        int storedBytes = 0;
+        foreach (Chunk chunk in world.Chunks)
+        {
+            storedBytes += chunk.Blocks.Length;
+            Require(ReferenceEquals(world.GetChunk(chunk.X, chunk.Z), chunk), "Chunk lookup order is inconsistent.");
+            foreach (int local in new[] { 0, 15 })
+            foreach (int y in new[] { 0, 63 })
+            {
+                int x = chunk.OriginX + local, z = chunk.OriginZ + local;
+                Require(world.SetBlock(x, y, z, BlockType.Dirt), "Valid extreme coordinate rejected.");
+                Require(world.GetBlock(x, y, z) == BlockType.Dirt && chunk.GetBlock(local, y, local) == BlockType.Dirt,
+                    "World-to-local coordinate conversion failed.");
+            }
+        }
+        Require(storedBytes == 4 * 1024 * 1024 && storedBytes == World.BlockCount, "Raw storage must be exactly 4 MiB.");
+        Require(world.GetChunk(15, 15).Bounds.Max == new Vector3(256, 64, 256), "Last chunk bounds are incorrect.");
+        Point3[] invalid = { new(-1, 0, 0), new(256, 0, 0), new(0, -1, 0), new(0, 64, 0),
+            new(0, 0, -1), new(0, 0, 256), new(int.MinValue, 0, 0), new(0, int.MaxValue, 0) };
+        int revision = world.Revision;
+        foreach (Point3 cell in invalid)
+        {
+            Require(world.GetBlock(cell.X, cell.Y, cell.Z) == BlockType.Air, "Out-of-bounds read must return air.");
+            Require(!world.SetBlock(cell.X, cell.Y, cell.Z, BlockType.Stone), "Out-of-bounds write succeeded.");
+            Require(!world.TryPlace(cell, BlockType.Stone, new BoundingBox()), "Out-of-bounds placement succeeded.");
+        }
+        Require(world.Revision == revision, "Invalid writes dirtied the world.");
+    }
+
+    private static void CheckTerrain()
+    {
+        var world = new World(173);
+        var same = new World(173);
+        var other = new World(174);
+        bool seedChangedTerrain = false;
+        for (int i = 0; i < World.ChunkCount; i++)
+        {
+            Require(world.Chunks[i].Blocks.SequenceEqual(same.Chunks[i].Blocks), "Identical seeds produced different terrain.");
+            seedChangedTerrain |= !world.Chunks[i].Blocks.SequenceEqual(other.Chunks[i].Blocks);
+        }
+        Require(seedChangedTerrain, "Changing seed had no effect.");
+
+        var generator = new TerrainGenerator(173);
+        int min = 64, max = 0;
+        var heights = new int[World.Width * World.Depth];
+        for (int z = 0; z < World.Depth; z++)
+        for (int x = 0; x < World.Width; x++)
+        {
+            int top = world.SurfaceY(x, z), dirt = generator.DirtDepth(x, z);
+            Require(top == generator.SurfaceY(x, z) && top >= 16 && top <= 44, "Surface height is unsafe or differs from generator.");
+            Require(dirt >= 3 && dirt <= 5, "Dirt thickness must be 3-5 blocks.");
+            for (int y = 0; y < World.Height; y++)
+            {
+                BlockType expected = y > top ? BlockType.Air : y == top ? BlockType.Grass
+                    : y >= top - dirt ? BlockType.Dirt : BlockType.Stone;
+                Require(world.GetBlock(x, y, z) == expected, "Generated column has incorrect layers or holes.");
+            }
+            heights[z * World.Width + x] = top;
+            if (x > 0) Require(Math.Abs(top - heights[z * World.Width + x - 1]) <= 2, "Discontinuity along X, including chunk seams.");
+            if (z > 0) Require(Math.Abs(top - heights[(z - 1) * World.Width + x]) <= 2, "Discontinuity along Z, including chunk seams.");
+            min = Math.Min(min, top);
+            max = Math.Max(max, top);
+        }
+        Require(max - min >= 4, "Terrain is effectively flat.");
+        var player = new Player(world.Spawn);
+        Require(!world.IntersectsSolid(player.Bounds) && player.Bounds.Max.Y < World.Height, "Generated spawn is obstructed or too high.");
+        Step(player, world, 90);
+        Require(player.Grounded && !world.IntersectsSolid(player.Bounds), "Player failed to land at generated spawn.");
+        Console.WriteLine($"  Seed 173 surface range: Y {min}-{max}; raw storage {World.BlockCount} bytes.");
+    }
+
+    private static void CheckChunkRevisions()
+    {
+        var world = new World(0, false);
+        CheckEdit(world, new Point3(8, 10, 8), (0, 0));
+        CheckEdit(world, new Point3(15, 10, 8), (0, 0), (1, 0));
+        CheckEdit(world, new Point3(16, 10, 8), (1, 0), (0, 0));
+        CheckEdit(world, new Point3(8, 10, 15), (0, 0), (0, 1));
+        CheckEdit(world, new Point3(16, 10, 16), (1, 1), (0, 1), (1, 0));
+        CheckEdit(world, new Point3(255, 63, 255), (15, 15));
+        CheckEdit(world, new Point3(0, 0, 0), (0, 0));
+    }
+
+    private static void CheckEdit(World world, Point3 cell, params (int X, int Z)[] expected)
+    {
+        var before = new int[World.ChunkCount];
+        for (int i = 0; i < before.Length; i++)
+            before[i] = world.Chunks[i].Revision;
+        Require(world.SetBlock(cell.X, cell.Y, cell.Z, BlockType.Stone), "Test edit failed.");
+        for (int i = 0; i < before.Length; i++)
+        {
+            Chunk chunk = world.Chunks[i];
+            bool dirty = false;
+            foreach (var target in expected)
+                dirty |= chunk.X == target.X && chunk.Z == target.Z;
+            Require(chunk.Revision == before[i] + (dirty ? 1 : 0), "Edit dirtied an unrelated chunk or missed a face-sharing neighbor.");
+        }
+        int revision = world.Revision;
+        Require(!world.SetBlock(cell.X, cell.Y, cell.Z, BlockType.Stone) && world.Revision == revision, "Unchanged edit dirtied meshes.");
+    }
+
+    private static void CheckFrustum()
+    {
+        var world = new World(0, false);
+        var camera = new Camera { Position = new Vector3(128.5f, 40, 128.5f) };
+        var frustum = new BoundingFrustum(camera.View * camera.Projection(16f / 9));
+        Require(frustum.Intersects(world.GetChunk(8, 4).Bounds), "Forward chunk was culled.");
+        Require(!frustum.Intersects(world.GetChunk(8, 15).Bounds), "Chunk behind camera was not culled.");
+        Require(!frustum.Intersects(new BoundingBox(new Vector3(128, 0, -500), new Vector3(144, 64, -484))), "Chunk beyond far plane was not culled.");
+    }
+
+    private static void CheckChunkGameplay()
+    {
+        var world = FlatWorld();
+        world.SetBlock(16, 8, 16, BlockType.Stone);
+        BlockHit? hit = BlockRaycaster.Cast(world, new Vector3(14.5f, 8.5f, 16.5f), Vector3.Right);
+        Require(hit.HasValue && hit.Value.Cell == new Point3(16, 8, 16) && hit.Value.PlacementCell == new Point3(15, 8, 16), "Raycast or placement face failed across seam.");
+        var player = new Player(new Vector3(14.5f, 5, 10.5f));
+        for (int y = 5; y < 9; y++)
+            world.SetBlock(16, y, 10, BlockType.Stone);
+        for (int i = 0; i < 60; i++)
+            player.Update(world, Vector3.Right, false, 1f / 60);
+        Require(Near(player.Position.X, 16 - Player.HalfWidth) && !world.IntersectsSolid(player.Bounds), "Cross-chunk wall collision failed.");
+        for (int y = 5; y < 9; y++)
+            world.SetBlock(16, y, 10, BlockType.Air);
+        for (int i = 0; i < 30; i++)
+            player.Update(world, Vector3.Right, false, 1f / 60);
+        Require(player.Position.X > 17 && !world.IntersectsSolid(player.Bounds), "Player failed to cross edited chunk seam.");
+    }
+
+    private static void CheckBoundaries()
+    {
+        var world = FlatWorld();
+        (Vector3 Start, Vector3 Direction)[] edges =
+        {
+            (new(0.5f, 5, 10.5f), Vector3.Left),
+            (new(255.5f, 5, 10.5f), Vector3.Right),
+            (new(10.5f, 5, 0.5f), Vector3.Forward),
+            (new(10.5f, 5, 255.5f), Vector3.Backward)
+        };
+        foreach (var edge in edges)
+        {
+            var player = new Player(edge.Start);
+            for (int i = 0; i < 120; i++)
+                player.Update(world, edge.Direction, false, 1f / 60);
+            Require(player.Bounds.Min.X >= -0.0001f && player.Bounds.Min.Z >= -0.0001f
+                && player.Bounds.Max.X <= World.Width + 0.0001f && player.Bounds.Max.Z <= World.Depth + 0.0001f,
+                "Player crossed a horizontal world boundary.");
+        }
+        Require(world.SetBlock(10, 63, 10, BlockType.Stone), "Top valid block rejected.");
+        Require(!world.SetBlock(10, 64, 10, BlockType.Stone) && !world.SetBlock(10, -1, 10, BlockType.Air), "Invalid vertical edit accepted.");
+        Require(BlockRaycaster.Cast(world, new Vector3(10.5f, 66, 10.5f), Vector3.Down).Value.Cell.Y == 63, "Ray from above world failed.");
+        var below = new Player(new Vector3(10.5f, -20, 10.5f));
+        Step(below, world, 1);
+        Require(below.Position.Y >= 5 && !world.IntersectsSolid(below.Bounds), "Bottom-boundary respawn failed.");
+    }
+
+    private static World FlatWorld()
+    {
+        var world = new World(0, false);
+        foreach (Chunk chunk in world.Chunks)
+        for (int y = 0; y < TestGroundHeight; y++)
+        for (int z = 0; z < Chunk.Size; z++)
+        for (int x = 0; x < Chunk.Size; x++)
+            chunk.SetBlock(x, y, z, y == TestGroundHeight - 1 ? BlockType.Grass
+                : y >= TestGroundHeight - 3 ? BlockType.Dirt : BlockType.Stone);
+        return world;
     }
 
     private static bool Near(float actual, float expected) => MathF.Abs(actual - expected) < 0.001f;

@@ -1,6 +1,6 @@
 # MDSM
 
-A small Minecraft Indev-inspired voxel sandbox prototype in C# and MonoGame DesktopGL. The world is a 32 x 16 x 32 block volume with a flat grass surface, two dirt layers, and two stone layers.
+A small Minecraft Indev-inspired voxel sandbox in C# and MonoGame DesktopGL. Milestone 2 provides a finite **256 x 64 x 256** world (X, Y, Z), gentle seeded terrain, and chunk-based rendering.
 
 ## Build and run
 
@@ -12,6 +12,16 @@ dotnet run --no-build
 ```
 
 The MonoGame build task restores the MGCB tool from the existing local tool manifest and compiles [Content/terrain.png](./Content/terrain.png) through [Content/Content.mgcb](./Content/Content.mgcb). The resulting `Content/terrain.xnb` is copied into the build output and loaded by the game's ContentManager. The small UI font remains generated in code and needs no installed system fonts.
+
+## Finite world and seed
+
+Valid block coordinates are X/Z 0-255 and Y 0-63. The complete world stays in memory as **256 chunks**, arranged 16 x 16. Each chunk spans 16 x 64 x 16 blocks and stores one byte per block: **4,194,304 bytes (4 MiB)** of raw block data in total, plus chunk metadata and render buffers.
+
+The configurable default seed is `World.DefaultSeed` in [World.cs](./World.cs), currently **173**. Change that constant to choose a different default, or pass an integer to the `World` constructor. The same seed produces the same world. [TerrainGenerator.cs](./TerrainGenerator.cs) combines coherent 2D gradient noise at several scales using global coordinates, so hills and valleys continue across chunk boundaries. Surfaces stay within Y 16-44, with grass on top, 3-5 dirt blocks below, and stone underneath. There are no caves or other terrain features in this milestone.
+
+The player spawns above the surface near the center. Horizontal player bounds stop at the finite edges, where terrain ends visibly. Block reads outside the world return air; edits outside it are rejected. Space above Y=63 remains open for movement, with no blocks stored above the limit. Mining through the bottom can cause a fall; falling below Y=-16 respawns the player above the current surface at the center.
+
+Terrain generation and initial mesh creation run synchronously on the main thread, so startup includes a short initial build. Each chunk has its own reusable GPU vertex buffer, containing only exposed faces. Neighbor queries cross chunk boundaries, hiding interior seam faces. Chunk bounds are tested against the camera frustum before submitting draws. An edit rebuilds its own mesh and, at a chunk edge, the face-sharing neighbors (at most three meshes for a single block edit). Diagonal chunks are unaffected. Mesh scratch storage and GPU capacity are reused, and all graphics operations stay on the main thread.
 
 ## Editing block textures
 
@@ -39,11 +49,12 @@ For a future material, draw its texture in an unused slot and assign that index 
 | Left click | Break the outlined block |
 | Right click | Place the selected block against the outlined face |
 | 1 / 2 / 3 (or numpad) | Select grass / dirt / stone |
+| F3 | Toggle player coordinates, chunk coordinates, approximate FPS, seed, chunk count, and dimensions |
 | Escape | Pause and release the mouse |
 | Left click while paused | Resume and capture the mouse |
 | F10 or gamepad Back | Quit |
 
-Block interaction reaches six blocks from the camera. Each click performs one edit. Placement requires an empty cell inside the world and cannot overlap the player's body. Movement includes gravity, solid-block collision, and sliding along walls; diagonal movement has the same speed as forward movement. Falling off the terrain respawns the player above the original spawn column, accounting for blocks placed there. Losing window focus pauses the game and releases the mouse; the resume click does not break a block.
+Block interaction reaches six blocks from the camera. Each click performs one edit. Placement requires an empty cell inside the world and cannot overlap the player's body. Movement includes gravity, solid-block collision, and sliding along walls; diagonal movement has the same speed as forward movement. Collision and raycasts operate in world coordinates across chunk seams. Losing window focus pauses the game and releases the mouse; the resume click does not break a block.
 
 The hotbar provides unlimited blocks. World edits last for the current session; saving, infinite terrain, crafting, and advanced lighting are outside this milestone.
 
@@ -55,15 +66,19 @@ The hotbar provides unlimited blocks. World edits last for the current session; 
 | [Camera.cs](./Camera.cs) | First-person orientation, view, and perspective projection |
 | [Player.cs](./Player.cs) | Player bounds, movement, gravity, jump, collision, and respawn |
 | [Blocks.cs](./Blocks.cs) | Block types and atlas tile selection |
-| [World.cs](./World.cs) | Flat terrain, safe reads/edits, placement, and collision queries |
+| [World.cs](./World.cs) | Finite world, chunk lookup/invalidation, safe reads/edits, placement, and collision queries |
+| [Chunk.cs](./Chunk.cs) | Compact local block storage, world bounds, and mesh revision |
+| [TerrainGenerator.cs](./TerrainGenerator.cs) | Seeded coherent height generation and grass/dirt/stone layering |
 | [BlockRaycaster.cs](./BlockRaycaster.cs) | Voxel grid traversal and hit-face selection |
 | [TextureAtlas.cs](./TextureAtlas.cs) | ContentManager atlas loading, grid tile rectangles, and texel-center UVs |
 | [Content/terrain.png](./Content/terrain.png) | Editable 256 x 256 block texture atlas |
-| [WorldRenderer.cs](./WorldRenderer.cs) | Exposed-face mesh, depth testing, backface culling, fog, and selection outline |
-| [Hud.cs](./Hud.cs) | Crosshair, hotbar, controls, and pause overlay |
+| [ChunkMeshBuilder.cs](./ChunkMeshBuilder.cs) | CPU exposed-face geometry with cross-chunk neighbor checks |
+| [ChunkMesh.cs](./ChunkMesh.cs) | Per-chunk GPU buffer, revision tracking, uploads, and disposal |
+| [WorldRenderer.cs](./WorldRenderer.cs) | Chunk frustum culling, depth testing, backface culling, fog, and selection outline |
+| [Hud.cs](./Hud.cs) | Crosshair, hotbar, controls, pause overlay, and cached F3 debug text |
 | [PrototypeChecks.cs](./PrototypeChecks.cs) | Automated checks that run without a graphics device |
 
-Only exposed faces are uploaded to the GPU. A world revision triggers a mesh rebuild after an edit; the mesh is reused between edits. Rebuilding this small world's mesh keeps editing straightforward without adding a chunk streaming system.
+All chunks remain loaded. There is no chunk streaming, multithreaded generation, saving/loading, water, trees, ores, or other gameplay expansion.
 
 ## Verification
 
@@ -71,7 +86,7 @@ Only exposed faces are uploaded to the GPU. A world revision triggers a mesh reb
 dotnet run --no-build -- --self-test
 ```
 
-The checks cover terrain and edit bounds, camera orientation, mesh face counts and winding, atlas rows and texel-center coordinates, raycast hits and reach, placement safety, jumping and landing, wall sliding, diagonal speed, ceilings, fast falls, and safe respawn. A failing check returns a nonzero exit code. These checks do not open a window and cannot verify content loading, GPU output, or operating-system input behavior.
+The 16 check groups cover deterministic seeds, generated layers and headroom, 4 MiB storage and coordinate conversion, safe out-of-bounds access, exact chunk invalidation, seam/edge face counts, frustum tests, cross-chunk collision and raycasting, horizontal boundaries, atlas UVs, and the original movement/placement checks. Controlled flat fixtures isolate physics tests from terrain generation. A failing check returns a nonzero exit code. These checks do not open a window and cannot verify content loading, GPU output, or operating-system input behavior.
 
-For a manual playtest, confirm the textured terrain, crosshair, hotbar, and block outline render correctly; walk and jump into placed walls; break the floor and place all three block types; verify placement never traps the player; then test Escape, click-to-resume, window resizing, and switching focus.
+For a manual playtest, inspect hills from different directions, toggle F3, and cross the chunk boundaries indicated by its chunk coordinates. Break/place blocks on chunk seams and at world edges; check neighboring faces, collision, and selection. Walk toward all four horizontal edges, dig through the bottom, and check safe respawn. Confirm all three hotbar blocks and the original jump, pause/resume, mouse-look, resizing, and focus behavior. Check responsiveness while turning across a wide view of the world.
 

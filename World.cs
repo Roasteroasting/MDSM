@@ -5,41 +5,85 @@ namespace MDSM;
 
 public sealed class World
 {
-    public const int Width = 32;
-    public const int Height = 16;
-    public const int Depth = 32;
-    public const int GroundHeight = 5;
+    public const int Width = 256;
+    public const int Height = 64;
+    public const int Depth = 256;
+    public const int ChunksX = Width / Chunk.Size;
+    public const int ChunksZ = Depth / Chunk.Size;
+    public const int ChunkCount = ChunksX * ChunksZ;
+    public const int BlockCount = Width * Height * Depth;
+    public const int DefaultSeed = 173;
 
-    private readonly BlockType[,,] _blocks = new BlockType[Width, Height, Depth];
+    private readonly Chunk[] _chunks = new Chunk[ChunkCount];
+    public ReadOnlySpan<Chunk> Chunks => _chunks;
+    public int Seed { get; }
     public int Revision { get; private set; }
-    public Vector3 Spawn => new(Width / 2f + 0.5f, GroundHeight, Depth / 2f + 6.5f);
+    public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
-    public World()
+    public World(int seed = DefaultSeed) : this(seed, true) { }
+
+    // Empty storage is used by the deterministic test fixtures, not by gameplay.
+    internal World(int seed, bool generateTerrain)
     {
-        for (int x = 0; x < Width; x++)
-        for (int z = 0; z < Depth; z++)
-        for (int y = 0; y < GroundHeight; y++)
-            _blocks[x, y, z] = y == GroundHeight - 1 ? BlockType.Grass
-                : y >= GroundHeight - 3 ? BlockType.Dirt : BlockType.Stone;
+        Seed = seed;
+        for (int z = 0; z < ChunksZ; z++)
+        for (int x = 0; x < ChunksX; x++)
+            _chunks[z * ChunksX + x] = new Chunk(x, z);
+
+        if (generateTerrain)
+            new TerrainGenerator(seed).Generate(this);
+    }
+
+    public Chunk GetChunk(int x, int z)
+    {
+        if ((uint)x >= ChunksX || (uint)z >= ChunksZ)
+            throw new ArgumentOutOfRangeException(nameof(x), "Chunk coordinates must be between 0 and 15.");
+        return _chunks[z * ChunksX + x];
+    }
+
+    public int SurfaceY(int x, int z)
+    {
+        if ((uint)x >= Width || (uint)z >= Depth)
+            return -1;
+        for (int y = Height - 1; y >= 0; y--)
+            if (IsSolid(x, y, z))
+                return y;
+        return -1;
     }
 
     public bool Contains(int x, int y, int z) =>
         x >= 0 && x < Width && y >= 0 && y < Height && z >= 0 && z < Depth;
 
     public BlockType GetBlock(int x, int y, int z) =>
-        Contains(x, y, z) ? _blocks[x, y, z] : BlockType.Air;
+        Contains(x, y, z) ? _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size]
+            .GetBlock(x % Chunk.Size, y, z % Chunk.Size) : BlockType.Air;
 
     public bool IsSolid(int x, int y, int z) => GetBlock(x, y, z) != BlockType.Air;
 
     public bool SetBlock(int x, int y, int z, BlockType block)
     {
         if (!Contains(x, y, z) || (block != BlockType.Air && !Blocks.IsPlaceable(block))
-            || _blocks[x, y, z] == block)
+            || GetBlock(x, y, z) == block)
             return false;
 
-        _blocks[x, y, z] = block;
+        int chunkX = x / Chunk.Size, chunkZ = z / Chunk.Size;
+        int localX = x % Chunk.Size, localZ = z % Chunk.Size;
+        Chunk chunk = GetChunk(chunkX, chunkZ);
+        chunk.SetBlock(localX, y, localZ, block);
+        chunk.MarkDirty();
+        // Only face-sharing neighbors can gain or lose an exposed face.
+        if (localX == 0) MarkDirty(chunkX - 1, chunkZ);
+        if (localX == Chunk.Size - 1) MarkDirty(chunkX + 1, chunkZ);
+        if (localZ == 0) MarkDirty(chunkX, chunkZ - 1);
+        if (localZ == Chunk.Size - 1) MarkDirty(chunkX, chunkZ + 1);
         Revision++;
         return true;
+    }
+
+    private void MarkDirty(int x, int z)
+    {
+        if ((uint)x < ChunksX && (uint)z < ChunksZ)
+            _chunks[z * ChunksX + x].MarkDirty();
     }
 
     public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds)
