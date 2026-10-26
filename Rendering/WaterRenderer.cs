@@ -25,34 +25,56 @@ internal sealed class WaterRenderer : IDisposable
     private int _count;
     private bool _initialized;
     private readonly Texture2D _texture;
+    private readonly ChunkRegion _region;
+    private readonly bool _ownsRegion;
+    private int _regionVersion = -1;
+    private bool _geometryChanged;
+    internal int CachedChunks { get; private set; }
+    internal int CachedFaces { get; private set; }
+    internal long BufferBytes => (long)(_buffer?.VertexCount ?? 0) * VertexPositionColorTexture.VertexDeclaration.VertexStride;
+    internal int DrawnVertices => _count * 6;
+    internal bool NeedsBuild(int index) => _revisions[index] != _world.Chunks[index].WaterRevision;
+    internal void Evict(int index)
+    {
+        if (_chunks[index] != null) { CachedChunks--; CachedFaces -= _chunks[index].Count; }
+        _chunks[index] = null; _revisions[index] = -1; _geometryChanged = true;
+    }
+    internal void PrepareChunk(int index)
+    {
+        if (!NeedsBuild(index)) return;
+        Chunk chunk = _world.Chunks[index]; _revisions[index] = chunk.WaterRevision;
+        if (chunk.WaterCount == 0) { Evict(index); _revisions[index] = chunk.WaterRevision; return; }
+        if (_chunks[index] == null) { _chunks[index] = new List<WaterFace>(); CachedChunks++; }
+        CachedFaces -= _chunks[index].Count;
+        WaterMeshBuilder.Build(_world, chunk, _chunks[index]);
+        CachedFaces += _chunks[index].Count; _geometryChanged = true;
+    }
 
-    public WaterRenderer(GraphicsDevice device, TextureAtlas atlas, World world)
+    public WaterRenderer(GraphicsDevice device, TextureAtlas atlas, World world, ChunkRegion region = null)
     {
         _device = device; _world = world; _texture = atlas.Water;
+        _ownsRegion = region == null; _region = region ?? new ChunkRegion(world);
         _chunks = new List<WaterFace>[world.ChunkCount]; _revisions = new int[world.ChunkCount];
         Array.Fill(_revisions, -1);
         _effect = new BasicEffect(device) { World = Matrix.Identity, TextureEnabled = true, VertexColorEnabled = true,
-            Texture = _texture, FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = 80, FogEnd = 220 };
+            Texture = _texture, FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
     }
 
     public void Draw(Camera camera)
     {
         Matrix projection = camera.Projection(_device.Viewport.AspectRatio), viewProjection = camera.View * projection;
-        bool changed = !_initialized || camera.Position != _lastPosition || viewProjection != _lastViewProjection;
-        for (int i = 0; i < _chunks.Length; i++)
+        if (_ownsRegion)
         {
-            Chunk chunk = _world.Chunks[i];
-            if (_revisions[i] == chunk.WaterRevision) continue;
-            _revisions[i] = chunk.WaterRevision;
-            if (chunk.WaterCount != 0 || _chunks[i] != null)
-            {
-                _chunks[i] ??= new List<WaterFace>(); WaterMeshBuilder.Build(_world, chunk, _chunks[i]); changed = true;
-            }
+            if (_region.Update(camera.Position, _device.Viewport.AspectRatio)) foreach (int index in _region.Removed) Evict(index);
+            // Standalone water checks use the same bounded region. Gameplay shares terrain's upload budget.
+            foreach (int index in _region.Indices) PrepareChunk(index);
         }
+        bool changed = !_initialized || _geometryChanged || _regionVersion != _region.Version
+            || camera.Position != _lastPosition || viewProjection != _lastViewProjection;
         if (changed)
         {
             _frustum.Matrix = viewProjection; _count = 0;
-            for (int i = 0; i < _chunks.Length; i++)
+            foreach (int i in _region.Indices)
             {
                 if (_chunks[i] == null || !_frustum.Intersects(_world.Chunks[i].Bounds)) continue;
                 foreach (WaterFace face in _chunks[i])
@@ -73,7 +95,8 @@ internal sealed class WaterRenderer : IDisposable
                 }
                 _buffer.SetData(_vertices, 0, _count * 6, SetDataOptions.Discard);
             }
-            _initialized = true; _lastPosition = camera.Position; _lastViewProjection = viewProjection;
+            _initialized = true; _geometryChanged = false; _regionVersion = _region.Version;
+            _lastPosition = camera.Position; _lastViewProjection = viewProjection;
         }
         if (_count == 0) return;
         BlendState blend = _device.BlendState; DepthStencilState depth = _device.DepthStencilState;
@@ -101,5 +124,10 @@ internal sealed class WaterRenderer : IDisposable
         public Vector3 Position;
         public int Compare(WaterFace a, WaterFace b) => Vector3.DistanceSquared(b.Center, Position).CompareTo(Vector3.DistanceSquared(a.Center, Position));
     }
-    public void Dispose() { _buffer?.Dispose(); _effect.Dispose(); }
+    public void Dispose()
+    {
+        _buffer?.Dispose(); _buffer = null; _effect.Dispose(); Array.Clear(_chunks);
+        _faces = Array.Empty<WaterFace>(); _vertices = Array.Empty<VertexPositionColorTexture>();
+        _count = CachedChunks = CachedFaces = 0;
+    }
 }

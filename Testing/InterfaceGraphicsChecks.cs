@@ -8,6 +8,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
 using MDSM.Core;
+using MDSM.Rendering;
 using MDSM.Input;
 using MDSM.Inventories;
 using MDSM.Persistence;
@@ -56,6 +57,7 @@ internal static class InterfaceGraphicsChecks
         private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
         private T Field<T>(string name) => (T)typeof(Game1).GetField(name, Private).GetValue(this);
         private object Call(string name, params object[] args) => typeof(Game1).GetMethod(name, Private).Invoke(this, args);
+        private void WarmRenderer() => RenderingPerformanceChecks.Warm(Field<WorldRenderer>("_renderer"), Session.Camera);
         private GameSession Session => Field<GameSession>("_session");
         private MenuController Menu => Field<MenuController>("_menu");
         private GameSettings Settings => Field<GameSettings>("_settings");
@@ -96,7 +98,7 @@ internal static class InterfaceGraphicsChecks
             world.SetBlock(64, 2, 61, BlockType.Stone);
             var save = new WorldSave(world, "Interface check", new Vector3(64.5f, 1, 64.5f), 0, 0, Inventory.CreateStarter());
             var store = Field<WorldSaveManager>("_saves");
-            Call("BeginWorld", store.Create(save), save);
+            Call("BeginWorld", store.Create(save), save); WarmRenderer();
         }
 
         protected override void Draw(GameTime time)

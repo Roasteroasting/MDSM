@@ -21,6 +21,8 @@ internal static class PrototypeChecks
             ("Seed determinism, terrain layers, and continuous hills", CheckTerrain),
             ("Only face-sharing chunk meshes are invalidated", CheckChunkRevisions),
             ("Chunk frustum culling", CheckFrustum),
+            ("All-size bounded residency, frustum coverage, edges and hysteresis", RenderingPerformanceChecks.Regions),
+            ("Cached mob collision matches fresh queries, edits, knockback and water", RenderingPerformanceChecks.CollisionCache),
             ("Collision and raycasting across chunk seams", CheckChunkGameplay),
             ("Horizontal player bounds and vertical world limits", CheckBoundaries),
             ("Camera direction and pitch limits", CheckCamera),
@@ -110,7 +112,10 @@ internal static class PrototypeChecks
             ("Swept low-FPS falling collision, terminal speed, and ordered active stacks", FallingBlockChecks.SweepsAndStacks),
             ("Identical falls at 30/60/144/360 FPS and safe placement around falling cubes", FallingBlockChecks.FrameRatesAndPlacement),
             ("All-size mid-fall persistence, exact resumption, v6 queues, and corrupt active states", FallingBlockChecks.Persistence),
-            ("Bounded active falls, deferred stacks, save/load, and exact material accounting", FallingBlockChecks.CapacityAndAccounting)
+            ("Bounded active falls, deferred stacks, save/load, and exact material accounting", FallingBlockChecks.CapacityAndAccounting),
+            ("Four expanded dimensions, high-Y indexing, terrain limits and smooth gradients", WorldExpansionChecks.DimensionsAndTerrain),
+            ("Legacy 64-high Normal/Large migration for save versions 1-7", WorldExpansionChecks.Migration),
+            ("All four complete generated worlds, water features, and streamed restoration", WorldExpansionChecks.GenerationAndStreaming)
         };
 
         int failures = 0;
@@ -220,7 +225,7 @@ internal static class PrototypeChecks
 
     private static void CheckMesh()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         var builder = new ChunkMeshBuilder();
         world.SetBlock(15, 10, 8, BlockType.Grass);
         builder.Build(world, world.GetChunk(0, 0));
@@ -371,8 +376,8 @@ internal static class PrototypeChecks
 
     private static void CheckCoordinates()
     {
-        var world = new World(0, false);
-        Require(world.Width == 256 && World.Height == 64 && world.Depth == 256, "World dimensions changed.");
+        var world = new World(0, WorldSize.Small, false);
+        Require(world.Width == 256 && World.Height == 128 && world.Depth == 256, "World dimensions changed.");
         Require(world.Chunks.Length == 256, "Expected exactly 256 chunks.");
         int storedBytes = 0;
         foreach (Chunk chunk in world.Chunks)
@@ -388,9 +393,9 @@ internal static class PrototypeChecks
                     "World-to-local coordinate conversion failed.");
             }
         }
-        Require(storedBytes == 4 * 1024 * 1024 && storedBytes == world.BlockCount, "Raw storage must be exactly 4 MiB.");
-        Require(world.GetChunk(15, 15).Bounds.Max == new Vector3(256, 64, 256), "Last chunk bounds are incorrect.");
-        Point3[] invalid = { new(-1, 0, 0), new(256, 0, 0), new(0, -1, 0), new(0, 64, 0),
+        Require(storedBytes == 8 * 1024 * 1024 && storedBytes == world.BlockCount, "Raw storage must be exactly 8 MiB.");
+        Require(world.GetChunk(15, 15).Bounds.Max == new Vector3(256, 128, 256), "Last chunk bounds are incorrect.");
+        Point3[] invalid = { new(-1, 0, 0), new(256, 0, 0), new(0, -1, 0), new(0, 128, 0),
             new(0, 0, -1), new(0, 0, 256), new(int.MinValue, 0, 0), new(0, int.MaxValue, 0) };
         int revision = world.Revision;
         foreach (Point3 cell in invalid)
@@ -416,13 +421,13 @@ internal static class PrototypeChecks
         Require(seedChangedTerrain, "Changing seed had no effect.");
 
         var generator = new TerrainGenerator(173);
-        int min = 64, max = 0;
+        int min = 128, max = 0;
         var heights = new int[world.Width * world.Depth];
         for (int z = 0; z < world.Depth; z++)
         for (int x = 0; x < world.Width; x++)
         {
             int top = world.SurfaceY(x, z), dirt = generator.DirtDepth(x, z);
-            Require(top == generator.SurfaceY(x, z) && top >= 16 && top <= 44, "Surface height is unsafe or differs from generator.");
+            Require(top == generator.SurfaceY(x, z) && top >= 63 && top <= 114, "Surface height is unsafe or differs from generator.");
             Require(dirt >= 3 && dirt <= 5, "Dirt thickness must be 3-5 blocks.");
             for (int y = 0; y < World.Height; y++)
             {
@@ -446,7 +451,7 @@ internal static class PrototypeChecks
 
     private static void CheckChunkRevisions()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         CheckEdit(world, new Point3(8, 10, 8), (0, 0));
         CheckEdit(world, new Point3(15, 10, 8), (0, 0), (1, 0));
         CheckEdit(world, new Point3(16, 10, 8), (1, 0), (0, 0));
@@ -476,7 +481,7 @@ internal static class PrototypeChecks
 
     private static void CheckFrustum()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         var camera = new Camera { Position = new Vector3(128.5f, 40, 128.5f) };
         var frustum = new BoundingFrustum(camera.View * camera.Projection(16f / 9));
         Require(frustum.Intersects(world.GetChunk(8, 4).Bounds), "Forward chunk was culled.");
@@ -522,9 +527,9 @@ internal static class PrototypeChecks
                 && player.Bounds.Max.X <= world.Width + 0.0001f && player.Bounds.Max.Z <= world.Depth + 0.0001f,
                 "Player crossed a horizontal world boundary.");
         }
-        Require(world.SetBlock(10, 63, 10, BlockType.Stone), "Top valid block rejected.");
-        Require(!world.SetBlock(10, 64, 10, BlockType.Stone) && !world.SetBlock(10, -1, 10, BlockType.Air), "Invalid vertical edit accepted.");
-        Require(BlockRaycaster.Cast(world, new Vector3(10.5f, 66, 10.5f), Vector3.Down).Value.Cell.Y == 63, "Ray from above world failed.");
+        Require(world.SetBlock(10, 127, 10, BlockType.Stone), "Top valid block rejected.");
+        Require(!world.SetBlock(10, 128, 10, BlockType.Stone) && !world.SetBlock(10, -1, 10, BlockType.Air), "Invalid vertical edit accepted.");
+        Require(BlockRaycaster.Cast(world, new Vector3(10.5f, 130, 10.5f), Vector3.Down).Value.Cell.Y == 127, "Ray from above world failed.");
         var below = new Player(new Vector3(10.5f, -20, 10.5f));
         Step(below, world, 1);
         Require(below.Position.Y >= 5 && !world.IntersectsSolid(below.Bounds), "Bottom-boundary respawn failed.");
@@ -532,7 +537,7 @@ internal static class PrototypeChecks
 
     private static World FlatWorld()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         foreach (Chunk chunk in world.Chunks)
         for (int y = 0; y < TestGroundHeight; y++)
         for (int z = 0; z < Chunk.Size; z++)
@@ -544,7 +549,7 @@ internal static class PrototypeChecks
 
     private static World BaseTerrain(int seed)
     {
-        var world = new World(seed, false);
+        var world = new World(seed, WorldSize.Small, false);
         new TerrainGenerator(seed).Generate(world);
         return world;
     }

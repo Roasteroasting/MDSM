@@ -15,6 +15,7 @@ internal sealed class FallingBlockRenderer : IDisposable
     private readonly BoundingFrustum _frustum = new(Matrix.Identity);
     private VertexPositionColorTexture[] _vertices = new VertexPositionColorTexture[256];
     private DynamicVertexBuffer _buffer;
+    internal long BufferBytes => (long)(_buffer?.VertexCount ?? 0) * VertexPositionColorTexture.VertexDeclaration.VertexStride;
 
     public FallingBlockRenderer(GraphicsDevice device, TextureAtlas atlas)
     {
@@ -24,7 +25,7 @@ internal sealed class FallingBlockRenderer : IDisposable
         builder.Clear(); builder.AppendCube(BlockType.Gravel, Vector3.Zero); _gravel = builder.Vertices.AsSpan(0, builder.VertexCount).ToArray();
         _effect = new AlphaTestEffect(device) { World = Matrix.Identity, Texture = atlas.Texture, VertexColorEnabled = true,
             AlphaFunction = CompareFunction.GreaterEqual, ReferenceAlpha = 128,
-            FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = 80, FogEnd = 220 };
+            FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
     }
     public void Draw(Camera camera, FallingBlockSimulation simulation, float fraction = 1)
     {

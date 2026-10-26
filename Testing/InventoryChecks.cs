@@ -214,7 +214,7 @@ internal static class InventoryChecks
 
     public static void PlacementAndIsolation()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(0, size, false);
             var inventory = new Inventory();
@@ -242,7 +242,7 @@ internal static class InventoryChecks
 
     public static void Persistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(-91, size, false);
             world.SetBlock(world.Width - 1, 63, world.Depth - 1, BlockType.Leaves);
@@ -300,7 +300,7 @@ internal static class InventoryChecks
         Bad(drop + 2, new byte[] { 0 });
         Bad(drop + 2, new byte[] { 65 });
         Bad(drop + 3, BitConverter.GetBytes(float.NaN));
-        Bad(drop + 3, BitConverter.GetBytes(129f));
+        Bad(drop + 3, BitConverter.GetBytes(257f));
         Bad(drop + 15, BitConverter.GetBytes(41f));
         Bad(drop + 19, BitConverter.GetBytes(-1f));
         Throws<InvalidDataException>(() => WorldSerializer.Write(new MemoryStream(), save with { DroppedItems = new[] { save.DroppedItems[0] with { Count = 65 } } }));
@@ -313,8 +313,8 @@ internal static class InventoryChecks
         {
             writer.Write(0x4d53444du); writer.Write(1); writer.Write(world.Width); writer.Write(64); writer.Write(world.Depth); writer.Write(world.Seed);
             byte[] name = Encoding.UTF8.GetBytes("Legacy"); writer.Write(name.Length); writer.Write(name);
-            writer.Write(32.5f); writer.Write(60f); writer.Write(32.5f); writer.Write(1.2f); writer.Write(-0.3f); writer.Write(world.BlockCount);
-            foreach (Chunk chunk in world.Chunks) writer.Write(chunk.Blocks);
+            writer.Write(32.5f); writer.Write(60f); writer.Write(32.5f); writer.Write(1.2f); writer.Write(-0.3f); writer.Write(world.Width * 64 * world.Depth);
+            foreach (Chunk chunk in world.Chunks) writer.Write(chunk.Blocks[..(16 * 64 * 16)]);
         }
         stream.Write(SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length)));
         stream.Position = 0;

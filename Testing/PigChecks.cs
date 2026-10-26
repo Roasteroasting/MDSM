@@ -27,7 +27,7 @@ internal static class PigChecks
 
     public static void Spawning()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             World world = Flat(size);
             MobState[] first = PassiveMobPopulation.Generate(world, MobSpecies.Pig), second = PassiveMobPopulation.Generate(world, MobSpecies.Pig);
@@ -43,7 +43,7 @@ internal static class PigChecks
             Require(new PassiveMobPopulation(world).Entities.Count == 0, "Loading empty population spawned pigs.");
         }
         var terrain = new World(173, WorldSize.Small);
-        Require(PassiveMobPopulation.Generate(terrain, MobSpecies.Pig).Length == 8, "Generated terrain did not support a modest pig population.");
+        Require(PassiveMobPopulation.Generate(terrain, MobSpecies.Pig).Length == 32, "Generated terrain did not support a modest pig population.");
     }
 
     public static void MovementAndDamage()
@@ -183,7 +183,7 @@ internal static class PigChecks
 
     public static void Persistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             World world = new(173, size, false);
             var save = new WorldSave(world, "Pig persistence", new Vector3(20, 10, 20), 0.1f, 0.2f, Inventory.CreateNewWorld(),

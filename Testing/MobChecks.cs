@@ -75,12 +75,12 @@ internal static class MobChecks
 
     public static void Spawning()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             World world = World.CreateNew(173, size);
             MobState[] first = PassiveMobPopulation.Generate(world), same = PassiveMobPopulation.Generate(world);
             Require(first.AsSpan().SequenceEqual(same) && first.Length == PassiveMobPopulation.InitialBudget(world)
-                && first.Length == (size == WorldSize.Small ? 8 : size == WorldSize.Normal ? 32 : 128), "Spawn budget multiplied or repeatability failed.");
+                && first.Length == (size.Width() * size.Width() / 2048), "Spawn budget multiplied or repeatability failed.");
             int[] counts = new int[4];
             foreach (MobState state in first)
             {
@@ -96,9 +96,9 @@ internal static class MobChecks
             Console.WriteLine($"  {size}: {first.Length} total mobs; pigs {counts[0]}, cows {counts[1]}, sheep {counts[2]}, chickens {counts[3]}.");
         }
         var dry = PigChecks.Flat();
-        Throws<InvalidDataException>(() => new PassiveMobPopulation(dry, Enumerable.Repeat(State(MobSpecies.Chicken), 257).ToArray()));
+        Throws<InvalidDataException>(() => new PassiveMobPopulation(dry, Enumerable.Repeat(State(MobSpecies.Chicken), PassiveMobPopulation.MaximumMobs + 1).ToArray()));
         Throws<InvalidDataException>(() => new PassiveMobPopulation(dry,
-            Enumerable.Repeat(new PigState(new Vector3(20, 1, 20), 0, 10), 128).ToArray(), Enumerable.Repeat(State(MobSpecies.Cow), 129).ToArray()));
+            Enumerable.Repeat(new PigState(new Vector3(20, 1, 20), 0, 10), 128).ToArray(), Enumerable.Repeat(State(MobSpecies.Cow), PassiveMobPopulation.MaximumMobs - 127).ToArray()));
     }
 
     public static void CombatAndDrops()
@@ -197,7 +197,7 @@ internal static class MobChecks
     private static WorldSave Decode(byte[] data) => WorldSerializer.Read(new MemoryStream(data));
     public static void Persistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(173, size, false); world.SetBlock(15, 8, 15, Water.Flow(3)); world.SetBlock(16, 7, 15, BlockType.WhiteWool);
             var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 23)); inventory.SetSlot(1, new ItemStack(Items.Leather, 7));

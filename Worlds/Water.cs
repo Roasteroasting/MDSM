@@ -36,6 +36,12 @@ public static class Water
 
     public static bool Intersects(World world, BoundingBox bounds)
     {
+        // Most entities occupy dry chunks. Avoid repeated voxel/height queries there.
+        bool wet = false;
+        for (int cz = Math.Max(0, (int)MathF.Floor(bounds.Min.Z / Chunk.Size)); cz <= Math.Min(world.ChunksZ - 1, (int)MathF.Floor(bounds.Max.Z / Chunk.Size)); cz++)
+        for (int cx = Math.Max(0, (int)MathF.Floor(bounds.Min.X / Chunk.Size)); cx <= Math.Min(world.ChunksX - 1, (int)MathF.Floor(bounds.Max.X / Chunk.Size)); cx++)
+            wet |= world.GetChunk(cx, cz).WaterCount != 0;
+        if (!wet) return false;
         for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
         for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)

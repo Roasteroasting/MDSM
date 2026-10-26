@@ -5,7 +5,8 @@ namespace MDSM.Gameplay;
 
 public sealed class Camera
 {
-    public const float FarPlane = 384f;
+    // Terrain, water and dynamic entities share this fully fogged far plane.
+    public const float FarPlane = 160f;
     private const float MouseSensitivity = 0.0025f;
     private float _yaw;
     private float _pitch = -0.3f;

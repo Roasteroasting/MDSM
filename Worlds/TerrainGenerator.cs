@@ -4,6 +4,7 @@ namespace MDSM.Worlds;
 
 public sealed class TerrainGenerator
 {
+    public const int MinimumSurface = 63, MaximumSurface = 114;
     private readonly int _seed;
 
     public TerrainGenerator(int seed) => _seed = seed;
@@ -11,11 +12,11 @@ public sealed class TerrainGenerator
     public int SurfaceY(int x, int z)
     {
         // Broad hills modulated by a slower field leave some areas relatively flat.
-        float flatness = 0.65f + Noise(x / 150f + 31, z / 150f - 17) * 0.35f;
-        float hills = Noise(x / 96f, z / 96f) * 11f
-            + Noise(x / 40f + 7, z / 40f + 13) * 4f
-            + Noise(x / 18f - 11, z / 18f + 5) * 1.5f;
-        return Math.Clamp((int)MathF.Round(28 + hills * flatness), 16, 44);
+        float flatness = 0.8f + Noise(x / 320f + 31, z / 320f - 17) * 0.2f;
+        float hills = Noise(x / 280f, z / 280f) * 34f
+            + Noise(x / 110f + 7, z / 110f + 13) * 10f
+            + Noise(x / 44f - 11, z / 44f + 5) * 2.5f;
+        return Math.Clamp((int)MathF.Round(88 + hills * flatness), MinimumSurface, MaximumSurface);
     }
 
     public int DirtDepth(int x, int z) =>

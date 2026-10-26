@@ -48,6 +48,7 @@ internal static class MobGraphicsChecks
         public bool Verified { get; private set; }
         private T Field<T>(string name) => (T)typeof(Game1).GetField(name, Private).GetValue(this);
         private object Call(string method, params object[] args) => typeof(Game1).GetMethod(method, Private).Invoke(this, args);
+        private void WarmRenderer() => RenderingPerformanceChecks.Warm(Field<WorldRenderer>("_renderer"), Session.Camera);
         private GameSession Session => Field<GameSession>("_session");
         public CheckGame(string root) : this(root, new WorldSaveManager(Path.Combine(root, "Worlds"))) { }
         private CheckGame(string root, WorldSaveManager store) : base(store, new SettingsStore(Path.Combine(root, "settings.json")))
@@ -81,7 +82,7 @@ internal static class MobGraphicsChecks
                             MobChecks.State(MobSpecies.Cow, new Vector3(62.5f, 1, 60.5f)) with { Yaw = MathHelper.Pi },
                             MobChecks.State(MobSpecies.Sheep, new Vector3(65.5f, 1, 60.5f)) with { Yaw = MathHelper.Pi },
                             MobChecks.State(MobSpecies.Chicken, new Vector3(68.5f, 1, 60.5f)) with { Yaw = MathHelper.Pi } });
-                    Call("BeginWorld", _store.Create(save), save); break;
+                    Call("BeginWorld", _store.Create(save), save); WarmRenderer(); break;
                 case 2: Press(Keys.F1); break;
                 case 5: Press(Keys.F1); break;
                 case 6: Press(Keys.D2); break;
@@ -98,14 +99,29 @@ internal static class MobGraphicsChecks
                 case 10:
                     Call("SetState", GameState.WorldCreation); MenuController menu = Field<MenuController>("_menu");
                     foreach (char ch in "Mixed new world") menu.TextInput(ch);
-                    Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch); Press(Keys.Tab); Press(Keys.Left);
+                    Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch); Press(Keys.Tab);
+                    foreach (WorldSize size in new[] { WorldSize.Large, WorldSize.Massive, WorldSize.Small, WorldSize.Normal })
+                    { Press(Keys.Right); Require(menu.SelectedSize == size, "Create menu did not cycle all four sizes."); }
+                    Press(Keys.Left);
                     Call("HandleMenuAction", MenuAction.CreateWorld);
-                    Require(State == GameState.Playing && Session.Mobs.Entities.Count == 8 && Session.Mobs.Entities.Select(m => m.Species).Distinct().Count() == 4,
+                    var creationWait = System.Diagnostics.Stopwatch.StartNew();
+                    while (State != GameState.Playing && creationWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
+                    Require(State == GameState.Playing && Session.Mobs.Entities.Count == 32 && Session.Mobs.Entities.Select(m => m.Species).Distinct().Count() == 4,
                         "Creation menu did not use one shared mixed population budget.");
                     Require(Session.Inventory[13] == new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64)
                         && Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty || Items.TryGetBlock(Session.Inventory[i].Item, out _)),
                         "New-world menu granted food/resources or omitted wool.");
-                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 8, "Initial save omitted mixed species.");
+                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 32, "Initial save omitted mixed species.");
+                    string reloadId = Session.Id; Vector3 reloadPosition = Session.Player.Position;
+                    Session.World.SetBlock(15, 125, 15, BlockType.WhiteWool);
+                    Call("HandleMenuAction", MenuAction.SaveAndReturn);
+                    Require(State == GameState.MainMenu && ChunkMesh.LiveBufferBytes == 0, "Save/return retained terrain GPU buffers.");
+                    Call("RefreshWorlds", reloadId); Call("HandleMenuAction", MenuAction.LoadWorld);
+                    var loadingWait = System.Diagnostics.Stopwatch.StartNew();
+                    while (State != GameState.Playing && loadingWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
+                    Require(State == GameState.Playing && Session.Id == reloadId && Session.Player.Position == reloadPosition
+                        && Session.World.GetBlock(15, 125, 15) == BlockType.WhiteWool && Session.Mobs.Entities.Count == 32
+                        && Field<WorldRenderer>("_renderer").PendingChunks == 0, "Background loading/nearby mesh preparation changed saved state or entered an incomplete world.");
                     break;
                 case 11: Verified = true; Exit(); break;
             }
@@ -129,7 +145,7 @@ internal static class MobGraphicsChecks
                 inventory.SetSlot(4, new ItemStack(Items.RawPorkchop, 23));
                 var save = new WorldSave(world, "Input " + species, new Vector3(64.5f, 1, 64.5f), 0, -0.1f, inventory, Health: 11,
                     Mobs: new[] { MobChecks.State(species, new Vector3(64.5f, 1, 61.5f), 3) });
-                Call("BeginWorld", _store.Create(save), save); Input();
+                Call("BeginWorld", _store.Create(save), save); WarmRenderer(); Input();
                 for (int i = 0; i < 1200 && Session.Mobs.Entities.Count > 0; i++)
                 {
                     PassiveMob target = Session.Mobs.Entities[0]; Vector3 delta = target.Position + Vector3.Up * (target.Definition.Height * 0.6f) - Session.Camera.Position;
@@ -138,7 +154,7 @@ internal static class MobGraphicsChecks
                 }
                 Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count == 1 && Session.Items.Entities[0].Item == MobDefinitions.Get(species).Drop
                     && Session.Items.Entities[0].Count is >= 1 and <= 4, "Real input path failed to kill/drop species " + species);
-                _store.Save(Session.Id, Session.Capture()); string id = Session.Id; Call("BeginWorld", id, _store.Load(id));
+                _store.Save(Session.Id, Session.Capture()); string id = Session.Id; Call("BeginWorld", id, _store.Load(id)); WarmRenderer();
                 Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count == 1 && Session.Inventory[4].Count == 23 && Session.Player.Health == 11,
                     "Saved species death changed existing food/health or regenerated entities.");
             }
@@ -149,7 +165,7 @@ internal static class MobGraphicsChecks
             World world = PigChecks.Flat();
             var save = new WorldSave(world, "World updates", new Vector3(64.5f, 1, 64.5f), 0, 0, new Inventory(),
                 Mobs: new[] { MobChecks.State(MobSpecies.Chicken, new Vector3(30.5f, 1, 30.5f), 1) });
-            Call("BeginWorld", _store.Create(save), save); Input();
+            Call("BeginWorld", _store.Create(save), save); WarmRenderer(); Input();
             Require(Session.Mobs.Punch(Session.Mobs.Entities[0], Session.Player.Position, Session.Items), "Could not schedule runtime replacement.");
             double delay = Session.Mobs.PendingRespawns[0].RemainingSeconds;
             world.SetBlock(15, 8, 15, BlockType.Sand); world.SetBlock(15, 9, 15, BlockType.Gravel);
@@ -187,7 +203,7 @@ internal static class MobGraphicsChecks
             WorldSave restored = _store.Load(id);
             Require(restored.Population.Targets[(int)MobSpecies.Chicken] == 1 && restored.Population.Pending.Length == 1
                 && restored.Population.Pending[0].RemainingSeconds == inventoryDelay, "Safe menu save changed population metadata.");
-            Call("BeginWorld", id, restored);
+            Call("BeginWorld", id, restored); WarmRenderer();
             Require(Session.Mobs.Entities.Count == 0 && Session.Mobs.PendingRespawns.Count == 1, "Loading duplicated a pending mob.");
             for (int i = 0; i < 61 * 60; i++) Input(seconds: 1f / 60);
             Require(State == GameState.Playing && Session.Mobs.Entities.Count == 1 && Session.Mobs.Entities[0].Species == MobSpecies.Chicken
@@ -198,7 +214,7 @@ internal static class MobGraphicsChecks
                 "Input path teleported an animated block instead of starting its fall.");
             Call("SetState", GameState.Paused); Input(seconds: 60);
             Require(Session.World.Gravity.CaptureActive().Single() == falling, "Pause moved an active falling block.");
-            _store.Save(id, Session.Capture()); Call("BeginWorld", id, _store.Load(id));
+            _store.Save(id, Session.Capture()); Call("BeginWorld", id, _store.Load(id)); WarmRenderer();
             Require(Session.World.Gravity.CaptureActive().Single() == falling, "Safe save/load changed an active falling block.");
             Input(seconds: 0.1f);
             Require(Session.World.Gravity.Active.Single().Y < falling.Y, "Loaded active fall did not resume.");

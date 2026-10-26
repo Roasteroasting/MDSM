@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -25,6 +27,7 @@ public class Game1 : Game
     private readonly GameSettings _settings;
     private readonly FrameLimiter _frameLimiter = new();
     private readonly SimulationClock _simulationClock = new();
+    private readonly FrameDiagnostics _diagnostics = new();
     private readonly PresentationInput _presentation = new();
     private readonly ScreenshotCapture _screenshots;
     private bool _pendingJump, _settingsDirty;
@@ -50,6 +53,10 @@ public class Game1 : Game
     private float _fallingInterpolation = 1;
     private double _noticeSeconds;
     private string _notice;
+    private Task<(string Id, WorldSave Save)> _creation;
+    private (string Id, WorldSave Save)? _created;
+    private WorldRenderer _preparingRenderer;
+    private volatile string _creationProgress;
     public GameState State { get; private set; } = GameState.MainMenu;
 
     public Game1() : this(new WorldSaveManager()) { }
@@ -97,17 +104,23 @@ public class Game1 : Game
 
     protected override void Update(GameTime gameTime)
     {
+        long start = Stopwatch.GetTimestamp(), allocations = GC.GetAllocatedBytesForCurrentThread();
         KeyboardState keyboard = Keyboard.GetState();
         MouseState mouse = Mouse.GetState();
         bool back = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
         Point lookDelta = _mouseLook.ReadDelta();
         ProcessInput(keyboard, mouse, back, gameTime, lookDelta);
         base.Update(gameTime);
+        _diagnostics.Update(start, GC.GetAllocatedBytesForCurrentThread() - allocations);
     }
 
     private void ProcessInput(KeyboardState keyboard, MouseState mouse, bool back, GameTime gameTime, Point lookDelta)
     {
         _presentation.Update(keyboard, _previousKeyboard, IsActive, _session != null);
+        if (_creation != null || _created.HasValue)
+        {
+            CompleteWorldCreation(); RememberInput(keyboard, mouse); return;
+        }
         if (_session?.Player.IsDead == true && State != GameState.Death)
         {
             EnterDeath(); RememberInput(keyboard, mouse); return;
@@ -230,16 +243,28 @@ public class Game1 : Game
                     if (string.IsNullOrWhiteSpace(_menu.SeedText)) seed = Random.Shared.Next();
                     else if (!int.TryParse(_menu.SeedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out seed))
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
-                    var world = World.CreateNew(seed, _menu.SelectedSize);
-                    var camera = new Camera();
-                    var population = new PassiveMobPopulation(world, PassiveMobPopulation.Generate(world));
-                    var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateNewWorld(),
-                        Pigs: population.CapturePigs(), Mobs: population.CaptureOthers(), Population: population.CapturePopulation());
-                    BeginWorld(_saves.Create(save), save);
+                    if (_creation != null || _created.HasValue) break;
+                    WorldSize selectedSize = _menu.SelectedSize;
+                    _creationProgress = "ALLOCATING WORLD";
+                    _creation = Task.Run(() =>
+                    {
+                        var world = World.CreateNew(seed, selectedSize, text => _creationProgress = text);
+                        _creationProgress = "POPULATING PASSIVE MOBS";
+                        var camera = new Camera();
+                        var population = new PassiveMobPopulation(world, PassiveMobPopulation.Generate(world));
+                        var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateNewWorld(),
+                            Pigs: population.CapturePigs(), Mobs: population.CaptureOthers(), Population: population.CapturePopulation());
+                        _creationProgress = "SAVING INITIAL WORLD";
+                        return (_saves.Create(save), save);
+                    });
                     break;
                 case MenuAction.LoadWorld:
                     WorldEntry entry = _menu.SelectedWorld;
-                    if (entry != null) BeginWorld(entry.Id, _saves.Load(entry.Id));
+                    if (entry != null)
+                    {
+                        _creationProgress = "LOADING WORLD";
+                        _creation = Task.Run(() => (entry.Id, _saves.Load(entry.Id)));
+                    }
                     break;
                 case MenuAction.RenameWorld:
                 case MenuAction.DeleteWorld:
@@ -337,7 +362,8 @@ public class Game1 : Game
     private void BeginWorld(string id, WorldSave save)
     {
         var session = new GameSession(id, save);
-        var renderer = new WorldRenderer(GraphicsDevice, _atlas, session.World);
+        var renderer = _preparingRenderer ?? new WorldRenderer(GraphicsDevice, _atlas, session.World);
+        _preparingRenderer = null;
         _renderer?.Dispose();
         _renderer = renderer;
         _session = session;
@@ -347,6 +373,36 @@ public class Game1 : Game
         _notice = null;
         _autosaveElapsed = 0;
         SetState(GameState.Playing);
+    }
+
+    private void CompleteWorldCreation()
+    {
+        try
+        {
+            if (_creation != null)
+            {
+                _menu.Message(_creationProgress + " - PLEASE WAIT");
+                if (!_creation.IsCompleted) return;
+                var task = _creation; _creation = null;
+                _created = task.GetAwaiter().GetResult();
+                _preparingRenderer = new WorldRenderer(GraphicsDevice, _atlas, _created.Value.Save.World);
+            }
+            WorldSave preparing = _created.Value.Save;
+            var preparingCamera = new Camera { Position = (preparing.Health == 0 ? preparing.World.Spawn : preparing.PlayerPosition)
+                + Vector3.Up * Player.StandingEyeHeight };
+            preparingCamera.RestoreOrientation(preparing.Yaw, preparing.Pitch);
+            if (!_preparingRenderer.PrepareInitialMeshes(preparingCamera))
+            {
+                _menu.Message($"BUILDING NEARBY MESHES {_preparingRenderer.MeshedChunks}/{_preparingRenderer.ResidentChunks}");
+                return;
+            }
+            var ready = _created.Value; _created = null; BeginWorld(ready.Id, ready.Save);
+        }
+        catch (Exception exception) when (IsStorageError(exception) || exception is OutOfMemoryException or InvalidOperationException)
+        {
+            _creation = null; _created = null; _preparingRenderer?.Dispose(); _preparingRenderer = null;
+            _menu.Message("WORLD CREATION FAILED: " + exception.Message, true);
+        }
     }
 
     private bool SaveCurrentWorld()
@@ -469,6 +525,10 @@ public class Game1 : Game
 
     protected override void OnExiting(object sender, ExitingEventArgs args)
     {
+        if (_creation != null || _created.HasValue)
+        {
+            args.Cancel = true; _menu.Message("WORLD CREATION IN PROGRESS. PLEASE WAIT."); return;
+        }
         if (!SaveCurrentWorld() || !SaveSettings()) args.Cancel = true;
         if (!args.Cancel) ReleaseMouse();
         base.OnExiting(sender, args);
@@ -482,6 +542,7 @@ public class Game1 : Game
 
     protected override void Draw(GameTime gameTime)
     {
+        long start = Stopwatch.GetTimestamp(), allocations = GC.GetAllocatedBytesForCurrentThread();
         if (GraphicsDevice.Viewport.Width <= 0 || GraphicsDevice.Viewport.Height <= 0) return;
         if (_session != null)
         {
@@ -490,10 +551,13 @@ public class Game1 : Game
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);
             _mobRenderer.Draw(_session.Camera, _session.Mobs);
             _renderer.DrawWater(_session.Camera);
+            _diagnostics.Mobs = _session.Mobs.Entities.Count; _diagnostics.Items = _session.Items.Entities.Count;
+            _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
+            _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
-                _session.Player.Health, _presentation.HudVisible);
+                _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session.InventoryInteraction, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
@@ -516,6 +580,9 @@ public class Game1 : Game
                 Console.Error.WriteLine(message);
             }
         }
+        _diagnostics.DrawCalls = (int)GraphicsDevice.Metrics.DrawCount;
+        _diagnostics.Triangles = GraphicsDevice.Metrics.PrimitiveCount;
+        _diagnostics.Draw(start, GC.GetAllocatedBytesForCurrentThread() - allocations);
     }
 
     protected override void UnloadContent()

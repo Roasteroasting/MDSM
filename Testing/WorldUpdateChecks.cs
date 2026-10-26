@@ -111,7 +111,7 @@ internal static class WorldUpdateChecks
     }
     public static void PopulationPersistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             World world = PigChecks.Flat(size);
             var states = new[] { MobChecks.State(MobSpecies.Pig, health: 1), MobChecks.State(MobSpecies.Cow, new Vector3(30,1,30), 1), MobChecks.State(MobSpecies.Chicken, new Vector3(40,1,40)) };
@@ -149,7 +149,7 @@ internal static class WorldUpdateChecks
         var pendingSave = empty with { Population = waiting.CapturePopulation() }; byte[] bytes = MobChecks.Encode(pendingSave);
         int start = SaveLayout.Population(bytes);
         foreach ((int Offset, byte[] Value) bad in new[] { (start, BitConverter.GetBytes(-1)), (start + 12, BitConverter.GetBytes(2)),
-            (start + 16, BitConverter.GetBytes(257)), (start + 20, new byte[] { 255 }), (start + 21, BitConverter.GetBytes(double.NaN)),
+            (start + 16, BitConverter.GetBytes(PassiveMobPopulation.MaximumMobs + 1)), (start + 20, new byte[] { 255 }), (start + 21, BitConverter.GetBytes(double.NaN)),
             (start + 21, BitConverter.GetBytes(-1d)), (start + 21, BitConverter.GetBytes(61d)) })
         {
             byte[] invalid = (byte[])bytes.Clone(); bad.Value.CopyTo(invalid, bad.Offset); SHA256.HashData(invalid.AsSpan(0, invalid.Length - 32)).CopyTo(invalid, invalid.Length - 32);
@@ -227,7 +227,7 @@ internal static class WorldUpdateChecks
     }
     public static void GenerationAndBudgets()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             World world = World.CreateNew(173, size); int count = 0;
             foreach (Chunk chunk in world.Chunks) for (int y = 0; y < World.Height; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)

@@ -187,7 +187,7 @@ internal static class SurvivalChecks
 
     public static void HealthPersistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(7, size, false); world.SetBlock(world.Width / 2, 0, world.Depth / 2, BlockType.Stone);
             var drops = new[] { new DroppedItemState(Dirt, 17, new Vector3(12.5f, 10, 12.5f), -2, 0.8f) };

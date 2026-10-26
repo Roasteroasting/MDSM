@@ -94,8 +94,8 @@ internal static class WaterChecks
         Require(Water.IsWater(world.GetBlock(16, 1, 16)), "Fluid did not cross diagonal chunk seams.");
         Require(world.GetChunk(0, 0).Revision == 0 && world.GetChunk(1, 1).Revision == 0,
             "Air/fluid state changes rebuilt opaque terrain.");
-        world.SetBlock(0, 1, 0, BlockType.WaterSource); world.SetBlock(127, 63, 127, BlockType.WaterSource); Settle(world, 1000);
-        Require(world.GetBlock(-1, 1, 0) == BlockType.Air && world.GetBlock(128, 1, 127) == BlockType.Air, "Fluid escaped finite storage.");
+        world.SetBlock(0, 1, 0, BlockType.WaterSource); world.SetBlock(world.Width-1, 127, world.Depth-1, BlockType.WaterSource); Settle(world, 1000);
+        Require(world.GetBlock(-1, 1, 0) == BlockType.Air && world.GetBlock(world.Width, 1, world.Depth-1) == BlockType.Air, "Fluid escaped finite storage.");
         var a = Floor(); a.SetBlock(15, 4, 15, BlockType.WaterSource);
         // Compare an active frontier at one second, not just an eventual settled configuration.
         for (int i = 0; i < 60; i++) a.Fluids.Update(1d / 60);
@@ -163,7 +163,7 @@ internal static class WaterChecks
     }
     public static void Lakes()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             World a = World.CreateNew(173, size), b = World.CreateNew(173, size); Equal(a, b);
             int water = 0, sand = 0, gravel = 0, surface = 0;
@@ -206,7 +206,7 @@ internal static class WaterChecks
     private static readonly Point3[] Directions = { new(1,0,0), new(-1,0,0), new(0,1,0), new(0,-1,0), new(0,0,1), new(0,0,-1) };
     public static void LakeEditsAndSeeds()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         foreach (int seed in new[] { int.MinValue, -1, 0, 174, int.MaxValue })
         {
             var a = new World(seed, size, false); new TerrainGenerator(seed).Generate(a);
@@ -251,7 +251,7 @@ internal static class WaterChecks
     }
     public static void Persistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var original = Floor(173, size); original.SetBlock(15, 6, 15, BlockType.WaterSource);
             for (int i = 0; i < 8; i++) original.Fluids.Tick(); // Save a moving waterfall/front, not just an idle pool.

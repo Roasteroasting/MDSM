@@ -59,6 +59,7 @@ public sealed class FluidSimulation
                 {
                     Point3 neighbor = cell + offset;
                     BlockType adjacent = At(neighbor);
+                    if (offset.Y > 0 && !Water.IsWater(adjacent)) continue; // Water cannot flow into dry air above it.
                     // Stable source interiors need no work. Examine only flow/frontier cells on load.
                     if (Water.Replaceable(adjacent) && !Water.IsSource(adjacent)) Enqueue(neighbor);
                 }

@@ -5,7 +5,7 @@ namespace MDSM.Worlds;
 
 public sealed class World
 {
-    public const int Height = 64;
+    public const int Height = 128;
     public WorldSize Size { get; }
     public int Width => Size.Width();
     public int Depth => Width;
@@ -21,6 +21,7 @@ public sealed class World
     public int Revision { get; private set; }
     public FluidSimulation Fluids { get; }
     public FallingBlockSimulation Gravity { get; }
+    public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
     public World(int seed = DefaultSeed, WorldSize size = WorldSize.Normal) : this(seed, size, true) { }
@@ -48,12 +49,17 @@ public sealed class World
     }
 
     // Explicit new-world pipeline. Base-terrain fixtures and deserialization never add lakes.
-    public static World CreateNew(int seed, WorldSize size = WorldSize.Normal)
+    public static World CreateNew(int seed, WorldSize size = WorldSize.Normal, Action<string> progress = null)
     {
+        progress?.Invoke("ALLOCATING WORLD");
         var world = new World(seed, size, false);
+        progress?.Invoke("GENERATING TERRAIN");
         new TerrainGenerator(seed).Generate(world);
-        new LakeGenerator(seed).Generate(world);
+        progress?.Invoke("CARVING PONDS, RIVERS AND LAKES");
+        var water = new LakeGenerator(seed); water.Generate(world); world.GeneratedWaterFeatures = water.Counts;
+        progress?.Invoke("PLACING TREES AND VEGETATION");
         new WorldDecorator(seed).Decorate(world);
+        progress?.Invoke("INITIALIZING WATER");
         world.Fluids.Initialize();
         return world;
     }
@@ -69,10 +75,7 @@ public sealed class World
     {
         if ((uint)x >= Width || (uint)z >= Depth)
             return -1;
-        for (int y = Height - 1; y >= 0; y--)
-            if (IsSolid(x, y, z))
-                return y;
-        return -1;
+        return GetChunk(x / Chunk.Size, z / Chunk.Size).SurfaceY(x % Chunk.Size, z % Chunk.Size);
     }
 
     public bool Contains(int x, int y, int z) =>

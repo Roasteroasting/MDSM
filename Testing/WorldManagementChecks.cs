@@ -12,11 +12,11 @@ internal static class WorldManagementChecks
 {
     public static void SizesAndBoundaries()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(173, size, false);
-            int width = size == WorldSize.Small ? 128 : size == WorldSize.Normal ? 256 : 512;
-            Require(world.Width == width && world.Depth == width && World.Height == 64, "Wrong world dimensions.");
+            int width = size.Width();
+            Require(world.Width == width && world.Depth == width && World.Height == 128, "Wrong world dimensions.");
             Require(world.ChunkCount == width / 16 * (width / 16) && world.Chunks.Length == world.ChunkCount, "Wrong chunk count.");
             int bytes = 0;
             foreach (Chunk chunk in world.Chunks)
@@ -30,9 +30,9 @@ internal static class WorldManagementChecks
                     Require(chunk.GetBlock(local, 63, local) == BlockType.Gravel, "World/local indexing disagrees.");
                 }
             }
-            Require(bytes == world.BlockCount && bytes == width * 64 * width, "Raw storage is not one byte per block.");
-            Require(world.GetChunk(world.ChunksX - 1, world.ChunksZ - 1).Bounds.Max == new Vector3(width, 64, width), "Last chunk bounds are wrong.");
-            foreach (Point3 cell in new[] { new Point3(-1, 0, 0), new(width, 0, 0), new(0, 0, width), new(0, 64, 0) })
+            Require(bytes == world.BlockCount && bytes == width * 128 * width, "Raw storage is not one byte per block.");
+            Require(world.GetChunk(world.ChunksX - 1, world.ChunksZ - 1).Bounds.Max == new Vector3(width, 128, width), "Last chunk bounds are wrong.");
+            foreach (Point3 cell in new[] { new Point3(-1, 0, 0), new(width, 0, 0), new(0, 0, width), new(0, 128, 0) })
                 Require(world.GetBlock(cell.X, cell.Y, cell.Z) == BlockType.Air
                     && !world.SetBlock(cell.X, cell.Y, cell.Z, BlockType.Stone)
                     && !world.TryPlace(cell, BlockType.Stone, new BoundingBox()), "Invalid world access succeeded.");
@@ -58,7 +58,7 @@ internal static class WorldManagementChecks
 
     public static void Generation()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(-907, size);
             var same = new World(-907, size);
@@ -124,7 +124,7 @@ internal static class WorldManagementChecks
 
     public static void PersistenceAndMetadata()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(-312, size, false);
             foreach (Chunk chunk in world.Chunks)

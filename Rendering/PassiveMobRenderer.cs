@@ -15,6 +15,7 @@ internal sealed class PassiveMobRenderer : IDisposable
     private readonly CuboidModelBuilder _builder = new(64, 16);
     private readonly BoundingFrustum _frustum = new(Matrix.Identity);
     private DynamicVertexBuffer _buffer;
+    internal long BufferBytes => (long)(_buffer?.VertexCount ?? 0) * VertexPositionColorTexture.VertexDeclaration.VertexStride;
     public PassiveMobRenderer(GraphicsDevice device, ContentManager content)
     {
         _device = device;
@@ -26,7 +27,7 @@ internal sealed class PassiveMobRenderer : IDisposable
         }
         _effect = new AlphaTestEffect(device) { World = Matrix.Identity, VertexColorEnabled = true,
             AlphaFunction = CompareFunction.GreaterEqual, ReferenceAlpha = 128,
-            FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = 80, FogEnd = 220 };
+            FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
     }
     public void Draw(Camera camera, PassiveMobPopulation population)
     {

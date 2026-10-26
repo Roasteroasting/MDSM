@@ -47,6 +47,7 @@ internal static class WaterGraphicsChecks
         public bool Verified { get; private set; }
         private T Field<T>(string name) => (T)typeof(Game1).GetField(name, Private).GetValue(this);
         private object Call(string name, params object[] args) => typeof(Game1).GetMethod(name, Private).Invoke(this, args);
+        private void WarmRenderer() => RenderingPerformanceChecks.Warm(Field<WorldRenderer>("_renderer"), Session.Camera);
         private GameSession Session => Field<GameSession>("_session");
         public CheckGame(string root) : this(root, new WorldSaveManager(Path.Combine(root, "Worlds"))) { }
         private CheckGame(string root, WorldSaveManager store) : base(store, new SettingsStore(Path.Combine(root, "settings.json")))
@@ -73,7 +74,7 @@ internal static class WaterGraphicsChecks
                     for (int y = 1; y <= 3; y++) world.SetGeneratedBlock(x, y, z, BlockType.WaterSource);
                     var inventory = Inventory.CreateNewWorld();
                     var save = new WorldSave(world, "Water runtime", new Vector3(64.5f, 3, 70.5f), 0, -0.3f, inventory);
-                    Call("BeginWorld", _store.Create(save), save); break;
+                    Call("BeginWorld", _store.Create(save), save); WarmRenderer(); break;
                 case 2: Press(Keys.F1); break;
                 case 5: Press(Keys.F1); break;
                 case 6: Press(Keys.F3); break;
@@ -92,7 +93,7 @@ internal static class WaterGraphicsChecks
                     World wet = WaterChecks.Floor();
                     for (int z = 60; z <= 70; z++) for (int x = 60; x <= 70; x++) for (int y = 1; y <= 5; y++) wet.SetGeneratedBlock(x, y, z, BlockType.WaterSource);
                     var swimSave = new WorldSave(wet, "Swimming input", new Vector3(64.5f, 1, 64.5f), 0, 0);
-                    Call("BeginWorld", _store.Create(swimSave), swimSave);
+                    Call("BeginWorld", _store.Create(swimSave), swimSave); WarmRenderer();
                     for (int i = 0; i < 120; i++) Input(1f / 60, Keys.Space);
                     Require(Session.Player.Position.Y > 5 && Session.Player.Health == 20, "Held Space input did not swim upward.");
                     break;
@@ -107,7 +108,7 @@ internal static class WaterGraphicsChecks
                             if (Water.IsSource(lake.GetBlock(x, y, z)) && !Water.IsWater(lake.GetBlock(x, y + 1, z))) { surface = new Point3(x, y, z); break; }
                     }
                     var lakeSave = new WorldSave(lake, "Natural lake runtime", new Vector3(surface.X + 0.5f, surface.Y + 5, surface.Z + 8.5f), 0, -0.6f);
-                    Call("BeginWorld", _store.Create(lakeSave), lakeSave); break;
+                    Call("BeginWorld", _store.Create(lakeSave), lakeSave); WarmRenderer(); break;
                 case 12:
                     var reloaded = _store.Load(Session.Id); Require(reloaded.World.GetBlock((int)Session.Player.Position.X, 0, (int)Session.Player.Position.Z) == BlockType.Bedrock,
                         "Natural lake new-world save changed bedrock.");

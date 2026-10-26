@@ -92,7 +92,7 @@ internal static class FallingBlockChecks
     }
     public static void Persistence()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(173, size, false); world.SetBlock(15, 0, 16, BlockType.Stone);
             world.SetBlock(15, 25, 16, BlockType.Sand); world.SetBlock(15, 26, 16, BlockType.Gravel); world.Gravity.Update(0.2);
@@ -117,7 +117,7 @@ internal static class FallingBlockChecks
         World falling = Falling(); falling.Gravity.Update(0.2); byte[] active = MobChecks.Encode(legacySave with { World = falling });
         int record = active.Length - 32 - 25;
         foreach ((int Offset, byte[] Value) invalid in new[] { (record, new byte[] { (byte)BlockType.Stone }), (record+1, BitConverter.GetBytes(-1)),
-            (record+9, BitConverter.GetBytes(double.NaN)), (record+9, BitConverter.GetBytes(64d)), (record+17, BitConverter.GetBytes(-1d)),
+            (record+9, BitConverter.GetBytes(double.NaN)), (record+9, BitConverter.GetBytes(128d)), (record+17, BitConverter.GetBytes(-1d)),
             (record+17, BitConverter.GetBytes(21d)), (record-4, BitConverter.GetBytes(FallingBlockSimulation.MaximumActiveBlocks+1)) })
         {
             byte[] bad = (byte[])active.Clone(); invalid.Value.CopyTo(bad, invalid.Offset); Sign(bad);

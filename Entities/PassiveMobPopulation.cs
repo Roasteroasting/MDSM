@@ -9,7 +9,7 @@ namespace MDSM.Entities;
 
 public sealed class PassiveMobPopulation
 {
-    public const int MaximumMobs = 256; // Shared save/runtime safety bound, not a per-species limit.
+    public const int MaximumMobs = 4096; // Shared safety bound; initial populations remain area-based.
     public const double MinimumRespawnSeconds = 30, MaximumRespawnSeconds = 60, RetrySeconds = 5;
     public const int MaximumSpawnAttemptsPerUpdate = 32;
     private readonly List<PassiveMob> _mobs = new();
@@ -23,7 +23,7 @@ public sealed class PassiveMobPopulation
     public IReadOnlyList<MobRespawnState> PendingRespawns => _pending;
     public int LastSpawnAttempts { get; private set; }
     public int Target(MobSpecies species) => _targets[(int)species];
-    public static int InitialBudget(World world) => world.Width * world.Depth / 2048; // 8 / 32 / 128 total.
+    public static int InitialBudget(World world) => world.Width * world.Depth / 2048; // 32 / 128 / 512 / 2048 combined.
 
     public PassiveMobPopulation(World world, ReadOnlySpan<MobState> saved = default, MobPopulationState population = null)
     {

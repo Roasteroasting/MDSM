@@ -28,9 +28,9 @@ public static class WorldSerializer
     private const int RespawnBytes = 9;
     private const int FallingBytes = 25; // Block byte, integer X/Z, double Y/downward speed.
     private const int PopulationPrefixBytes = MobDefinitions.SpeciesCount * 4 + 4;
-    internal const int MaximumFileSize = 512 * World.Height * 512 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes
+    internal const long MaximumFileSize = 2048L * World.Height * 2048 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes
         + 8 + PassiveMobPopulation.MaximumMobs * MobBytes + PopulationPrefixBytes
-        + PassiveMobPopulation.MaximumMobs * RespawnBytes + 4 + 512 * 512 * 4
+        + PassiveMobPopulation.MaximumMobs * RespawnBytes + 4 + 2048L * 2048 * 4
         + 4 + FallingBlockSimulation.MaximumActiveBlocks * FallingBytes;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
@@ -58,8 +58,9 @@ public static class WorldSerializer
         if (pigs.Length + mobs.Length > PassiveMobPopulation.MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
         MobPopulationState population = save.Population ?? MobPopulationState.FromLiving(pigs, mobs);
         population.Validate(MobPopulationState.LivingCounts(pigs, mobs));
-        using var payload = new MemoryStream(save.World.BlockCount + 512 + drops.Length * DropBytes);
-        using (var writer = new BinaryWriter(payload, Utf8, true))
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hashed = new HashedWriteStream(destination, hash);
+        using (var writer = new BinaryWriter(hashed, Utf8, true))
         {
             writer.Write(Magic);
             writer.Write(FormatVersion);
@@ -121,15 +122,15 @@ public static class WorldSerializer
             foreach (FallingBlockState block in falling)
             { writer.Write((byte)block.Block); writer.Write(block.X); writer.Write(block.Z); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
         }
-        ReadOnlySpan<byte> bytes = payload.GetBuffer().AsSpan(0, (int)payload.Length);
-        destination.Write(bytes);
-        destination.Write(SHA256.HashData(bytes));
+        destination.Write(hash.GetHashAndReset());
     }
 
     public static WorldSave Read(Stream source)
     {
         try
         {
+            if (source.CanSeek && source.Length - source.Position > MaximumFileSize)
+                throw new InvalidDataException("Save exceeds the supported size limit.");
             // Validate a bounded header before allocating the exact selected world's payload.
             // This also works on non-seekable streams and rejects trailing or truncated data.
             byte[] prefix = new byte[28];
@@ -142,12 +143,17 @@ public static class WorldSerializer
             source.ReadExactly(header.AsSpan(prefix.Length));
             using var reader = new BinaryReader(new MemoryStream(header, false), Utf8);
             WorldMetadata metadata = ReadHeader(reader);
-            int count = metadata.Size.BlockCount();
-            byte[] bytes = new byte[count];
-            source.ReadExactly(bytes);
+            if (source.CanSeek && source.Length - source.Position < (long)metadata.StoredBlockCount + ChecksumSize)
+                throw new InvalidDataException("Save file is truncated.");
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             hash.AppendData(header);
-            hash.AppendData(bytes);
+            var world = new World(metadata.Seed, metadata.Size, false);
+            byte[] chunkBytes = new byte[Chunk.Size * metadata.StoredHeight * Chunk.Size];
+            foreach (Chunk chunk in world.Chunks)
+            {
+                source.ReadExactly(chunkBytes); hash.AppendData(chunkBytes); ValidateBlocks(chunkBytes);
+                chunk.RestoreBlocks(chunkBytes, metadata.StoredHeight);
+            }
             byte[] tail = Array.Empty<byte>();
             if (metadata.Version >= 2)
             {
@@ -225,15 +231,6 @@ public static class WorldSerializer
             if (!CryptographicOperations.FixedTimeEquals(hash.GetHashAndReset(), checksum))
                 throw new InvalidDataException("Save checksum failed. The file is damaged or incomplete.");
 
-            var world = new World(metadata.Seed, metadata.Size, false);
-            int offset = 0;
-            foreach (Chunk chunk in world.Chunks)
-            {
-                ReadOnlySpan<byte> blocks = bytes.AsSpan(offset, Chunk.BlockCount);
-                ValidateBlocks(blocks);
-                chunk.RestoreBlocks(blocks);
-                offset += Chunk.BlockCount;
-            }
             world.Fluids.Initialize();
             world.Gravity.Restore(gravityColumns, fallingBlocks); // No global scan/rewrite of legacy terrain.
             Inventory inventory;
@@ -285,7 +282,7 @@ public static class WorldSerializer
         WorldMetadata metadata = ReadHeader(reader);
         if (source.CanSeek)
         {
-            long extra = source.Length - source.Position - metadata.Size.BlockCount() - ChecksumSize;
+            long extra = source.Length - source.Position - metadata.StoredBlockCount - ChecksumSize;
             if (metadata.Version >= 3) extra -= 4;
             if (metadata.Version >= 6)
             {
@@ -319,7 +316,8 @@ public static class WorldSerializer
             int version = reader.ReadInt32();
             if (version < 1 || version > FormatVersion)
                 throw new InvalidDataException($"Save version {version} is unsupported; expected 1-{FormatVersion}.");
-            WorldSize size = WorldSizes.FromDimensions(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32());
+            int width = reader.ReadInt32(), storedHeight = reader.ReadInt32(), depth = reader.ReadInt32();
+            WorldSize size = WorldSizes.FromDimensions(width, storedHeight, depth);
             int seed = reader.ReadInt32();
             int nameLength = reader.ReadInt32();
             if (nameLength < 1 || nameLength > MaxNameBytes)
@@ -330,10 +328,10 @@ public static class WorldSerializer
             string name = ValidateName(Utf8.GetString(nameBytes));
             Vector3 position = new(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
             float yaw = reader.ReadSingle(), pitch = reader.ReadSingle();
-            ValidatePose(position, yaw, pitch, size);
-            if (reader.ReadInt32() != size.BlockCount())
+            ValidatePose(position, yaw, pitch, size, storedHeight);
+            if (reader.ReadInt32() != checked(width * storedHeight * depth))
                 throw new InvalidDataException("Save block count does not match the world dimensions.");
-            return new WorldMetadata(name, seed, position, yaw, pitch, size, version);
+            return new WorldMetadata(name, seed, position, yaw, pitch, size, version, storedHeight);
         }
         catch (Exception exception) when (exception is EndOfStreamException or ArgumentException)
         {
@@ -341,12 +339,12 @@ public static class WorldSerializer
         }
     }
 
-    private static void ValidatePose(Vector3 position, float yaw, float pitch, WorldSize size)
+    private static void ValidatePose(Vector3 position, float yaw, float pitch, WorldSize size, int height = World.Height)
     {
         if (!float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(position.Z)
             || position.X < Player.HalfWidth || position.X > size.Width() - Player.HalfWidth
             || position.Z < Player.HalfWidth || position.Z > size.Width() - Player.HalfWidth
-            || position.Y < -16 || position.Y > World.Height + 16
+            || position.Y < -16 || position.Y > height + 16
             || !float.IsFinite(yaw) || MathF.Abs(yaw) > MathHelper.Pi
             || !float.IsFinite(pitch) || MathF.Abs(pitch) > Camera.PitchLimit)
             throw new InvalidDataException("Save contains an invalid player position or orientation.");
@@ -362,5 +360,21 @@ public static class WorldSerializer
     private static void ValidateHealth(int health)
     {
         if (health < 0 || health > Player.MaximumHealth) throw new InvalidDataException("Save health must be an integer from 0 to 20.");
+    }
+
+    // Hash chunks as they are written; never stage an additional full-world payload.
+    private sealed class HashedWriteStream(Stream target, IncrementalHash hash) : Stream
+    {
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => target.Flush();
+        public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+        public override void Write(ReadOnlySpan<byte> buffer) { target.Write(buffer); hash.AppendData(buffer); }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
     }
 }

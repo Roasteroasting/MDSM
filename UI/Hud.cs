@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 using MDSM.Gameplay;
+using MDSM.Core;
 using MDSM.Inventories;
 using MDSM.Rendering;
 using MDSM.Worlds;
@@ -15,7 +16,7 @@ public sealed class Hud : IDisposable
     private readonly Texture2D _pixel;
     private readonly TextureAtlas _atlas;
     private static readonly string[] SlotNumbers = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
-    private readonly string[] _debugLines = new string[6];
+    private readonly string[] _debugLines = new string[12];
     private double _fpsElapsed;
     private double _debugElapsed;
     private int _frameCount;
@@ -33,9 +34,9 @@ public sealed class Hud : IDisposable
 
     public void Draw(Viewport viewport, Inventory inventory, bool captured, bool showDebug,
         Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0,
-        int health = Player.MaximumHealth, bool visible = true)
+        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null)
     {
-        UpdateDebug(showDebug && visible, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds);
+        UpdateDebug(showDebug && visible, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds, renderer, diagnostics);
         if (!visible) return;
         int width = viewport.Width, height = viewport.Height;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
@@ -74,10 +75,10 @@ public sealed class Hud : IDisposable
 
         if (showDebug)
         {
-            int panelWidth = 180 * textScale;
+            int panelWidth = 260 * textScale;
             int panelX = Math.Max(8, width - panelWidth - 8);
             int panelY = width >= 900 ? 8 : 56;
-            Fill(new Rectangle(panelX, panelY, panelWidth, 72 * textScale), Color.Black * 0.65f);
+            Fill(new Rectangle(panelX, panelY, panelWidth, (10 + 11 * _debugLines.Length) * textScale), Color.Black * 0.65f);
             for (int i = 0; i < _debugLines.Length; i++)
                 Text(_debugLines[i], panelX + 6, panelY + 6 + i * 11 * textScale, textScale, Color.White);
         }
@@ -85,7 +86,7 @@ public sealed class Hud : IDisposable
         _sprites.End();
     }
 
-    private void UpdateDebug(bool visible, Vector3 position, World world, double elapsed)
+    private void UpdateDebug(bool visible, Vector3 position, World world, double elapsed, WorldRenderer renderer, FrameDiagnostics diagnostics)
     {
         _frameCount++;
         _fpsElapsed += elapsed;
@@ -107,6 +108,12 @@ public sealed class Hud : IDisposable
         _debugLines[3] = $"SEED {world.Seed}";
         _debugLines[4] = $"CHUNKS {world.ChunkCount}";
         _debugLines[5] = $"WORLD {world.Width} X {World.Height} X {world.Depth}";
+        _debugLines[6] = $"MESH {renderer?.MeshedChunks ?? 0} GPU {renderer?.GpuChunks ?? 0} DRAW {renderer?.VisibleChunks ?? 0}";
+        _debugLines[7] = $"EST VB {((renderer?.BufferBytes ?? 0) + (diagnostics?.DynamicBufferBytes ?? 0)) / 1048576.0:0.0} MIB";
+        _debugLines[8] = $"DRAWS {diagnostics?.DrawCalls ?? 0} TRIS {diagnostics?.Triangles ?? 0}";
+        _debugLines[9] = $"CPU U {diagnostics?.UpdateMilliseconds ?? 0:0.0} D {diagnostics?.DrawMilliseconds ?? 0:0.0} MS";
+        _debugLines[10] = $"MOBS {diagnostics?.Mobs ?? 0} ITEMS {diagnostics?.Items ?? 0} FALL {diagnostics?.FallingBlocks ?? 0}";
+        _debugLines[11] = $"ALLOC {diagnostics?.AllocatedBytes ?? 0} B WATER {renderer?.Water.CachedFaces ?? 0} FACES";
     }
 
     private void Fill(Rectangle rectangle, Color color) => _sprites.Draw(_pixel, rectangle, color);

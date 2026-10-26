@@ -44,7 +44,8 @@ internal static class PersistenceChecks
         byte[] original = Encode(Fixture());
         Reject(Array.Empty<byte>());
         Reject(original[..^1]);
-        Reject(new byte[WorldSerializer.MaximumFileSize + 1]);
+        using (var oversized = new OversizedStream(original))
+            Throws<InvalidDataException>(() => WorldSerializer.Read(oversized));
         byte[] damaged = (byte[])original.Clone();
         damaged[1000] ^= 1;
         Reject(damaged);
@@ -53,7 +54,7 @@ internal static class PersistenceChecks
         ChangeInt(original, 0, 0);                         // magic
         ChangeInt(original, 4, 999);                       // version
         ChangeInt(original, 8, 128);                       // width
-        ChangeInt(original, 12, 128);                      // height
+        ChangeInt(original, 12, 256);                      // height
         ChangeInt(original, 16, 128);                      // depth
         ChangeInt(original, 24, int.MaxValue);             // unbounded name length
         int nameLength = Encoding.UTF8.GetByteCount("Test");
@@ -181,5 +182,9 @@ internal static class PersistenceChecks
                 throw new InvalidOperationException("Test cleanup escaped its directory.");
             Directory.Delete(root, true);
         }
+    }
+    private sealed class OversizedStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public override long Length => WorldSerializer.MaximumFileSize + 1;
     }
 }

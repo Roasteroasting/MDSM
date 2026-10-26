@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -11,6 +12,7 @@ namespace MDSM.Rendering;
 public sealed class WorldRenderer : IDisposable
 {
     public static readonly Color SkyColor = new(143, 190, 232);
+    public const float FogStart = 80, FogEnd = 144;
     private readonly GraphicsDevice _device;
     private readonly AlphaTestEffect _terrainEffect;
     private readonly BasicEffect _selectionEffect;
@@ -18,6 +20,7 @@ public sealed class WorldRenderer : IDisposable
     private readonly DroppedItemRenderer _items;
     private readonly FallingBlockRenderer _falling;
     private readonly WaterRenderer _water;
+    private readonly ChunkRegion _region;
     private readonly ChunkMesh[] _meshes;
     private readonly ChunkMesh[] _visible;
     private readonly ChunkMeshBuilder _builder = new();
@@ -27,6 +30,68 @@ public sealed class WorldRenderer : IDisposable
     private static readonly int[] OutlineEdges = { 0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7 };
     public int VisibleChunks { get; private set; }
     public int RebuiltChunks { get; private set; }
+    public int PreparedChunks { get; private set; }
+    public const int MaximumBuildsPerFrame = 4;
+    public const double BuildBudgetMilliseconds = 3;
+    public int ResidentChunks => _region.Indices.Count;
+    public int ResidentLimit => Math.Min(_world.ChunkCount, _region.MaximumCount);
+    public int MeshedChunks { get; private set; }
+    public int GpuChunks { get; private set; }
+    public int PendingChunks { get; private set; }
+    public long BufferBytes { get; private set; }
+    internal long VertexCount { get; private set; }
+    internal long DrawnVertices { get { long total = 0; for (int i = 0; i < VisibleChunks; i++) total += _visible[i].VertexCount; return total; } }
+    internal WaterRenderer Water => _water;
+    internal long DynamicBufferBytes => _items.BufferBytes + _falling.BufferBytes + _water.BufferBytes;
+    public bool PrepareInitialMeshes(int budget = MaximumBuildsPerFrame)
+    {
+        var camera = new Camera { Position = _world.Spawn + Vector3.Up * Player.StandingEyeHeight };
+        return PrepareInitialMeshes(camera, budget);
+    }
+    internal bool PrepareInitialMeshes(Camera camera, int budget = MaximumBuildsPerFrame)
+    {
+        Prepare(camera, budget);
+        return PendingChunks == 0;
+    }
+
+    // All creation/uploads/evictions happen here on the graphics thread. No CPU mesh cache.
+    internal void Prepare(Camera camera, int budget = MaximumBuildsPerFrame)
+    {
+        _frustum.Matrix = camera.View * camera.Projection(_device.Viewport.AspectRatio);
+        if (_region.Update(camera.Position, _device.Viewport.AspectRatio))
+            foreach (int index in _region.Removed) { _meshes[index]?.Dispose(); _meshes[index] = null; _water.Evict(index); }
+        long start = Stopwatch.GetTimestamp(); RebuiltChunks = 0;
+        while (RebuiltChunks < budget)
+        {
+            int next = -1; float priority = float.MaxValue;
+            foreach (int index in _region.Indices)
+            {
+                ChunkMesh mesh = _meshes[index];
+                Chunk chunk = _world.Chunks[index];
+                if (mesh != null && !mesh.NeedsBuild && !_water.NeedsBuild(index)) continue;
+                float dx = chunk.OriginX + 8 - camera.Position.X, dz = chunk.OriginZ + 8 - camera.Position.Z;
+                float score = dx * dx + dz * dz;
+                if (mesh != null && mesh.NeedsBuild) score -= 1000000; // Edits first, keeping the old mesh until replaced.
+                else if (!_frustum.Intersects(chunk.Bounds) && score > 32 * 32) score += 100000;
+                if (score < priority) { next = index; priority = score; }
+            }
+            if (next < 0) break;
+            _meshes[next] ??= new ChunkMesh(_device, _world.Chunks[next]);
+            _meshes[next].Update(_world, _builder);
+            _water.PrepareChunk(next);
+            RebuiltChunks++; PreparedChunks++;
+            if (Stopwatch.GetElapsedTime(start).TotalMilliseconds >= BuildBudgetMilliseconds) break;
+        }
+        MeshedChunks = GpuChunks = PendingChunks = 0; BufferBytes = VertexCount = 0;
+        foreach (int index in _region.Indices)
+        {
+            ChunkMesh mesh = _meshes[index];
+            if (mesh == null || mesh.NeedsBuild || _water.NeedsBuild(index)) PendingChunks++;
+            if (mesh == null) continue;
+            MeshedChunks++; if (mesh.BufferBytes > 0) GpuChunks++;
+            BufferBytes += mesh.BufferBytes; VertexCount += mesh.VertexCount;
+        }
+    }
 
     public WorldRenderer(GraphicsDevice device, TextureAtlas atlas, World world)
     {
@@ -34,11 +99,10 @@ public sealed class WorldRenderer : IDisposable
         _world = world;
         _items = new DroppedItemRenderer(device, atlas);
         _falling = new FallingBlockRenderer(device, atlas);
-        _water = new WaterRenderer(device, atlas, world);
+        _region = new ChunkRegion(world);
+        _water = new WaterRenderer(device, atlas, world, _region);
         _meshes = new ChunkMesh[world.ChunkCount];
         _visible = new ChunkMesh[world.ChunkCount];
-        for (int i = 0; i < _meshes.Length; i++)
-            _meshes[i] = new ChunkMesh(device, world.Chunks[i]);
         _terrainEffect = new AlphaTestEffect(device)
         {
             World = Matrix.Identity,
@@ -48,8 +112,8 @@ public sealed class WorldRenderer : IDisposable
             ReferenceAlpha = 128,
             FogEnabled = true,
             FogColor = SkyColor.ToVector3(),
-            FogStart = 80,
-            FogEnd = 220
+            FogStart = WorldRenderer.FogStart,
+            FogEnd = WorldRenderer.FogEnd
         };
         _selectionEffect = new BasicEffect(device)
         {
@@ -64,13 +128,11 @@ public sealed class WorldRenderer : IDisposable
         Matrix projection = camera.Projection(_device.Viewport.AspectRatio);
         _frustum.Matrix = view * projection;
         VisibleChunks = 0;
-        RebuiltChunks = 0;
-        foreach (ChunkMesh mesh in _meshes)
+        Prepare(camera);
+        foreach (int index in _region.Indices)
         {
-            // All meshes are initialized once; subsequent frames rebuild only edited chunks.
-            if (mesh.Update(_world, _builder))
-                RebuiltChunks++;
-            if (mesh.HasGeometry && _frustum.Intersects(mesh.Bounds))
+            ChunkMesh mesh = _meshes[index];
+            if (mesh != null && mesh.HasGeometry && _frustum.Intersects(mesh.Bounds))
                 _visible[VisibleChunks++] = mesh;
         }
 
@@ -117,7 +179,8 @@ public sealed class WorldRenderer : IDisposable
     public void Dispose()
     {
         foreach (ChunkMesh mesh in _meshes)
-            mesh.Dispose();
+            mesh?.Dispose();
+        Array.Clear(_meshes); BufferBytes = VertexCount = 0; GpuChunks = MeshedChunks = 0;
         _terrainEffect.Dispose();
         _selectionEffect.Dispose();
         _items.Dispose();

@@ -12,7 +12,11 @@ public sealed record WorldSave(World World, string Name, Vector3 PlayerPosition,
     MobState[] Mobs = null, MobPopulationState Population = null); // Mobs contains non-pig species.
 
 public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch,
-    WorldSize Size = WorldSize.Normal, int Version = 1);
+    WorldSize Size = WorldSize.Normal, int Version = 1, int StoredHeight = World.Height)
+{
+    public int StoredBlockCount => checked(Size.Width() * StoredHeight * Size.Width());
+    public bool ExpandsHeight => StoredHeight != World.Height;
+}
 
 // A session has no GPU resources. The renderer is replaced/disposed by Game1.
 public sealed class GameSession

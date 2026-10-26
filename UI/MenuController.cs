@@ -117,8 +117,9 @@ internal sealed class MenuController : IDisposable
         for (int i = 0; i < worlds.Count; i++)
         {
             if (worlds[i].Id == selectedId) _selected = i;
+            WorldSize size = worlds[i].Size ?? WorldSize.Normal;
             _worldDetails[i] = worlds[i].Error == null
-                ? $"{worlds[i].Size ?? WorldSize.Normal} / SEED {worlds[i].Seed} / {worlds[i].ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
+                ? $"{size} {size.Width()} X {World.Height} X {size.Width()} / SEED {worlds[i].Seed} / {worlds[i].ModifiedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}"
                 : "UNAVAILABLE - SELECT LOAD FOR DETAILS";
         }
         _scroll = _selected;
@@ -259,7 +260,7 @@ internal sealed class MenuController : IDisposable
 
     private bool IsTextField => (_screen == GameState.WorldCreation && _focus < 2)
         || (_screen == GameState.WorldRename && _focus == 0);
-    private void CycleSize(int direction) => SelectedSize = (WorldSize)(((int)SelectedSize + direction + 3) % 3);
+    private void CycleSize(int direction) => SelectedSize = (WorldSize)(((int)SelectedSize + direction + 4) % 4);
     private bool CanActivate(MenuAction action) => action switch
     {
         MenuAction.LoadWorld or MenuAction.DeleteWorld => _worlds.Count > 0,
@@ -378,7 +379,7 @@ internal sealed class MenuController : IDisposable
             DrawField(viewport, 0, "WORLD NAME", NameText, "ENTER A NAME", scale);
             DrawField(viewport, 1, "OPTIONAL INTEGER SEED", SeedText, "RANDOM", scale);
             DrawField(viewport, 2, "WORLD SIZE - CLICK OR LEFT/RIGHT",
-                $"{SelectedSize} / {SelectedSize.Width()} X 64 X {SelectedSize.Width()}", "", scale);
+                $"{SelectedSize} / {SelectedSize.Width()} X {World.Height} X {SelectedSize.Width()}", "", scale);
         }
         if (_screen == GameState.WorldRename)
         {

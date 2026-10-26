@@ -7,7 +7,7 @@ namespace MDSM.Entities;
 public sealed class PassiveMob
 {
     public MobSpecies Species { get; }
-    public MobDefinition Definition => MobDefinitions.Get(Species);
+    public MobDefinition Definition { get; }
     private float HalfWidth => Definition.HalfWidth;
     private float Height => Definition.Height;
     public Vector3 Position { get; private set; }
@@ -24,10 +24,15 @@ public sealed class PassiveMob
     private float _decisionSeconds;
     private float _shoreHopSeconds;
     private bool _wandering;
+    // Tiny local voxel cache, not a simulation throttle: all AI/physics still run at 120 Hz.
+    // Conservative world revision invalidation preserves immediate edits/fluid changes.
+    private readonly bool[] _solidCells = new bool[216];
+    private int _cacheRevision = -1, _minX, _minY, _minZ, _maxX, _maxY, _maxZ, _cacheWidth, _cacheDepth;
 
     internal PassiveMob(MobState state, int aiSeed)
     {
         Species = state.Species;
+        Definition = MobDefinitions.Get(Species);
         Position = state.Position; Yaw = state.Yaw; Health = state.Health;
         _random = new Random(aiSeed);
         _decisionSeconds = 0.5f + _random.NextSingle() * 2;
@@ -113,12 +118,14 @@ public sealed class PassiveMob
         else if (axis == 2) next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
         else next.Y += amount;
         BoundingBox bounds = BoundsAt(Species, next);
+        CacheCollisionCells(world, bounds);
         bool blocked = axis == 0 ? next.X != Position.X + amount : axis == 2 && next.Z != Position.Z + amount;
         for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
         for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
-            if (!world.IsSolid(x, y, z) || !World.Overlaps(bounds, World.Bounds(new Point3(x, y, z)))) continue;
+            if (!_solidCells[((y - _minY) * _cacheDepth + z - _minZ) * _cacheWidth + x - _minX]
+                || !World.Overlaps(bounds, World.Bounds(new Point3(x, y, z)))) continue;
             blocked = true;
             if (axis == 0) next.X = amount > 0 ? Math.Min(next.X, x - HalfWidth) : Math.Max(next.X, x + 1 + HalfWidth);
             else if (axis == 2) next.Z = amount > 0 ? Math.Min(next.Z, z - HalfWidth) : Math.Max(next.Z, z + 1 + HalfWidth);
@@ -126,5 +133,21 @@ public sealed class PassiveMob
         }
         Position = next;
         return blocked;
+    }
+
+    private void CacheCollisionCells(World world, BoundingBox bounds)
+    {
+        int minX = (int)MathF.Floor(bounds.Min.X), minY = (int)MathF.Floor(bounds.Min.Y), minZ = (int)MathF.Floor(bounds.Min.Z);
+        int maxX = (int)MathF.Floor(bounds.Max.X), maxY = (int)MathF.Floor(bounds.Max.Y), maxZ = (int)MathF.Floor(bounds.Max.Z);
+        if (_cacheRevision == world.Revision && minX >= _minX && minY >= _minY && minZ >= _minZ
+            && maxX <= _maxX && maxY <= _maxY && maxZ <= _maxZ) return;
+        _minX = (int)MathF.Floor(bounds.Min.X - .25f); _maxX = (int)MathF.Floor(bounds.Max.X + .25f);
+        _minY = (int)MathF.Floor(bounds.Min.Y - .25f); _maxY = (int)MathF.Floor(bounds.Max.Y + .25f);
+        _minZ = (int)MathF.Floor(bounds.Min.Z - .25f); _maxZ = (int)MathF.Floor(bounds.Max.Z + .25f);
+        _cacheWidth = _maxX - _minX + 1; _cacheDepth = _maxZ - _minZ + 1;
+        int i = 0;
+        for (int y = _minY; y <= _maxY; y++) for (int z = _minZ; z <= _maxZ; z++) for (int x = _minX; x <= _maxX; x++)
+            _solidCells[i++] = world.IsSolid(x, y, z);
+        _cacheRevision = world.Revision;
     }
 }

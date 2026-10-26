@@ -39,9 +39,9 @@ internal static class DecorationChecks
 
     public static void Determinism()
     {
-        var world = new World(173);
-        var same = new World(173);
-        var other = new World(174);
+        var world = new World(173, WorldSize.Small);
+        var same = new World(173, WorldSize.Small);
+        var other = new World(174, WorldSize.Small);
         bool changed = false;
         for (int i = 0; i < world.ChunkCount; i++)
         {
@@ -103,7 +103,7 @@ internal static class DecorationChecks
 
     public static void TreeBoundaries()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         world.SetGeneratedBlock(15, 10, 15, BlockType.Grass);
         Require(WorldDecorator.TryTree(world, 15, 10, 15, 5, 2, 0), "Valid seam tree was rejected.");
         Require(world.GetBlock(15, 15, 15) == BlockType.WoodLog
@@ -111,11 +111,11 @@ internal static class DecorationChecks
             && world.GetBlock(16, 13, 16) == BlockType.Leaves, "Canopy did not cross chunk boundaries.");
         world.SetGeneratedBlock(0, 10, 0, BlockType.Grass);
         world.SetGeneratedBlock(255, 10, 255, BlockType.Grass);
-        world.SetGeneratedBlock(40, 62, 40, BlockType.Grass);
+        world.SetGeneratedBlock(40, 126, 40, BlockType.Grass);
         Require(!WorldDecorator.TryTree(world, 0, 10, 0, 4, 2, 0)
             && !WorldDecorator.TryTree(world, 255, 10, 255, 4, 3, 0)
-            && !WorldDecorator.TryTree(world, 40, 62, 40, 4, 2, 0), "Out-of-bounds tree was accepted.");
-        Require(world.GetBlock(0, 11, 0) == BlockType.Air && world.GetBlock(40, 63, 40) == BlockType.Air, "Rejected tree wrote partial blocks.");
+            && !WorldDecorator.TryTree(world, 40, 126, 40, 4, 2, 0), "Out-of-bounds tree was accepted.");
+        Require(world.GetBlock(0, 11, 0) == BlockType.Air && world.GetBlock(40, 127, 40) == BlockType.Air, "Rejected tree wrote partial blocks.");
         world.SetGeneratedBlock(50, 10, 50, BlockType.Grass);
         world.SetGeneratedBlock(50, 12, 50, BlockType.Stone);
         Require(!WorldDecorator.TryTree(world, 50, 10, 50, 5, 2, 0) && world.GetBlock(50, 11, 50) == BlockType.Air,
@@ -124,7 +124,7 @@ internal static class DecorationChecks
 
     public static void Meshes()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         var mesh = new ChunkMeshBuilder();
         world.SetBlock(15, 10, 8, BlockType.Leaves);
         world.SetBlock(16, 10, 8, BlockType.Leaves);
@@ -158,7 +158,7 @@ internal static class DecorationChecks
 
     public static void Interaction()
     {
-        var world = new World(0, false);
+        var world = new World(0, WorldSize.Small, false);
         var cell = new Point3(16, 10, 16);
         var player = new Player(new Vector3(128.5f, 30, 128.5f));
         world.SetBlock(16, 9, 16, BlockType.Grass);
@@ -182,8 +182,8 @@ internal static class DecorationChecks
     public static void Persistence()
     {
         // Independent v1 writer restricted to Milestone 3's original IDs.
-        var legacy = new World(173, false);
-        new TerrainGenerator(173).Generate(legacy);
+        var legacy = new World(173, WorldSize.Small, false);
+        for (int z = 0; z < legacy.Depth; z++) for (int x = 0; x < legacy.Width; x++) for (int y = 0; y <= 30; y++) legacy.SetGeneratedBlock(x, y, z, y == 30 ? BlockType.Grass : y > 26 ? BlockType.Dirt : BlockType.Stone);
         // Milestone 3 used stone at the bottom and IDs 0-3 only.
         for (int z = 0; z < legacy.Depth; z++)
         for (int x = 0; x < legacy.Width; x++) legacy.SetGeneratedBlock(x, 0, z, BlockType.Stone);
@@ -198,7 +198,7 @@ internal static class DecorationChecks
             writer.Write(name.Length); writer.Write(name);
             writer.Write(128.5f); writer.Write(60f); writer.Write(128.5f);
             writer.Write(-0.4f); writer.Write(0.2f); writer.Write(4194304);
-            foreach (Chunk chunk in legacy.Chunks) writer.Write(chunk.Blocks);
+            foreach (Chunk chunk in legacy.Chunks) writer.Write(chunk.Blocks[..(16 * 64 * 16)]);
         }
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
