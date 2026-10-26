@@ -37,7 +37,7 @@ public class Game1 : Game
     private MenuController _menu;
     private InventoryScreen _inventoryScreen;
     private FirstPersonRenderer _firstPerson;
-    private PigRenderer _pigs;
+    private PassiveMobRenderer _mobRenderer;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private bool _previousBack;
@@ -47,6 +47,7 @@ public class Game1 : Game
     private bool _awaitMouseRelease;
     private readonly HotbarScroll _hotbarScroll = new();
     private double _autosaveElapsed;
+    private float _fallingInterpolation = 1;
     private double _noticeSeconds;
     private string _notice;
     public GameState State { get; private set; } = GameState.MainMenu;
@@ -86,7 +87,7 @@ public class Game1 : Game
         _menu = new MenuController(GraphicsDevice, _atlas, _settings);
         _inventoryScreen = new InventoryScreen(GraphicsDevice, _atlas);
         _firstPerson = new FirstPersonRenderer(GraphicsDevice, _atlas);
-        _pigs = new PigRenderer(GraphicsDevice, Content);
+        _mobRenderer = new PassiveMobRenderer(GraphicsDevice, Content);
         _mouseLook = new MouseLookInput();
         _previousKeyboard = Keyboard.GetState();
         _previousMouse = Mouse.GetState();
@@ -190,11 +191,13 @@ public class Game1 : Game
             if (player.IsDead) { EnterDeath(); return; }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
             world.Fluids.Update(dt);
-            _session.Pigs.Update(dt);
-            _session.Combat.Update(world, _session.Pigs, _session.Items, _session.Mining,
+            world.Gravity.Update(dt);
+            _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items);
+            _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
                 camera.Position, camera.Forward, _selection, held, dt);
             _session.Items.Update(player, _session.Inventory, dt);
         }
+        _fallingInterpolation = _simulationClock.Fraction;
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         if (!_awaitMouseRelease)
             ItemUse.TryConsume(player, _session.Inventory, mouse.RightButton == ButtonState.Pressed,
@@ -206,7 +209,7 @@ public class Game1 : Game
                 BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
-        if (EntityRaycaster.Cast(world, _session.Pigs, camera.Position, camera.Forward) != null) _selection = null;
+        if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward) != null) _selection = null;
     }
 
     private void HandleMenuAction(MenuAction action)
@@ -229,8 +232,9 @@ public class Game1 : Game
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
                     var world = World.CreateNew(seed, _menu.SelectedSize);
                     var camera = new Camera();
+                    var population = new PassiveMobPopulation(world, PassiveMobPopulation.Generate(world));
                     var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateNewWorld(),
-                        Pigs: PigPopulation.Generate(world));
+                        Pigs: population.CapturePigs(), Mobs: population.CaptureOthers(), Population: population.CapturePopulation());
                     BeginWorld(_saves.Create(save), save);
                     break;
                 case MenuAction.LoadWorld:
@@ -483,8 +487,8 @@ public class Game1 : Game
         {
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
-            _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress);
-            _pigs.Draw(_session.Camera, _session.Pigs);
+            _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);
+            _mobRenderer.Draw(_session.Camera, _session.Mobs);
             _renderer.DrawWater(_session.Camera);
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
@@ -526,7 +530,7 @@ public class Game1 : Game
         _inventoryScreen?.Dispose();
         _hud?.Dispose();
         _firstPerson?.Dispose();
-        _pigs?.Dispose();
+        _mobRenderer?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();
     }

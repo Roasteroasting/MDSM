@@ -89,7 +89,28 @@ internal static class PrototypeChecks
             ("Player swimming/fall resistance and passive pig water collisions", WaterChecks.Swimming),
             ("Deterministic all-size lakes, restrained basins, beaches, spawn and stability", WaterChecks.Lakes),
             ("Extreme seeds, sealed lakes, digging shore/bottom, and solid displacement", WaterChecks.LakeEditsAndSeeds),
-            ("All-size active water round trips, resumed flow, and unchanged v4 compatibility", WaterChecks.Persistence)
+            ("All-size active water round trips, resumed flow, and saved terrain preservation", WaterChecks.Persistence),
+            ("All species health, passive AI, collisions, knockback, and frame independence", MobChecks.DefinitionsAndMotion),
+            ("Shared all-size spawn budgets, balanced species, grass/water safety, and no replenishment", MobChecks.Spawning),
+            ("Species targeting, terrain occlusion, cooldown, exact drops, and mining fallback", MobChecks.CombatAndDrops),
+            ("Leather/feather stacks and pickup, non-food resources, and wool placement/mining/UVs", MobChecks.ResourcesAndWool),
+            ("Revised placeable-only starting stock, legacy migration, and empty respawn", MobChecks.StartingAndRespawn),
+            ("All-size mixed mobs/resources/water persistence and saved kills", MobChecks.Persistence),
+            ("Independent v4 pig/food migration and invalid species/health/count rejection", MobChecks.BackwardCompatibilityAndValidation),
+            ("Species cuboid proportions, cutout UVs, animation, and hurt tint", MobChecks.Geometry),
+            ("Species targets, independent 30-60 second delays, caps, and single replacements", WorldUpdateChecks.TargetsAndTimers),
+            ("Bounded respawn retries, recovery, player/entity/water clearance", WorldUpdateChecks.RetryAndClearance),
+            ("All-size target and outstanding timer save/load without duplicate mobs", WorldUpdateChecks.PopulationPersistence),
+            ("Conservative v4/v5 population migration and corrupt scheduling data", WorldUpdateChecks.LegacyPopulationAndCorruption),
+            ("Sand/gravel support removal, stacks, chunk edges, and finite bottom", WorldUpdateChecks.GravityStacksAndBoundaries),
+            ("Gravity through water, queued-save restoration, and unchanged legacy terrain", WorldUpdateChecks.GravityWaterAndPersistence),
+            ("Supported natural shores/beds and bounded gravity column processing", WorldUpdateChecks.GenerationAndBudgets),
+            ("Render-independent respawns/gravity and corrected up/down hotbar direction", WorldUpdateChecks.TimingAndScroll),
+            ("Continuous falling acceleration, interpolation, full cube geometry, and idle terrain meshes", FallingBlockChecks.ContinuousMotion),
+            ("Swept low-FPS falling collision, terminal speed, and ordered active stacks", FallingBlockChecks.SweepsAndStacks),
+            ("Identical falls at 30/60/144/360 FPS and safe placement around falling cubes", FallingBlockChecks.FrameRatesAndPlacement),
+            ("All-size mid-fall persistence, exact resumption, v6 queues, and corrupt active states", FallingBlockChecks.Persistence),
+            ("Bounded active falls, deferred stacks, save/load, and exact material accounting", FallingBlockChecks.CapacityAndAccounting)
         };
 
         int failures = 0;

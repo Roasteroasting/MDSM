@@ -16,6 +16,7 @@ public sealed class WorldRenderer : IDisposable
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
     private readonly DroppedItemRenderer _items;
+    private readonly FallingBlockRenderer _falling;
     private readonly WaterRenderer _water;
     private readonly ChunkMesh[] _meshes;
     private readonly ChunkMesh[] _visible;
@@ -32,6 +33,7 @@ public sealed class WorldRenderer : IDisposable
         _device = device;
         _world = world;
         _items = new DroppedItemRenderer(device, atlas);
+        _falling = new FallingBlockRenderer(device, atlas);
         _water = new WaterRenderer(device, atlas, world);
         _meshes = new ChunkMesh[world.ChunkCount];
         _visible = new ChunkMesh[world.ChunkCount];
@@ -56,7 +58,7 @@ public sealed class WorldRenderer : IDisposable
         };
     }
 
-    public void Draw(Camera camera, BlockHit? selection, DroppedItems items = null, float miningProgress = 0)
+    public void Draw(Camera camera, BlockHit? selection, DroppedItems items = null, float miningProgress = 0, float fallingInterpolation = 1)
     {
         Matrix view = camera.View;
         Matrix projection = camera.Projection(_device.Viewport.AspectRatio);
@@ -87,6 +89,7 @@ public sealed class WorldRenderer : IDisposable
         }
 
         _items.Draw(camera, items);
+        _falling.Draw(camera, _world.Gravity, fallingInterpolation);
         if (selection is BlockHit hit)
             DrawSelection(hit, camera, miningProgress);
     }
@@ -118,6 +121,7 @@ public sealed class WorldRenderer : IDisposable
         _terrainEffect.Dispose();
         _selectionEffect.Dispose();
         _items.Dispose();
+        _falling.Dispose();
         _water.Dispose();
     }
 }

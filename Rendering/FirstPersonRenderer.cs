@@ -16,7 +16,7 @@ internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId It
     {
         if (state != GameState.Playing) return new(ViewModelKind.Hidden, default);
         ItemStack stack = inventory.Selected;
-        if (!stack.IsEmpty && stack.Item == Items.RawPorkchop) return new(ViewModelKind.Sprite, stack.Item);
+        if (!stack.IsEmpty && Items.IsSprite(stack.Item)) return new(ViewModelKind.Sprite, stack.Item);
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)) return new(ViewModelKind.Hidden, default);
         return new(Blocks.Get(block).Shape == BlockShape.Cross ? ViewModelKind.Plant : ViewModelKind.Cube, stack.Item);
     }
@@ -67,8 +67,7 @@ internal sealed class ViewModelGeometry
 internal sealed class FirstPersonRenderer : IDisposable
 {
     private readonly GraphicsDevice _device;
-    private readonly Texture2D _terrain; // ContentManager owns the atlas.
-    private readonly Texture2D _porkchop;
+    private readonly TextureAtlas _atlas; // ContentManager owns all textures.
     private readonly AlphaTestEffect _effect;
     private readonly DynamicVertexBuffer _buffer;
     private readonly ViewModelGeometry _geometry = new();
@@ -76,8 +75,7 @@ internal sealed class FirstPersonRenderer : IDisposable
 
     public FirstPersonRenderer(GraphicsDevice device, TextureAtlas atlas)
     {
-        _device = device; _terrain = atlas.Texture;
-        _porkchop = atlas.Porkchop;
+        _device = device; _atlas = atlas;
         _effect = new AlphaTestEffect(device)
         {
             VertexColorEnabled = true, View = Matrix.Identity,
@@ -109,7 +107,7 @@ internal sealed class FirstPersonRenderer : IDisposable
             // The world is finished. Clear depth while retaining its color, then draw in camera space.
             _device.Clear(ClearOptions.DepthBuffer, Color.Transparent, 1, 0);
             _device.Viewport = new Viewport(bounds);
-            _effect.Texture = selection.Kind == ViewModelKind.Sprite ? _porkchop : _terrain;
+            _effect.Texture = _atlas.ItemTexture(selection.Item);
             _effect.Projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(50), bounds.Width / (float)bounds.Height, 0.05f, 10);
             _effect.World = Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(0.25f) * Matrix.CreateRotationZ(-0.1f) * Matrix.CreateTranslation(0, 0, -2.2f);
             _device.SetVertexBuffer(_buffer);

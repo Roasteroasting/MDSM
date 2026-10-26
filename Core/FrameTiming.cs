@@ -30,6 +30,7 @@ public sealed class SimulationClock
 {
     public const double StepSeconds = 1.0 / 120;
     private double _remaining;
+    public float Fraction => (float)Math.Clamp(_remaining / StepSeconds, 0, 1);
     public void Reset() => _remaining = 0;
     public int Advance(double elapsed)
     {

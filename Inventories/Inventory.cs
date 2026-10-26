@@ -53,15 +53,18 @@ public sealed class Inventory
     {
         var inventory = new Inventory();
         int slot = 0;
-        foreach (BlockType block in Blocks.Selection)
+        // Pre-inventory saves migrate with exactly the original thirteen stacks.
+        foreach (BlockType block in Blocks.Selection[..13])
             inventory._slots[slot++] = new ItemStack(Items.FromBlock(block), ItemStack.Maximum);
         return inventory;
     }
 
     public static Inventory CreateNewWorld()
     {
-        Inventory inventory = CreateStarter();
-        inventory._slots[Blocks.Selection.Length] = new ItemStack(Items.RawPorkchop, ItemStack.Maximum);
+        var inventory = new Inventory();
+        int slot = 0;
+        foreach (BlockType block in Blocks.Selection)
+            inventory._slots[slot++] = new ItemStack(Items.FromBlock(block), ItemStack.Maximum);
         return inventory;
     }
 }
@@ -129,6 +132,6 @@ public sealed class HotbarScroll
         long total = _remainder + delta;
         long steps = total / 120;
         _remainder = total % 120;
-        inventory.SelectedSlot = (int)((inventory.SelectedSlot + steps % Inventory.HotbarSlots + Inventory.HotbarSlots) % Inventory.HotbarSlots);
+        inventory.SelectedSlot = (int)((inventory.SelectedSlot - steps % Inventory.HotbarSlots + Inventory.HotbarSlots) % Inventory.HotbarSlots);
     }
 }

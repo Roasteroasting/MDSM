@@ -89,27 +89,27 @@ internal static class PigGraphicsChecks
                     Input(); Input(right: true); Require(Session.Player.Health == 16 && Session.Inventory[0].IsEmpty, "RMB release/repress did not consume last item."); break;
                 case 8:
                     Input(left: true, seconds: 1f / 60); // TimeSpan quantization must span at least one full simulation tick.
-                    _punchedHealth = Session.Pigs.Entities[0].Health;
+                    _punchedHealth = Session.Mobs.Entities[0].Health;
                     Require(_punchedHealth is 8 or 9 && Session.Mining.Target == null, "Input path did not prioritize punching."); break;
                 case 9:
                     for (int i = 0; i < 20; i++) Input(left: true, seconds: (float)SimulationClock.StepSeconds);
-                    Require(Session.Pigs.Entities[0].Health == _punchedHealth, "Held LMB ignored attack cooldown."); break;
+                    Require(Session.Mobs.Entities[0].Health == _punchedHealth, "Held LMB ignored attack cooldown."); break;
                 case 10:
-                    for (int i = 0; i < 1200 && Session.Pigs.Entities.Count > 0; i++)
+                    for (int i = 0; i < 1200 && Session.Mobs.Entities.Count > 0; i++)
                     {
-                        Vector3 delta = Session.Pigs.Entities[0].Position + Vector3.Up * 0.5f - Session.Camera.Position;
+                        Vector3 delta = Session.Mobs.Entities[0].Position + Vector3.Up * 0.5f - Session.Camera.Position;
                         Session.Camera.RestoreOrientation(MathF.Atan2(-delta.X, -delta.Z), MathF.Atan2(delta.Y, new Vector2(delta.X, delta.Z).Length()));
                         Input(left: true, seconds: (float)SimulationClock.StepSeconds);
                     }
-                    Require(Session.Pigs.Entities.Count == 0 && Session.Items.Entities.Count == 1
+                    Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count == 1
                         && Session.Items.Entities[0].Item == Items.RawPorkchop, "Held LMB could not kill/drop porkchops.");
                     _store.Save(Session.Id, Session.Capture());
                     string id = Session.Id; Call("BeginWorld", id, _store.Load(id));
-                    Require(Session.Pigs.Entities.Count == 0 && Session.Items.Entities.Count == 1 && Session.Inventory[0].IsEmpty
+                    Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count == 1 && Session.Inventory[0].IsEmpty
                         && Session.Player.Health == 16, "Reload resurrected a pig or changed food/player/drop state."); break;
                 case 11:
                     Session.Player.ApplyDamage(20); Input(); Call("HandleMenuAction", MenuAction.Respawn);
-                    Require(Session.Player.Health == 20 && Session.Inventory[0].IsEmpty && Session.Pigs.Entities.Count == 0,
+                    Require(Session.Player.Health == 20 && Session.Inventory[0].IsEmpty && Session.Mobs.Entities.Count == 0,
                         "Respawn replenished food or pigs."); break;
                 case 12:
                     Call("SetState", GameState.WorldCreation);
@@ -117,9 +117,9 @@ internal static class PigGraphicsChecks
                     foreach (char ch in "New pig world") menu.TextInput(ch);
                     Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch);
                     Press(Keys.Tab); Press(Keys.Left); Call("HandleMenuAction", MenuAction.CreateWorld);
-                    Require(State == GameState.Playing && Session.World.Size == WorldSize.Small && Session.Pigs.Entities.Count == 8
-                        && Session.Inventory[13] == new ItemStack(Items.RawPorkchop, 64), "New-world menu did not grant pigs and food exactly once.");
-                    Require(_store.Load(Session.Id).Pigs.Length == 8, "Initial new-world save omitted pigs."); break;
+                    Require(State == GameState.Playing && Session.World.Size == WorldSize.Small && Session.Mobs.Entities.Count == 8
+                        && Session.Inventory[13] == new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64), "New-world menu did not grant mixed mobs and revised block stock exactly once.");
+                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 8 && initial.Mobs.Length > 0, "Initial new-world save omitted the shared mob population."); break;
                 case 13:
                     Verified = true; Exit(); break;
             }
@@ -141,7 +141,7 @@ internal static class PigGraphicsChecks
 
         private void VerifyModels()
         {
-            PigRenderer renderer = Field<PigRenderer>("_pigs"); TextureAtlas atlas = Field<TextureAtlas>("_atlas");
+            PassiveMobRenderer renderer = Field<PassiveMobRenderer>("_mobRenderer"); TextureAtlas atlas = Field<TextureAtlas>("_atlas");
             World world = PigChecks.Flat();
             var population = new PigPopulation(world, new[] { new PigState(new Vector3(10, 1, 10), MathHelper.Pi, 10) });
             var camera = new Camera { Position = new Vector3(10, 1.6f, 13) };

@@ -15,6 +15,13 @@ internal sealed class ChunkMeshBuilder
     public int VertexCount { get; private set; }
     public void Clear() => VertexCount = 0;
 
+    public void AppendCube(BlockType block, Vector3 origin)
+    {
+        foreach (Face face in Faces)
+            AddQuad(origin + face.A, origin + face.B, origin + face.C, origin + face.D,
+                Blocks.Tile(block, face.Normal), new Color(new Vector3(face.Shade)), false);
+    }
+
     public void AppendItem(BlockType block, Vector3 center)
     {
         float size = DroppedItem.Radius * 2;

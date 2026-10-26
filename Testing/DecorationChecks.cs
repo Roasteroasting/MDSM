@@ -32,7 +32,7 @@ internal static class DecorationChecks
             && Blocks.Tile(BlockType.WoodLog, Vector3.Right) == 4, "Log end and bark textures are incorrect.");
         Inventory inventory = Inventory.CreateStarter();
         int index = 0;
-        foreach (BlockType block in Blocks.Selection)
+        foreach (BlockType block in Blocks.Selection[..13])
             Require(inventory[index++] == new ItemStack(Items.FromBlock(block), 64), "Starter palette order changed.");
         Require(index == 13 && inventory.Selected.Item == Items.FromBlock(BlockType.Grass), "Initial item selection changed.");
     }
@@ -203,7 +203,7 @@ internal static class DecorationChecks
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
         WorldSave restored = WorldSerializer.Read(oldFile);
-        Require(WorldSerializer.FormatVersion == 4 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
+        Require(WorldSerializer.FormatVersion == 7 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
         for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");

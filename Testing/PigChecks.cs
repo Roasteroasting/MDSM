@@ -99,7 +99,7 @@ internal static class PigChecks
     public static void Combat()
     {
         World world = Flat(); var pigs = new PigPopulation(world, new[] { State() });
-        var drops = new DroppedItems(world); Pig pig = pigs.Entities[0];
+        var drops = new DroppedItems(world); PassiveMob pig = pigs.Entities[0];
         Vector3 eye = new(10.5f, 1.5f, 15);
         Require(EntityRaycaster.Cast(world, pigs, eye, Vector3.Forward) == pig, "Pig targeting missed within reach.");
         Require(EntityRaycaster.Cast(world, pigs, eye + new Vector3(0, 0, 5), Vector3.Forward) == null, "Pig targeted out of reach.");
@@ -162,7 +162,8 @@ internal static class PigChecks
         Require(!ItemUse.TryConsume(dead, inventory, true, false) && dead.Health == 0 && inventory[0].Count == 1, "Eating revived a dead player.");
         inventory = Inventory.CreateNewWorld();
         for (int i = 0; i < 13; i++) Require(inventory[i].Item == Items.FromBlock(Blocks.Selection[i]) && inventory[i].Count == 64, "Existing starting stock changed.");
-        Require(inventory[13] == new ItemStack(Items.RawPorkchop, 64) && inventory[14].IsEmpty && Inventory.CreateStarter()[13].IsEmpty, "New-world and legacy stock were confused.");
+        Require(inventory[13] == new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64) && inventory[14].IsEmpty
+            && Inventory.CreateStarter()[13].IsEmpty && !inventory[13].Item.Equals(Items.RawPorkchop), "New-world and legacy stock were confused.");
         World world = Flat();
         var session = new GameSession("food", new WorldSave(world, "Food", new Vector3(20, 1, 20), 0, 0, inventory));
         session.Player.ApplyDamage(20); session.HandleDeath(); session.Respawn();
@@ -192,21 +193,21 @@ internal static class PigChecks
             Require(restored.Pigs.AsSpan().SequenceEqual(save.Pigs) && restored.DroppedItems.AsSpan().SequenceEqual(save.DroppedItems)
                 && restored.Inventory[13] == save.Inventory[13] && restored.Health == 12, "Pig/food/player persistence failed.");
             var session = new GameSession("pigs", restored);
-            Require(session.Pigs.Entities.Count == 1 && session.Pigs.Entities[0].Health == 3 && session.Pigs.Entities[0].Yaw == 1.25f,
+            Require(session.Mobs.Entities.Count == 1 && session.Mobs.Entities[0].Health == 3 && session.Mobs.Entities[0].Yaw == 1.25f,
                 "Session regenerated pigs or reset saved health/yaw.");
             Require(bytes.AsSpan().SequenceEqual(Encode(session.Capture())), "Saving/loading duplicated or changed entities.");
             var empty = save with { Pigs = Array.Empty<PigState>(), Inventory = Inventory.CreateStarter(), DroppedItems = Array.Empty<DroppedItemState>() };
             byte[] v3 = ToVersion3(Encode(empty));
             WorldSave legacy = Decode(v3);
-            Require(legacy.Pigs.Length == 0 && legacy.Inventory[13].IsEmpty && new GameSession("legacy", legacy).Pigs.Entities.Count == 0,
+            Require(legacy.Pigs.Length == 0 && legacy.Inventory[13].IsEmpty && new GameSession("legacy", legacy).Mobs.Entities.Count == 0,
                 "Old world unexpectedly received pigs or porkchops.");
             Require(Decode(Encode(legacy)).Pigs.Length == 0, "Upgraded old world repopulated pigs.");
             byte[] killed = Encode(save with { Pigs = Array.Empty<PigState>() });
             Require(Decode(killed).Pigs.Length == 0, "Empty/killed population regenerated.");
             foreach (PigState bad in new[] { State(health: 0), State(health: 11), State(x: -1), State(y: float.NaN), State() with { Yaw = float.PositiveInfinity } })
                 Throws<InvalidDataException>(() => Encode(save with { Pigs = new[] { bad } }));
-            int pigOffset = bytes.Length - 32 - 20;
-            foreach (int offset in new[] { pigOffset - 4, pigOffset + 16 })
+            int pigOffset = SaveLayout.MobRecords(bytes) + 1;
+            foreach (int offset in new[] { pigOffset - 5, pigOffset + 16 })
             {
                 byte[] bad = (byte[])bytes.Clone(); BitConverter.GetBytes(-1).CopyTo(bad, offset);
                 SHA256.HashData(bad.AsSpan(0, bad.Length - 32)).CopyTo(bad, bad.Length - 32);
@@ -214,11 +215,11 @@ internal static class PigChecks
             }
             foreach (int badHealth in new[] { -1, 21 })
             {
-                byte[] bad = (byte[])bytes.Clone(); BitConverter.GetBytes(badHealth).CopyTo(bad, pigOffset - 8);
+                byte[] bad = (byte[])bytes.Clone(); BitConverter.GetBytes(badHealth).CopyTo(bad, pigOffset - 9);
                 SHA256.HashData(bad.AsSpan(0, bad.Length - 32)).CopyTo(bad, bad.Length - 32);
                 Throws<InvalidDataException>(() => Decode(bad));
             }
-            byte[] oversized = (byte[])bytes.Clone(); BitConverter.GetBytes(PigPopulation.MaximumPigs + 1).CopyTo(oversized, pigOffset - 4);
+            byte[] oversized = (byte[])bytes.Clone(); BitConverter.GetBytes(PigPopulation.MaximumPigs + 1).CopyTo(oversized, pigOffset - 5);
             SHA256.HashData(oversized.AsSpan(0, oversized.Length - 32)).CopyTo(oversized, oversized.Length - 32);
             Throws<InvalidDataException>(() => Decode(oversized));
             Throws<InvalidDataException>(() => Decode(bytes[..^1]));
@@ -249,8 +250,9 @@ internal static class PigChecks
     // V3 has no pig section. Used by the existing independent V1/V2 fixtures too.
     internal static byte[] ToVersion3(byte[] version4)
     {
-        if (BitConverter.ToInt32(version4, version4.Length - 36) != 0) throw new InvalidOperationException("Expected an empty pig section.");
-        byte[] v3 = new byte[version4.Length - 4]; version4.AsSpan(0, version4.Length - 36).CopyTo(v3);
+        if (BitConverter.ToInt32(version4, SaveLayout.MobCount(version4)) != 0) throw new InvalidOperationException("Expected an empty pig section.");
+        int end = SaveLayout.Health(version4) + 4;
+        byte[] v3 = new byte[end + 32]; version4.AsSpan(0, end).CopyTo(v3);
         BitConverter.GetBytes(3).CopyTo(v3, 4);
         SHA256.HashData(v3.AsSpan(0, v3.Length - 32)).CopyTo(v3, v3.Length - 32);
         return v3;

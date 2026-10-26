@@ -8,7 +8,8 @@ using MDSM.Worlds;
 namespace MDSM.Persistence;
 
 public sealed record WorldSave(World World, string Name, Vector3 PlayerPosition, float Yaw, float Pitch,
-    Inventory Inventory = null, DroppedItemState[] DroppedItems = null, int Health = Player.MaximumHealth, PigState[] Pigs = null);
+    Inventory Inventory = null, DroppedItemState[] DroppedItems = null, int Health = Player.MaximumHealth, PigState[] Pigs = null,
+    MobState[] Mobs = null, MobPopulationState Population = null); // Mobs contains non-pig species.
 
 public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch,
     WorldSize Size = WorldSize.Normal, int Version = 1);
@@ -26,7 +27,7 @@ public sealed class GameSession
     public DroppedItems Items { get; }
     public MiningController Mining { get; } = new();
     public CombatController Combat { get; } = new();
-    public PigPopulation Pigs { get; }
+    public PassiveMobPopulation Mobs { get; }
     private bool _deathHandled;
     public bool UndroppedDeathItems { get; private set; }
 
@@ -38,7 +39,7 @@ public sealed class GameSession
         Inventory = save.Inventory?.Clone() ?? Inventory.CreateStarter();
         InventoryInteraction = new InventoryInteraction(Inventory);
         Items = new DroppedItems(World, save.DroppedItems);
-        Pigs = new PigPopulation(World, save.Pigs);
+        Mobs = new PassiveMobPopulation(World, save.Pigs, save.Mobs, save.Population);
         Player = new Player(save.PlayerPosition, save.Health);
         if (Player.IsDead) Player.Respawn(World); // Saved drops already exist; never drop again on load.
         Camera = new Camera { Position = Player.EyePosition };
@@ -49,7 +50,8 @@ public sealed class GameSession
     {
         if (!InventoryInteraction.Cursor.IsEmpty)
             throw new System.InvalidOperationException("Return cursor-held items before saving.");
-        return new(World, Name, Player.Position, Camera.Yaw, Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health, Pigs.Capture());
+        return new(World, Name, Player.Position, Camera.Yaw, Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health,
+            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation());
     }
 
     public bool HandleDeath()

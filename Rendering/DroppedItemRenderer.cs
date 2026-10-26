@@ -34,38 +34,41 @@ internal sealed class DroppedItemRenderer : IDisposable
     {
         if (items == null || items.Entities.Count == 0) return;
         _builder.Clear();
-        int spriteCount = 0;
+
         _frustum.Matrix = camera.View * camera.Projection(_device.Viewport.AspectRatio);
         for (int i = 0; i < items.Entities.Count; i++)
         {
             DroppedItem item = items.Entities[i];
             if (!_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
             if (Items.TryGetBlock(item.Item, out BlockType block)) _builder.AppendItem(block, item.Position);
-            else if (item.Item == Items.RawPorkchop)
+        }
+        _effect.View = camera.View;
+        _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
+        DrawBatch(_builder.Vertices, _builder.VertexCount, _atlas.Texture);
+        foreach (ItemId type in Items.Sprites)
+        {
+            int spriteCount = 0;
+            for (int i = 0; i < items.Entities.Count; i++)
             {
+                DroppedItem item = items.Entities[i];
+                if (item.Item != type || !_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
                 if (spriteCount + ItemSpriteGeometry.VertexCount > _sprites.Length) Array.Resize(ref _sprites, _sprites.Length * 2);
                 ItemSpriteGeometry.Fill(_sprites, spriteCount, item.Position, camera.Right, Vector3.Up);
                 spriteCount += ItemSpriteGeometry.VertexCount;
             }
+            DrawBatch(_sprites, spriteCount, _atlas.ItemTexture(type));
         }
-        int needed = Math.Max(_builder.VertexCount, spriteCount);
-        if (needed == 0) return;
-        if (_buffer == null || _buffer.VertexCount < needed)
-        {
-            int capacity = 256;
-            while (capacity < needed) capacity *= 2;
-            _buffer?.Dispose();
-            _buffer = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), capacity, BufferUsage.WriteOnly);
-        }
-        _device.SetVertexBuffer(_buffer);
-        _effect.View = camera.View;
-        _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
-        DrawBatch(_builder.Vertices, _builder.VertexCount, _atlas.Texture);
-        DrawBatch(_sprites, spriteCount, _atlas.Porkchop);
 
         void DrawBatch(VertexPositionColorTexture[] vertices, int count, Texture2D texture)
         {
             if (count == 0) return;
+            if (_buffer == null || _buffer.VertexCount < count)
+            {
+                int capacity = 256; while (capacity < count) capacity *= 2;
+                _buffer?.Dispose();
+                _buffer = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), capacity, BufferUsage.WriteOnly);
+            }
+            _device.SetVertexBuffer(_buffer);
             _buffer.SetData(vertices, 0, count, SetDataOptions.Discard);
             _effect.Texture = texture;
             foreach (EffectPass pass in _effect.CurrentTechnique.Passes)

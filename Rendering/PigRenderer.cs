@@ -1,34 +1,13 @@
 using System;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Content;
-using Microsoft.Xna.Framework.Graphics;
 using MDSM.Entities;
-using MDSM.Gameplay;
 
 namespace MDSM.Rendering;
 
-internal sealed class PigRenderer : IDisposable
+// Original pig geometry retained unchanged; GPU submission is shared by every species.
+internal static class PigRenderer
 {
-    private readonly GraphicsDevice _device;
-    private readonly Texture2D _texture; // ContentManager owns it.
-    private readonly AlphaTestEffect _effect;
-    private readonly CuboidModelBuilder _builder = new(64, 16);
-    private readonly BoundingFrustum _frustum = new(Matrix.Identity);
-    private DynamicVertexBuffer _buffer;
-
-    public PigRenderer(GraphicsDevice device, ContentManager content)
-    {
-        _device = device; _texture = content.Load<Texture2D>("pig");
-        if (_texture.Width != 64 || _texture.Height != 16) throw new ContentLoadException("pig.png must be 64x16.");
-        _effect = new AlphaTestEffect(device)
-        {
-            World = Matrix.Identity, Texture = _texture, VertexColorEnabled = true,
-            AlphaFunction = CompareFunction.GreaterEqual, ReferenceAlpha = 128,
-            FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = 80, FogEnd = 220
-        };
-    }
-
-    internal static void Append(CuboidModelBuilder builder, Pig pig)
+    internal static void Append(CuboidModelBuilder builder, PassiveMob pig)
     {
         Matrix world = Matrix.CreateRotationY(pig.Yaw) * Matrix.CreateTranslation(pig.Position);
         Color tint = pig.HurtSeconds > 0 ? new Color(255, 85, 85) : Color.White;
@@ -45,40 +24,4 @@ internal sealed class PigRenderer : IDisposable
         }
     }
 
-    public void Draw(Camera camera, PigPopulation pigs)
-    {
-        _builder.Clear();
-        _frustum.Matrix = camera.View * camera.Projection(_device.Viewport.AspectRatio);
-        for (int i = 0; i < pigs.Entities.Count; i++)
-        {
-            Pig pig = pigs.Entities[i];
-            if (!pig.IsDead && _frustum.Intersects(pig.Bounds)) Append(_builder, pig);
-        }
-        if (_builder.Count == 0) return;
-        if (_buffer == null || _buffer.VertexCount < _builder.Count)
-        {
-            int capacity = 4096; while (capacity < _builder.Count) capacity *= 2;
-            _buffer?.Dispose();
-            _buffer = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), capacity, BufferUsage.WriteOnly);
-        }
-        BlendState blend = _device.BlendState; DepthStencilState depth = _device.DepthStencilState;
-        RasterizerState raster = _device.RasterizerState; SamplerState sampler = _device.SamplerStates[0];
-        Texture texture = _device.Textures[0];
-        try
-        {
-            _device.BlendState = BlendState.Opaque; _device.DepthStencilState = DepthStencilState.Default;
-            _device.RasterizerState = RasterizerState.CullCounterClockwise; _device.SamplerStates[0] = SamplerState.PointClamp;
-            _buffer.SetData(_builder.Vertices, 0, _builder.Count, SetDataOptions.Discard);
-            _device.SetVertexBuffer(_buffer);
-            _effect.View = camera.View; _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
-            foreach (EffectPass pass in _effect.CurrentTechnique.Passes)
-            { pass.Apply(); _device.DrawPrimitives(PrimitiveType.TriangleList, 0, _builder.Count / 3); }
-        }
-        finally
-        {
-            _device.BlendState = blend; _device.DepthStencilState = depth; _device.RasterizerState = raster;
-            _device.SamplerStates[0] = sampler; _device.Textures[0] = null; _device.Textures[0] = texture;
-        }
-    }
-    public void Dispose() { _buffer?.Dispose(); _effect.Dispose(); }
 }

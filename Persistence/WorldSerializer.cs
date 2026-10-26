@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,7 +15,7 @@ namespace MDSM.Persistence;
 
 public static class WorldSerializer
 {
-    public const int FormatVersion = 4;
+    public const int FormatVersion = 7;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -23,8 +24,14 @@ public static class WorldSerializer
     private const int TailPrefixBytes = InventoryBytes + 4;
     private const int DropBytes = 23;
     private const int PigBytes = 20;
+    private const int MobBytes = PigBytes + 1; // Species tag followed by the existing pose/health fields.
+    private const int RespawnBytes = 9;
+    private const int FallingBytes = 25; // Block byte, integer X/Z, double Y/downward speed.
+    private const int PopulationPrefixBytes = MobDefinitions.SpeciesCount * 4 + 4;
     internal const int MaximumFileSize = 512 * World.Height * 512 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes
-        + 8 + PigPopulation.MaximumPigs * PigBytes;
+        + 8 + PassiveMobPopulation.MaximumMobs * MobBytes + PopulationPrefixBytes
+        + PassiveMobPopulation.MaximumMobs * RespawnBytes + 4 + 512 * 512 * 4
+        + 4 + FallingBlockSimulation.MaximumActiveBlocks * FallingBytes;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static string ValidateName(string name)
@@ -46,8 +53,11 @@ public static class WorldSerializer
         Inventory inventory = save.Inventory ?? Inventory.CreateStarter();
         DroppedItemState[] drops = save.DroppedItems ?? Array.Empty<DroppedItemState>();
         PigState[] pigs = save.Pigs ?? Array.Empty<PigState>();
+        MobState[] mobs = save.Mobs ?? Array.Empty<MobState>();
         if (drops.Length > DroppedItems.MaximumEntities) throw new InvalidDataException("Too many dropped items.");
-        if (pigs.Length > PigPopulation.MaximumPigs) throw new InvalidDataException("Too many pigs.");
+        if (pigs.Length + mobs.Length > PassiveMobPopulation.MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
+        MobPopulationState population = save.Population ?? MobPopulationState.FromLiving(pigs, mobs);
+        population.Validate(MobPopulationState.LivingCounts(pigs, mobs));
         using var payload = new MemoryStream(save.World.BlockCount + 512 + drops.Length * DropBytes);
         using (var writer = new BinaryWriter(payload, Utf8, true))
         {
@@ -83,13 +93,33 @@ public static class WorldSerializer
                 writer.Write(drop.VerticalVelocity); writer.Write(drop.PickupDelay);
             }
             writer.Write(save.Health);
-            writer.Write(pigs.Length);
+            writer.Write(pigs.Length + mobs.Length);
             foreach (PigState pig in pigs)
             {
                 PigPopulation.Validate(pig, save.World.Size);
+                writer.Write((byte)MobSpecies.Pig);
                 writer.Write(pig.Position.X); writer.Write(pig.Position.Y); writer.Write(pig.Position.Z);
                 writer.Write(pig.Yaw); writer.Write(pig.Health);
             }
+            foreach (MobState mob in mobs)
+            {
+                if (mob.Species == MobSpecies.Pig) throw new InvalidDataException("Pigs must use the pig state collection.");
+                PassiveMobPopulation.Validate(mob, save.World.Size);
+                writer.Write((byte)mob.Species);
+                writer.Write(mob.Position.X); writer.Write(mob.Position.Y); writer.Write(mob.Position.Z);
+                writer.Write(mob.Yaw); writer.Write(mob.Health);
+            }
+            foreach (int target in population.Targets) writer.Write(target);
+            writer.Write(population.Pending.Length);
+            foreach (MobRespawnState respawn in population.Pending)
+            { writer.Write((byte)respawn.Species); writer.Write(respawn.RemainingSeconds); }
+            int[] columns = save.World.Gravity.CaptureColumns();
+            writer.Write(columns.Length);
+            foreach (int column in columns) writer.Write(column);
+            FallingBlockState[] falling = save.World.Gravity.CaptureActive();
+            writer.Write(falling.Length);
+            foreach (FallingBlockState block in falling)
+            { writer.Write((byte)block.Block); writer.Write(block.X); writer.Write(block.Z); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
         }
         ReadOnlySpan<byte> bytes = payload.GetBuffer().AsSpan(0, (int)payload.Length);
         destination.Write(bytes);
@@ -132,22 +162,61 @@ public static class WorldSerializer
                 hash.AppendData(tail);
             }
             PigState[] pigs = Array.Empty<PigState>();
+            MobState[] mobs = Array.Empty<MobState>();
             if (metadata.Version >= 4)
             {
                 byte[] countBytes = new byte[4];
                 source.ReadExactly(countBytes); hash.AppendData(countBytes);
-                int pigCount = BinaryPrimitives.ReadInt32LittleEndian(countBytes);
-                if (pigCount < 0 || pigCount > PigPopulation.MaximumPigs) throw new InvalidDataException("Invalid pig count.");
-                byte[] pigBytes = new byte[pigCount * PigBytes];
-                source.ReadExactly(pigBytes); hash.AppendData(pigBytes);
-                pigs = new PigState[pigCount];
-                using var pigReader = new BinaryReader(new MemoryStream(pigBytes, false));
-                for (int i = 0; i < pigs.Length; i++)
+                int mobCount = BinaryPrimitives.ReadInt32LittleEndian(countBytes);
+                if (mobCount < 0 || mobCount > PassiveMobPopulation.MaximumMobs) throw new InvalidDataException("Invalid passive mob count.");
+                byte[] mobBytes = new byte[mobCount * (metadata.Version >= 5 ? MobBytes : PigBytes)];
+                source.ReadExactly(mobBytes); hash.AppendData(mobBytes);
+                var pigList = new List<PigState>(); var otherList = new List<MobState>();
+                using var mobReader = new BinaryReader(new MemoryStream(mobBytes, false));
+                for (int i = 0; i < mobCount; i++)
                 {
-                    pigs[i] = new PigState(new Vector3(pigReader.ReadSingle(), pigReader.ReadSingle(), pigReader.ReadSingle()),
-                        pigReader.ReadSingle(), pigReader.ReadInt32());
-                    PigPopulation.Validate(pigs[i], metadata.Size);
+                    MobSpecies species = metadata.Version >= 5 ? (MobSpecies)mobReader.ReadByte() : MobSpecies.Pig;
+                    var state = new MobState(species, new Vector3(mobReader.ReadSingle(), mobReader.ReadSingle(), mobReader.ReadSingle()),
+                        mobReader.ReadSingle(), mobReader.ReadInt32());
+                    PassiveMobPopulation.Validate(state, metadata.Size);
+                    if (species == MobSpecies.Pig) pigList.Add(new PigState(state.Position, state.Yaw, state.Health));
+                    else otherList.Add(state);
                 }
+                pigs = pigList.ToArray(); mobs = otherList.ToArray();
+            }
+            MobPopulationState population = null;
+            int[] gravityColumns = Array.Empty<int>();
+            FallingBlockState[] fallingBlocks = Array.Empty<FallingBlockState>();
+            if (metadata.Version >= 6)
+            {
+                byte[] populationPrefix = new byte[PopulationPrefixBytes]; source.ReadExactly(populationPrefix); hash.AppendData(populationPrefix);
+                int[] targets = new int[MobDefinitions.SpeciesCount];
+                for (int i = 0; i < targets.Length; i++) targets[i] = BinaryPrimitives.ReadInt32LittleEndian(populationPrefix.AsSpan(i * 4));
+                int pendingCount = BinaryPrimitives.ReadInt32LittleEndian(populationPrefix.AsSpan(targets.Length * 4));
+                if (pendingCount < 0 || pendingCount > PassiveMobPopulation.MaximumMobs) throw new InvalidDataException("Invalid pending respawn count.");
+                byte[] pendingBytes = new byte[pendingCount * RespawnBytes]; source.ReadExactly(pendingBytes); hash.AppendData(pendingBytes);
+                var pending = new MobRespawnState[pendingCount];
+                using var pendingReader = new BinaryReader(new MemoryStream(pendingBytes, false));
+                for (int i = 0; i < pending.Length; i++) pending[i] = new MobRespawnState((MobSpecies)pendingReader.ReadByte(), pendingReader.ReadDouble());
+                population = new MobPopulationState(targets, pending); population.Validate(MobPopulationState.LivingCounts(pigs, mobs));
+                byte[] countBytes = new byte[4]; source.ReadExactly(countBytes); hash.AppendData(countBytes);
+                int columnCount = BinaryPrimitives.ReadInt32LittleEndian(countBytes);
+                if (columnCount < 0 || columnCount > metadata.Size.Width() * metadata.Size.Width()) throw new InvalidDataException("Invalid gravity column count.");
+                byte[] columnBytes = new byte[columnCount * 4]; source.ReadExactly(columnBytes); hash.AppendData(columnBytes);
+                gravityColumns = new int[columnCount];
+                for (int i = 0; i < columnCount; i++) gravityColumns[i] = BinaryPrimitives.ReadInt32LittleEndian(columnBytes.AsSpan(i * 4));
+            }
+            else population = MobPopulationState.FromLiving(pigs, mobs); // Conservative, once-only survivor baseline.
+            if (metadata.Version >= 7)
+            {
+                byte[] countBytes = new byte[4]; source.ReadExactly(countBytes); hash.AppendData(countBytes);
+                int fallingCount = BinaryPrimitives.ReadInt32LittleEndian(countBytes);
+                if (fallingCount < 0 || fallingCount > FallingBlockSimulation.MaximumActiveBlocks) throw new InvalidDataException("Invalid falling block count.");
+                byte[] fallingBytes = new byte[fallingCount * FallingBytes]; source.ReadExactly(fallingBytes); hash.AppendData(fallingBytes);
+                fallingBlocks = new FallingBlockState[fallingCount];
+                using var fallingReader = new BinaryReader(new MemoryStream(fallingBytes, false));
+                for (int i = 0; i < fallingCount; i++) fallingBlocks[i] = new FallingBlockState((BlockType)fallingReader.ReadByte(),
+                    fallingReader.ReadInt32(), fallingReader.ReadInt32(), fallingReader.ReadDouble(), fallingReader.ReadDouble());
             }
             byte[] checksum = new byte[ChecksumSize];
             source.ReadExactly(checksum);
@@ -166,6 +235,7 @@ public static class WorldSerializer
                 offset += Chunk.BlockCount;
             }
             world.Fluids.Initialize();
+            world.Gravity.Restore(gravityColumns, fallingBlocks); // No global scan/rewrite of legacy terrain.
             Inventory inventory;
             DroppedItemState[] drops;
             int health = Player.MaximumHealth;
@@ -200,7 +270,7 @@ public static class WorldSerializer
                 }
                 if (metadata.Version >= 3) { health = extras.ReadInt32(); ValidateHealth(health); }
             }
-            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs);
+            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population);
         }
         catch (EndOfStreamException exception)
         {
@@ -217,11 +287,20 @@ public static class WorldSerializer
         {
             long extra = source.Length - source.Position - metadata.Size.BlockCount() - ChecksumSize;
             if (metadata.Version >= 3) extra -= 4;
-            if (metadata.Version >= 4)
+            if (metadata.Version >= 6)
+            {
+                long extension = PopulationPrefixBytes + 4;
+                if (metadata.Version >= 7) extension += 4;
+                if (extra < TailPrefixBytes + 4 + extension || extra > TailPrefixBytes + (long)DroppedItems.MaximumEntities * DropBytes
+                    + 4 + (long)PassiveMobPopulation.MaximumMobs * (MobBytes + RespawnBytes) + extension + (long)metadata.Size.Width() * metadata.Size.Width() * 4
+                    + (metadata.Version >= 7 ? FallingBlockSimulation.MaximumActiveBlocks * FallingBytes : 0))
+                    throw new InvalidDataException("Save file has an invalid data length.");
+            }
+            else if (metadata.Version >= 4)
             {
                 // Only the header is read for listings; validate variable tails fully on load.
                 if (extra < TailPrefixBytes + 4 || extra > TailPrefixBytes + (long)DroppedItems.MaximumEntities * DropBytes
-                    + 4 + (long)PigPopulation.MaximumPigs * PigBytes)
+                    + 4 + (long)PassiveMobPopulation.MaximumMobs * (metadata.Version >= 5 ? MobBytes : PigBytes))
                     throw new InvalidDataException("Save file has an invalid data length.");
             }
             else if (metadata.Version == 1 ? extra != 0 : extra < TailPrefixBytes

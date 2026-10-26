@@ -1,126 +1,15 @@
-using System;
 using Microsoft.Xna.Framework;
-using MDSM.Worlds;
 
 namespace MDSM.Entities;
 
+// The legacy pig state and constants retain the pre-species save/fixture contract.
 public readonly record struct PigState(Vector3 Position, float Yaw, int Health);
-
-public sealed class Pig
+public sealed class Pig : PassiveMob
 {
     public const int MaximumHealth = 10;
     public const float HalfWidth = 0.8f;
     public const float Height = 1f;
-    public Vector3 Position { get; private set; }
-    public float Yaw { get; private set; }
-    public int Health { get; private set; }
-    public bool IsDead => Health == 0;
-    public bool Grounded { get; private set; }
-    public bool Walking { get; private set; }
-    public float WalkPhase { get; private set; }
-    public float HurtSeconds { get; private set; }
-    public BoundingBox Bounds => BoundsAt(Position);
-    private readonly Random _random;
-    private Vector3 _velocity;
-    private float _decisionSeconds;
-    private float _shoreHopSeconds;
-    private bool _wandering;
-
-    internal Pig(PigState state, int aiSeed)
-    {
-        Position = state.Position; Yaw = state.Yaw; Health = state.Health;
-        _random = new Random(aiSeed);
-        _decisionSeconds = 0.5f + _random.NextSingle() * 2;
-    }
-
+    internal Pig(PigState state, int aiSeed) : base(new MobState(MobSpecies.Pig, state.Position, state.Yaw, state.Health), aiSeed) { }
     public PigState Capture() => new(Position, Yaw, Health);
-    public static BoundingBox BoundsAt(Vector3 feet) => new(feet + new Vector3(-HalfWidth, 0, -HalfWidth),
-        feet + new Vector3(HalfWidth, Height, HalfWidth));
-
-    internal void Damage(int amount, Vector3 away)
-    {
-        if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
-        if (IsDead || amount == 0) return;
-        Health -= Math.Min(Health, amount);
-        HurtSeconds = 0.25f;
-        away.Y = 0;
-        if (away.LengthSquared() > 0.000001f) away.Normalize();
-        _velocity = away * 2.5f + Vector3.Up * 4;
-        // Neither the idle/wander decision nor facing changes in response to damage.
-    }
-
-    internal void Update(World world, float elapsed)
-    {
-        if (IsDead || !float.IsFinite(elapsed) || elapsed <= 0) return;
-        float dt = Math.Min(elapsed, 0.1f);
-        HurtSeconds = Math.Max(0, HurtSeconds - dt);
-        _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
-        if ((_decisionSeconds -= dt) <= 0)
-        {
-            _wandering = !_wandering;
-            _decisionSeconds = 1 + _random.NextSingle() * (_wandering ? 4 : 3);
-            if (_wandering) Yaw = _random.NextSingle() * MathHelper.TwoPi - MathHelper.Pi;
-        }
-        Vector3 before = Position;
-        Vector3 walking = _wandering ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) * 0.8f : Vector3.Zero;
-        bool swimming = Water.Intersects(world, Bounds);
-        if (swimming)
-        {
-            walking *= 0.45f;
-            bool submerged = Water.Intersects(world, new BoundingBox(Position + new Vector3(-0.1f, 0.55f, -0.1f),
-                Position + new Vector3(0.1f, 0.65f, 0.1f)));
-            _velocity.Y = submerged ? Math.Max(1.5f, _velocity.Y - 4 * dt) : Math.Max(-2, _velocity.Y * MathF.Exp(-3 * dt) - 4 * dt);
-        }
-        else _velocity.Y = Math.Max(-40, _velocity.Y - 18 * dt);
-        Vector3 displacement = (walking + _velocity) * dt;
-        int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.15f));
-        Vector3 step = displacement / steps;
-        Grounded = false;
-        bool blocked = false;
-        for (int i = 0; i < steps; i++)
-        {
-            blocked |= MoveAxis(world, step.X, 0);
-            blocked |= MoveAxis(world, step.Z, 2);
-            if (MoveAxis(world, step.Y, 1))
-            {
-                if (step.Y < 0) Grounded = true;
-                step.Y = 0; _velocity.Y = 0;
-            }
-        }
-        if (blocked && _wandering)
-        {
-            // A small swimming hop lets wandering pigs leave a one-block shore instead of getting trapped.
-            if (swimming) { _velocity.Y = Math.Max(_velocity.Y, 4.5f); _shoreHopSeconds = 0.7f; }
-            else if (_shoreHopSeconds == 0) { _wandering = false; _decisionSeconds = 0.5f; }
-        }
-        float decay = MathF.Exp(-8 * dt);
-        _velocity.X *= decay; _velocity.Z *= decay;
-        if (Position.Y < -16) { Position = new Vector3(Position.X, -16, Position.Z); _velocity.Y = 0; }
-        float distance = new Vector2(Position.X - before.X, Position.Z - before.Z).Length();
-        Walking = distance > 0.00001f;
-        if (Walking) WalkPhase = (WalkPhase + distance * 7) % MathHelper.TwoPi;
-    }
-
-    private bool MoveAxis(World world, float amount, int axis)
-    {
-        if (amount == 0) return false;
-        Vector3 next = Position;
-        if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, world.Width - HalfWidth);
-        else if (axis == 2) next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
-        else next.Y += amount;
-        BoundingBox bounds = BoundsAt(next);
-        bool blocked = axis == 0 ? next.X != Position.X + amount : axis == 2 && next.Z != Position.Z + amount;
-        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
-        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
-        {
-            if (!world.IsSolid(x, y, z) || !World.Overlaps(bounds, World.Bounds(new Point3(x, y, z)))) continue;
-            blocked = true;
-            if (axis == 0) next.X = amount > 0 ? Math.Min(next.X, x - HalfWidth) : Math.Max(next.X, x + 1 + HalfWidth);
-            else if (axis == 2) next.Z = amount > 0 ? Math.Min(next.Z, z - HalfWidth) : Math.Max(next.Z, z + 1 + HalfWidth);
-            else next.Y = amount > 0 ? Math.Min(next.Y, y - Height) : Math.Max(next.Y, y + 1);
-        }
-        Position = next;
-        return blocked;
-    }
+    public static BoundingBox BoundsAt(Vector3 feet) => PassiveMob.BoundsAt(MobSpecies.Pig, feet);
 }

@@ -309,13 +309,13 @@ internal static class SurvivalChecks
     {
         var inventory = Inventory.CreateStarter(); var scroll = new HotbarScroll();
         int[] before = InventoryTotals(new GameSession("scroll", new WorldSave(new World(0, WorldSize.Small, false), "Scroll", new Vector3(30, 30, 30), 0, 0, inventory)));
-        inventory.SelectedSlot = 8; scroll.Apply(inventory, 120); Require(inventory.SelectedSlot == 0, "Forward wheel failed to wrap 9 to 1.");
-        scroll.Apply(inventory, -120); Require(inventory.SelectedSlot == 8, "Backward wheel failed to wrap 1 to 9.");
-        scroll.Apply(inventory, 120 * 20); Require(inventory.SelectedSlot == 1, "Multiple positive wheel steps were lost.");
-        scroll.Apply(inventory, -120 * 20); Require(inventory.SelectedSlot == 8, "Multiple negative wheel steps were lost.");
-        scroll.Apply(inventory, 60); Require(inventory.SelectedSlot == 8, "Partial wheel step selected too early.");
-        scroll.Apply(inventory, 60); Require(inventory.SelectedSlot == 0, "Partial deltas did not accumulate.");
-        scroll.Apply(inventory, 60); scroll.Reset(); scroll.Apply(inventory, 60); Require(inventory.SelectedSlot == 0, "Menu reset retained an old partial wheel step.");
+        inventory.SelectedSlot = 8; scroll.Apply(inventory, -120); Require(inventory.SelectedSlot == 0, "Scroll down failed to wrap 9 to 1.");
+        scroll.Apply(inventory, 120); Require(inventory.SelectedSlot == 8, "Scroll up failed to wrap 1 to 9.");
+        scroll.Apply(inventory, -120 * 20); Require(inventory.SelectedSlot == 1, "Multiple downward wheel steps were lost.");
+        scroll.Apply(inventory, 120 * 20); Require(inventory.SelectedSlot == 8, "Multiple upward wheel steps were lost.");
+        scroll.Apply(inventory, -60); Require(inventory.SelectedSlot == 8, "Partial wheel step selected too early.");
+        scroll.Apply(inventory, -60); Require(inventory.SelectedSlot == 0, "Partial deltas did not accumulate.");
+        scroll.Apply(inventory, -60); scroll.Reset(); scroll.Apply(inventory, -60); Require(inventory.SelectedSlot == 0, "Menu reset retained an old partial wheel step.");
         inventory.SelectedSlot = 6;
         var copy = new GameSession("copy", new WorldSave(new World(0, WorldSize.Small, false), "Copy", new Vector3(30, 30, 30), 0, 0, inventory));
         Require(before.AsSpan().SequenceEqual(InventoryTotals(copy)), "Scrolling changed inventory contents.");

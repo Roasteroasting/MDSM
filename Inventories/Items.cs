@@ -11,7 +11,12 @@ public readonly record struct ItemId(ushort Value);
 public static class Items
 {
     public static readonly ItemId RawPorkchop = new(256); // Non-block IDs begin above the byte block range.
-    public static bool IsDefined(ItemId item) => item == RawPorkchop || TryGetBlock(item, out _);
+    public static readonly ItemId Leather = new(257);
+    public static readonly ItemId Feather = new(258);
+    private static readonly ItemId[] SpriteItems = { RawPorkchop, Leather, Feather };
+    public static ReadOnlySpan<ItemId> Sprites => SpriteItems;
+    public static bool IsSprite(ItemId item) => item == RawPorkchop || item == Leather || item == Feather;
+    public static bool IsDefined(ItemId item) => IsSprite(item) || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
         ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));
     public static bool TryGetBlock(ItemId item, out BlockType block)
@@ -20,6 +25,7 @@ public static class Items
         return item.Value != 0 && Blocks.IsPlaceable(block);
     }
     public static string Name(ItemId item) => item == RawPorkchop ? "RAW PORKCHOP"
+        : item == Leather ? "LEATHER" : item == Feather ? "FEATHER"
         : TryGetBlock(item, out BlockType block) ? Blocks.Get(block).Name : "";
 }
 

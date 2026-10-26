@@ -22,7 +22,8 @@ public enum BlockType : byte
     YellowFlower = 13,
     WaterSource = 14,
     WaterFlow1 = 15, WaterFlow2 = 16, WaterFlow3 = 17, WaterFlow4 = 18,
-    WaterFlow5 = 19, WaterFlow6 = 20, WaterFlow7 = 21, WaterFalling = 22
+    WaterFlow5 = 19, WaterFlow6 = 20, WaterFlow7 = 21, WaterFalling = 22,
+    WhiteWool = 23
 }
 
 public enum BlockShape { None, Cube, Cross, Fluid }
@@ -62,13 +63,14 @@ public static class Blocks
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
-        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1)
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WHITE WOOL", true, true, BlockShape.Cube, 15, MiningSeconds: 1.25f)
     };
     private static readonly BlockType[] Palette =
     {
         BlockType.Grass, BlockType.Dirt, BlockType.Stone, BlockType.WoodLog, BlockType.Leaves,
         BlockType.WoodenPlanks, BlockType.Cobblestone, BlockType.Sand, BlockType.Gravel,
-        BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower
+        BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
     public static bool IsDefined(BlockType block) => (int)block < Definitions.Length;
@@ -79,4 +81,5 @@ public static class Blocks
     public static bool IsPlaceable(BlockType block) => Get(block).Placeable;
     public static int Tile(BlockType block, Vector3 normal) => Get(block).Tile(normal);
     public static bool SupportsPlant(BlockType block) => block == BlockType.Grass;
+    public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
 }

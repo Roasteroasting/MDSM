@@ -20,6 +20,7 @@ public sealed class World
     public int Seed { get; }
     public int Revision { get; private set; }
     public FluidSimulation Fluids { get; }
+    public FallingBlockSimulation Gravity { get; }
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
     public World(int seed = DefaultSeed, WorldSize size = WorldSize.Normal) : this(seed, size, true) { }
@@ -31,6 +32,7 @@ public sealed class World
     {
         Seed = seed;
         Fluids = new FluidSimulation(this);
+        Gravity = new FallingBlockSimulation(this);
         _ = size.Width(); // Validate before allocating storage.
         Size = size;
         _chunks = new Chunk[ChunkCount];
@@ -111,6 +113,7 @@ public sealed class World
             if ((uint)cx < ChunksX && (uint)cz < ChunksZ) GetChunk(cx, cz).MarkWaterDirty();
         Revision++;
         Fluids.Changed(new Point3(x, y, z), previous, block);
+        Gravity.Changed(x, z, previous, block);
         if (!Blocks.SupportsPlant(block) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
             SetBlock(x, y + 1, z, BlockType.Air);
         return true;
@@ -120,6 +123,8 @@ public sealed class World
     internal void SetGeneratedBlock(int x, int y, int z, BlockType block)
     {
         if (!Contains(x, y, z)) throw new ArgumentOutOfRangeException(nameof(x));
+        if (Blocks.Falls(block) && (y == 0 || !IsSolid(x, y - 1, z)))
+            throw new InvalidOperationException("Generated Sand and Gravel require solid support.");
         _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size].SetBlock(x % Chunk.Size, y, z % Chunk.Size, block);
     }
 
@@ -136,6 +141,7 @@ public sealed class World
             || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
             || (definition.Solid && Overlaps(Bounds(cell), playerBounds))
+            || (definition.Solid && Gravity.Intersects(Bounds(cell)))
             || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z))))
             return false;
 
