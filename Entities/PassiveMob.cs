@@ -4,7 +4,7 @@ using MDSM.Worlds;
 
 namespace MDSM.Entities;
 
-public class PassiveMob
+public sealed class PassiveMob
 {
     public MobSpecies Species { get; }
     public MobDefinition Definition => MobDefinitions.Get(Species);

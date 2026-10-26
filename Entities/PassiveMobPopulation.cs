@@ -7,7 +7,7 @@ using MDSM.Worlds;
 
 namespace MDSM.Entities;
 
-public class PassiveMobPopulation
+public sealed class PassiveMobPopulation
 {
     public const int MaximumMobs = 256; // Shared save/runtime safety bound, not a per-species limit.
     public const double MinimumRespawnSeconds = 30, MaximumRespawnSeconds = 60, RetrySeconds = 5;
@@ -35,7 +35,7 @@ public class PassiveMobPopulation
     public PassiveMobPopulation(World world, ReadOnlySpan<PigState> pigs, ReadOnlySpan<MobState> others, MobPopulationState population = null) : this(world)
     {
         if (pigs.Length + others.Length > MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
-        foreach (PigState pig in pigs) AddSaved(new MobState(MobSpecies.Pig, pig.Position, pig.Yaw, pig.Health));
+        foreach (PigState pig in pigs) AddSaved(pig.ToMobState());
         foreach (MobState state in others)
         {
             if (state.Species == MobSpecies.Pig) throw new InvalidDataException("Pigs must use the pig state section.");
@@ -56,8 +56,7 @@ public class PassiveMobPopulation
     {
         if (_mobs.Count >= MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
         Validate(state, _world.Size);
-        _mobs.Add(state.Species == MobSpecies.Pig
-            ? new Pig(new PigState(state.Position, state.Yaw, state.Health), _random.Next()) : new PassiveMob(state, _random.Next()));
+        _mobs.Add(new PassiveMob(state, _random.Next()));
         _living[(int)state.Species]++;
     }
 

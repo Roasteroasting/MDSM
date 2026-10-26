@@ -143,7 +143,7 @@ internal static class PigGraphicsChecks
         {
             PassiveMobRenderer renderer = Field<PassiveMobRenderer>("_mobRenderer"); TextureAtlas atlas = Field<TextureAtlas>("_atlas");
             World world = PigChecks.Flat();
-            var population = new PigPopulation(world, new[] { new PigState(new Vector3(10, 1, 10), MathHelper.Pi, 10) });
+            var population = new PassiveMobPopulation(world, new[] { new PigState(new Vector3(10, 1, 10), MathHelper.Pi, 10) }, default);
             var camera = new Camera { Position = new Vector3(10, 1.6f, 13) };
             using var target = new RenderTarget2D(GraphicsDevice, 320, 240, false, SurfaceFormat.Color, DepthFormat.Depth24);
             Color[] DrawPig()
@@ -168,7 +168,7 @@ internal static class PigGraphicsChecks
             camera.Position = population.Entities[0].Position + new Vector3(0, 0.6f, 3);
             Color[] walking = DrawPig();
             // Same feet position/yaw/health, but no temporary limb phase or walking state.
-            population = new PigPopulation(world, population.Capture());
+            population = new PassiveMobPopulation(world, population.CapturePigs(), default);
             Color[] standing = DrawPig();
             Require(!walking.AsSpan().SequenceEqual(standing), "Moving pig leg animation changed no rendered pixels.");
             GraphicsDevice.SetRenderTarget(target); GraphicsDevice.Clear(Color.CornflowerBlue);

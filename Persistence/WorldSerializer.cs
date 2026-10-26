@@ -96,7 +96,7 @@ public static class WorldSerializer
             writer.Write(pigs.Length + mobs.Length);
             foreach (PigState pig in pigs)
             {
-                PigPopulation.Validate(pig, save.World.Size);
+                PassiveMobPopulation.Validate(pig.ToMobState(), save.World.Size);
                 writer.Write((byte)MobSpecies.Pig);
                 writer.Write(pig.Position.X); writer.Write(pig.Position.Y); writer.Write(pig.Position.Z);
                 writer.Write(pig.Yaw); writer.Write(pig.Health);

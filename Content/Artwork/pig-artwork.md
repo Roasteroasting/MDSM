@@ -1,6 +1,6 @@
 # Milestone 7 artwork
 
-The editable final assets are [pig.png](./pig.png), **64 x 16 RGBA**, and [raw-porkchop.png](./raw-porkchop.png), **16 x 16 RGBA**. They were generated with the built-in `image_gen` tool, not the fallback CLI. No generation or preparation runs at build/startup. The existing [terrain.png](./terrain.png) is unchanged.
+The editable final assets are [pig.png](../Mobs/pig.png), **64 x 16 RGBA**, and [raw-porkchop.png](../Items/raw-porkchop.png), **16 x 16 RGBA**. They were generated with the built-in `image_gen` tool, not the fallback CLI. No generation or preparation runs at build/startup. The existing [terrain.png](../Blocks/terrain.png) is unchanged.
 
 Pig tiles are a single horizontal row of four 16 x 16 squares: **0 skin, 1 face, 2 snout front, 3 leg/hoof**. During one-time preparation the generated sheet's white top/bottom margins were cropped away and its four equal-width tiles sampled with nearest-neighbor scaling into the final 64 x 16 PNG. The transparent porkchop sprite was nearest-neighbor sampled into 16 x 16; alpha was thresholded at 128 to exact 0/255 for crisp binary transparency. No existing block artwork was replaced.
 

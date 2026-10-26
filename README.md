@@ -11,7 +11,7 @@ dotnet build
 dotnet run --no-build
 ```
 
-The MonoGame build task restores the MGCB tool from the existing local tool manifest and compiles [Content/terrain.png](./Content/terrain.png) through [Content/Content.mgcb](./Content/Content.mgcb). The resulting atlas texture is copied into the build output and owned by the game's ContentManager. The small UI font remains generated in code and needs no installed system fonts.
+The MonoGame build task restores the MGCB tool from the existing local tool manifest and compiles [Content/Blocks/terrain.png](./Content/Blocks/terrain.png) through [Content/Content.mgcb](./Content/Content.mgcb). The resulting atlas texture is copied into the build output and owned by the game's ContentManager. The small UI font remains generated in code and needs no installed system fonts.
 
 ## Settings and frame rate
 
@@ -65,7 +65,7 @@ Water is non-solid, cannot be mined or held in inventory, and does not obstruct 
 
 [FluidSimulation.cs](./Worlds/FluidSimulation.cs) maintains a deterministic, deduplicated frontier with a **0.2-second water tick** and a **2,048-cell budget per tick**. Decisions use a snapshot and apply together, preventing update order from accelerating flow. Creation/loading scans water-bearing chunks once to schedule active flow and exposed frontiers; stable lakes then do no work. The queue uses one bit per block only when needed. Updates pause with gameplay. Fluid-only changes rebuild affected water geometry, without rebuilding opaque terrain or scanning the entire world each frame.
 
-[WaterRenderer.cs](./Rendering/WaterRenderer.cs) caches water faces per chunk, frustum-culls chunks, sorts visible faces back-to-front, and batches them into a reusable GPU buffer. Shared corner heights join differing flow levels across chunk boundaries; sources are substantially full, weak flows are shallower, and falling columns join vertically. Internal water faces and faces against opaque terrain are omitted. The pass runs after opaque terrain/items/mobs and before held items/HUD, with point sampling, alpha blending, depth testing and **no depth writes**. It restores texture bindings and graphics states, retaining the screenshot binding fix. [Content/water.png](./Content/water.png) is a separate editable 16 x 16 tile; existing terrain artwork is unchanged. Edit, rebuild and restart to change it. Its built-in image-generation prompt and one-time preparation are recorded in [Content/water-artwork.md](./Content/water-artwork.md).
+[WaterRenderer.cs](./Rendering/WaterRenderer.cs) caches water faces per chunk, frustum-culls chunks, sorts visible faces back-to-front, and batches them into a reusable GPU buffer. Shared corner heights join differing flow levels across chunk boundaries; sources are substantially full, weak flows are shallower, and falling columns join vertically. Internal water faces and faces against opaque terrain are omitted. The pass runs after opaque terrain/items/mobs and before held items/HUD, with point sampling, alpha blending, depth testing and **no depth writes**. It restores texture bindings and graphics states, retaining the screenshot binding fix. [Content/Blocks/water.png](./Content/Blocks/water.png) is a separate editable 16 x 16 tile; existing terrain artwork is unchanged. Edit, rebuild and restart to change it. Its built-in image-generation prompt and one-time preparation are recorded in [Content/Artwork/water-artwork.md](./Content/Artwork/water-artwork.md).
 
 Entering water reduces horizontal movement and falling speed and cancels accumulated fall damage. **Hold Space to swim upward**; normal jumping outside water is unchanged. Passive mobs slow down, float, and can hop against a shoreline while wandering to avoid being trapped. There are no water currents, drowning, oxygen, underwater effects, buckets, rivers, or oceans.
 
@@ -139,7 +139,7 @@ Smooth falling writes **version 7**, appending active Sand/Gravel types, columns
 
 ## Editing block textures
 
-Open [Content/terrain.png](./Content/terrain.png) in an ordinary image editor. Keep the image at **256 x 256 pixels**, arranged as a **16 x 16 grid of 16 x 16 pixel tiles**. Tiles are numbered from 0 to 255 in row-major order: left to right, then top to bottom. Tile 16 begins the second row, and tile 255 is at the bottom right.
+Open [Content/Blocks/terrain.png](./Content/Blocks/terrain.png) in an ordinary image editor. Keep the image at **256 x 256 pixels**, arranged as a **16 x 16 grid of 16 x 16 pixel tiles**. Tiles are numbered from 0 to 255 in row-major order: left to right, then top to bottom. Tile 16 begins the second row, and tile 255 is at the bottom right.
 
 | Tile index | Texture | Pixel origin (x, y) |
 | --- | --- | --- |
@@ -161,7 +161,7 @@ Open [Content/terrain.png](./Content/terrain.png) in an ordinary image editor. K
 | 15 | White Wool | (240, 0) |
 | 16-255 | Unused, transparent | `(index % 16 * 16, index / 16 * 16)` using integer division |
 
-The first four tiles were exported once from the original seed-173 algorithm and remain pixel-for-pixel unchanged. Milestone 4 artwork occupies tiles 4-14; its generation prompt and one-time preparation are recorded in [Content/texture-artwork.md](./Content/texture-artwork.md). White Wool occupies tile 15, documented in [Content/passive-mob-artwork.md](./Content/passive-mob-artwork.md); all other existing atlas pixels are unchanged. The PNG is the source artwork; builds and game launches never regenerate or overwrite it. Edit a tile, save the PNG, then run `dotnet build` followed by `dotnet run --no-build` (or simply `dotnet run`, which builds first). Restarting an existing build without rebuilding will continue to use its previously compiled texture. Replacing existing textures requires no C# changes.
+The first four tiles were exported once from the original seed-173 algorithm and remain pixel-for-pixel unchanged. Milestone 4 artwork occupies tiles 4-14; its generation prompt and one-time preparation are recorded in [Content/Artwork/texture-artwork.md](./Content/Artwork/texture-artwork.md). White Wool occupies tile 15, documented in [Content/Artwork/passive-mob-artwork.md](./Content/Artwork/passive-mob-artwork.md); all other existing atlas pixels are unchanged. The PNG is the source artwork; builds and game launches never regenerate or overwrite it. Edit a tile, save the PNG, then run `dotnet build` followed by `dotnet run --no-build` (or simply `dotnet run`, which builds first). Restarting an existing build without rebuilding will continue to use its previously compiled texture. Replacing existing textures requires no C# changes.
 
 For a future material, draw its texture in an unused slot and assign that index in the centralized [block definitions](./Worlds/Blocks.cs). Each definition owns its name, collision solidity, opacity, mesh shape, placement eligibility, and side/top/bottom tiles. Grass retains its existing face mappings; logs use end grain on top/bottom and bark on their sides. Both world rendering and the hotbar use point sampling, with mipmaps disabled and world UVs inset to texel centers to prevent tile bleeding. For leaves and plants, use alpha 0 for holes/backgrounds and alpha 255 for visible pixels; intermediate alpha is treated as a binary cutout rather than translucency.
 
@@ -257,7 +257,7 @@ Hold **LMB** while aiming at a mob within the normal six-block reach to punch it
 
 **Raw Porkchop uses item ID 256**, outside the existing byte-valued block IDs. It is non-placeable and stacks to 64. Existing inventory clicks, merging, splitting, manual/death drops, pickup, and per-world persistence apply. Its cutout icon also appears as a flat held item and camera-facing dropped sprite. Select it in the hotbar and **press RMB to consume one and restore 3 health**, capped at 20. Full-health/dead players consume nothing. Holding RMB does not repeat eating; release and press again. Ordinary block placement still uses RMB for placeable items. There is no hunger, regeneration, eating animation, cooking, or consumption timer.
 
-Living mob species, positions, yaw, and remaining health persist with each world, together with population targets and pending replacement delays. AI timers, walk phase, knockback velocity, and hurt flash are temporary. Killed mobs are removed before saving; loading or player respawn never restores the dead entity, and its scheduled replacement still waits for the remaining gameplay delay. Mobs and dropped resources freeze while gameplay is paused or inventory/menus are open. Editable [pig.png](./Content/pig.png) and [raw-porkchop.png](./Content/raw-porkchop.png) remain unchanged. The new [cow.png](./Content/cow.png), [sheep.png](./Content/sheep.png), [chicken.png](./Content/chicken.png), [leather.png](./Content/leather.png) and [feather.png](./Content/feather.png) use the existing Content pipeline. [Artwork notes](./Content/passive-mob-artwork.md) record their built-in image-generation prompts and one-time preparation. Only previously unused terrain atlas tile 15 was filled; world/lake generation and water mechanics are unchanged.
+Living mob species, positions, yaw, and remaining health persist with each world, together with population targets and pending replacement delays. AI timers, walk phase, knockback velocity, and hurt flash are temporary. Killed mobs are removed before saving; loading or player respawn never restores the dead entity, and its scheduled replacement still waits for the remaining gameplay delay. Mobs and dropped resources freeze while gameplay is paused or inventory/menus are open. Editable [pig.png](./Content/Mobs/pig.png) and [raw-porkchop.png](./Content/Items/raw-porkchop.png) remain unchanged. The new [cow.png](./Content/Mobs/cow.png), [sheep.png](./Content/Mobs/sheep.png), [chicken.png](./Content/Mobs/chicken.png), [leather.png](./Content/Items/leather.png) and [feather.png](./Content/Items/feather.png) use the existing Content pipeline. [Artwork notes](./Content/Artwork/passive-mob-artwork.md) record their built-in image-generation prompts and one-time preparation. Only previously unused terrain atlas tile 15 was filled; world/lake generation and water mechanics are unchanged.
 
 ## Health, death, and movement
 
@@ -323,13 +323,17 @@ Source files use file-scoped namespaces matching their directories, rooted at `M
 | [Rendering/](./Rendering/) — `MDSM.Rendering` | World/item rendering, meshes, atlas loading, held models, and screenshots |
 | [Gameplay/](./Gameplay/) — `MDSM.Gameplay` | Player/camera state, movement, fall tracking, mining, placement, and raycasting |
 | [Inventories/](./Inventories/) — `MDSM.Inventories` | Item definitions, stacks, inventory operations, and hotbar selection |
-| [Entities/](./Entities/) — `MDSM.Entities` | Dropped-item state/physics and drop-position checks |
+| [Entities/](./Entities/) — `MDSM.Entities` | Passive-mob definitions, shared behavior/populations, respawn metadata, dropped-item physics, and drop-position checks |
 | [UI/](./UI/) — `MDSM.UI` | HUD, inventory interface, menus, layouts, and pixel font |
 | [Input/](./Input/) — `MDSM.Input` | Relative mouse capture and presentation shortcuts |
 | [Persistence/](./Persistence/) — `MDSM.Persistence` | World serialization, save management, and saved/session state |
 | [Testing/](./Testing/) — `MDSM.Testing` | All existing headless checks and optional DesktopGL regression checks |
 
-[Program.cs](./Program.cs) remains at the project root as the application/check-runner entry point, alongside [MDSM.csproj](./MDSM.csproj) and the existing configuration, documentation, and icon files. SDK recursive source inclusion compiles the organized directories without explicit compile entries. [Content/](./Content/), content asset names, application-data locations, and save/settings formats are unchanged. Build and check commands still run from the project root.
+[Program.cs](./Program.cs) remains at the project root as the application/check-runner entry point, alongside [MDSM.csproj](./MDSM.csproj) and the existing configuration, documentation, and icon files. SDK recursive source inclusion compiles the organized directories without explicit compile entries. Build and check commands still run from the project root. Application-data locations and save/settings formats are unchanged.
+
+Source assets under [Content/](./Content/) are grouped into [Blocks/](./Content/Blocks/) (terrain atlas and water), [Mobs/](./Content/Mobs/) (four animal skins), [Items/](./Content/Items/) (porkchop, leather and feather icons), and [Artwork/](./Content/Artwork/) (existing creation notes). [Content.mgcb](./Content/Content.mgcb) remains at the Content root and builds matching grouped content keys, such as `Blocks/terrain`, `Mobs/pig`, and `Items/raw-porkchop`. Texture bytes, basenames, processing settings and filtering are unchanged; normal builds and publish include the grouped compiled assets. Generated content directories are managed by MonoGame.
+
+The targeted cleanup removed the old Pig and PigPopulation inheritance wrappers: all species now use [PassiveMob.cs](./Entities/PassiveMob.cs) and [PassiveMobPopulation.cs](./Entities/PassiveMobPopulation.cs) directly. The legacy `PigState` record remains in [MobDefinitions.cs](./Entities/MobDefinitions.cs), preserving its fields and the existing binary readers/writers. [MobPopulationState.cs](./Entities/MobPopulationState.cs) retains its distinct population-target/timer validation role. [PassiveMobModels.cs](./Rendering/PassiveMobModels.cs) owns all four species' unchanged geometry and shared transform/tint/leg setup; [PassiveMobRenderer.cs](./Rendering/PassiveMobRenderer.cs) continues to own GPU batching, culling and graphics-state restoration. The former PigRenderer was a geometry helper, not a separate rendering pass. No save identifiers, layouts or version numbers changed.
 
 | File | Responsibility |
 | --- | --- |
@@ -366,7 +370,7 @@ Source files use file-scoped namespaces matching their directories, rooted at `M
 | [WorldDecorator.cs](./Worlds/WorldDecorator.cs) | Deterministic trees and plants after base terrain generation |
 | [BlockRaycaster.cs](./Gameplay/BlockRaycaster.cs) | Voxel grid traversal and hit-face selection |
 | [TextureAtlas.cs](./Rendering/TextureAtlas.cs) | ContentManager atlas loading, grid tile rectangles, and texel-center UVs |
-| [Content/terrain.png](./Content/terrain.png) | Editable 256 x 256 block texture atlas |
+| [Content/Blocks/terrain.png](./Content/Blocks/terrain.png) | Editable 256 x 256 block texture atlas |
 | [ChunkMeshBuilder.cs](./Rendering/ChunkMeshBuilder.cs) | Shared cube/cross geometry for chunks and small items, with chunk opacity checks |
 | [ChunkMesh.cs](./Rendering/ChunkMesh.cs) | Per-chunk GPU buffer, revision tracking, uploads, and disposal |
 | [WorldRenderer.cs](./Rendering/WorldRenderer.cs) | Chunk frustum culling, alpha testing, depth testing, backface culling, fog, and selection outline |
@@ -380,9 +384,9 @@ Source files use file-scoped namespaces matching their directories, rooted at `M
 | [SurvivalChecks.cs](./Testing/SurvivalChecks.cs) | Health/hearts, fall distances, death accounting, respawn, deliberate drops, delays/merges, v1/v2 compatibility, crouching, and wheel checks |
 | [PresentationChecks.cs](./Testing/PresentationChecks.cs) | FPS range/override, settings persistence/corruption, render-rate independence, crouch camera, and model geometry/visibility/layout checks |
 | [MouseInputChecks.cs](./Testing/MouseInputChecks.cs) | Stationary/moving high-frequency input, unchanged sensitivity, consumed deltas, and capture/release resets |
-| [Pig.cs](./Entities/Pig.cs), [PigPopulation.cs](./Entities/PigPopulation.cs) | Thin pig compatibility facades over shared passive-mob behavior/population for older state and regression fixtures |
+| [MobDefinitions.cs](./Entities/MobDefinitions.cs), [PassiveMob.cs](./Entities/PassiveMob.cs), [PassiveMobPopulation.cs](./Entities/PassiveMobPopulation.cs) | Central species properties and legacy save record, shared simulation, spawning, combat and replenishment |
 | [CombatController.cs](./Gameplay/CombatController.cs), [ItemUse.cs](./Gameplay/ItemUse.cs) | Entity ray targeting/occlusion, attack cooldown/mining priority, and press-edge food consumption |
-| [CuboidModelBuilder.cs](./Rendering/CuboidModelBuilder.cs), [PigRenderer.cs](./Rendering/PigRenderer.cs) | Reusable textured cuboids/UV regions and the preserved original pig model/animation |
+| [CuboidModelBuilder.cs](./Rendering/CuboidModelBuilder.cs), [PassiveMobModels.cs](./Rendering/PassiveMobModels.cs) | Reusable textured cuboids/UV regions and unchanged species models/animation |
 | [ItemSpriteGeometry.cs](./Rendering/ItemSpriteGeometry.cs) | Shared cutout geometry for held and dropped non-block items |
 | [PigChecks.cs](./Testing/PigChecks.cs), [PigGraphicsChecks.cs](./Testing/PigGraphicsChecks.cs) | Pig/food simulation, persistence, input paths, and actual GPU regressions |
 | [InterfaceChecks.cs](./Testing/InterfaceChecks.cs) | F1/F3/F2 input edges, screenshot storage/failures, and information text/layout checks |
@@ -398,9 +402,9 @@ Milestone 8 changes 26 files (9 added, 17 modified):
 | --- | --- | --- |
 | World and simulation | [Water.cs](./Worlds/Water.cs), [FluidSimulation.cs](./Worlds/FluidSimulation.cs), [LakeGenerator.cs](./Worlds/LakeGenerator.cs) | [World.cs](./Worlds/World.cs), [Chunk.cs](./Worlds/Chunk.cs), [Blocks.cs](./Worlds/Blocks.cs) |
 | Rendering | [WaterMeshBuilder.cs](./Rendering/WaterMeshBuilder.cs), [WaterRenderer.cs](./Rendering/WaterRenderer.cs) | [WorldRenderer.cs](./Rendering/WorldRenderer.cs), [ChunkMeshBuilder.cs](./Rendering/ChunkMeshBuilder.cs), [TextureAtlas.cs](./Rendering/TextureAtlas.cs) |
-| Integration and movement | None | [Game1.cs](./Core/Game1.cs), [Player.cs](./Gameplay/Player.cs), [BlockRaycaster.cs](./Gameplay/BlockRaycaster.cs), [Pig.cs](./Entities/Pig.cs), [PigPopulation.cs](./Entities/PigPopulation.cs), [MenuInformation.cs](./UI/MenuInformation.cs) |
+| Integration and movement | None | [Game1.cs](./Core/Game1.cs), [Player.cs](./Gameplay/Player.cs), [BlockRaycaster.cs](./Gameplay/BlockRaycaster.cs), `Pig.cs` (legacy wrapper, now consolidated), `PigPopulation.cs` (legacy wrapper, now consolidated), [MenuInformation.cs](./UI/MenuInformation.cs) |
 | Persistence | None | [WorldSerializer.cs](./Persistence/WorldSerializer.cs) |
-| Assets | [water.png](./Content/water.png), [water-artwork.md](./Content/water-artwork.md) | [Content.mgcb](./Content/Content.mgcb) |
+| Assets | [water.png](./Content/Blocks/water.png), [water-artwork.md](./Content/Artwork/water-artwork.md) | [Content.mgcb](./Content/Content.mgcb) |
 | Checks | [WaterChecks.cs](./Testing/WaterChecks.cs), [WaterGraphicsChecks.cs](./Testing/WaterGraphicsChecks.cs) | [PrototypeChecks.cs](./Testing/PrototypeChecks.cs), [Program.cs](./Program.cs) |
 | Documentation | None | This README |
 
@@ -443,10 +447,10 @@ The graphics command additionally checks water on a real DesktopGL device: blue 
 
 | System | Added | Modified |
 | --- | --- | --- |
-| Passive behavior/population | [MobDefinitions.cs](./Entities/MobDefinitions.cs), [PassiveMob.cs](./Entities/PassiveMob.cs), [PassiveMobPopulation.cs](./Entities/PassiveMobPopulation.cs) | [Pig.cs](./Entities/Pig.cs), [PigPopulation.cs](./Entities/PigPopulation.cs) |
-| Rendering | [PassiveMobModels.cs](./Rendering/PassiveMobModels.cs), [PassiveMobRenderer.cs](./Rendering/PassiveMobRenderer.cs) | [PigRenderer.cs](./Rendering/PigRenderer.cs), [CuboidModelBuilder.cs](./Rendering/CuboidModelBuilder.cs), [DroppedItemRenderer.cs](./Rendering/DroppedItemRenderer.cs), [FirstPersonRenderer.cs](./Rendering/FirstPersonRenderer.cs), [TextureAtlas.cs](./Rendering/TextureAtlas.cs) |
+| Passive behavior/population | [MobDefinitions.cs](./Entities/MobDefinitions.cs), [PassiveMob.cs](./Entities/PassiveMob.cs), [PassiveMobPopulation.cs](./Entities/PassiveMobPopulation.cs) | `Pig.cs` (legacy wrapper, now consolidated), `PigPopulation.cs` (legacy wrapper, now consolidated) |
+| Rendering | [PassiveMobModels.cs](./Rendering/PassiveMobModels.cs), [PassiveMobRenderer.cs](./Rendering/PassiveMobRenderer.cs) | `PigRenderer.cs` (geometry now in [PassiveMobModels.cs](./Rendering/PassiveMobModels.cs)), [CuboidModelBuilder.cs](./Rendering/CuboidModelBuilder.cs), [DroppedItemRenderer.cs](./Rendering/DroppedItemRenderer.cs), [FirstPersonRenderer.cs](./Rendering/FirstPersonRenderer.cs), [TextureAtlas.cs](./Rendering/TextureAtlas.cs) |
 | Integration, items and saves | None | [Game1.cs](./Core/Game1.cs), [CombatController.cs](./Gameplay/CombatController.cs), [Items.cs](./Inventories/Items.cs), [Inventory.cs](./Inventories/Inventory.cs), [Blocks.cs](./Worlds/Blocks.cs), [WorldSave.cs](./Persistence/WorldSave.cs), [WorldSerializer.cs](./Persistence/WorldSerializer.cs), [MenuInformation.cs](./UI/MenuInformation.cs) |
-| Assets | [cow.png](./Content/cow.png), [sheep.png](./Content/sheep.png), [chicken.png](./Content/chicken.png), [leather.png](./Content/leather.png), [feather.png](./Content/feather.png), [passive-mob-artwork.md](./Content/passive-mob-artwork.md) | [terrain.png](./Content/terrain.png) (tile 15 only), [Content.mgcb](./Content/Content.mgcb) |
+| Assets | [cow.png](./Content/Mobs/cow.png), [sheep.png](./Content/Mobs/sheep.png), [chicken.png](./Content/Mobs/chicken.png), [leather.png](./Content/Items/leather.png), [feather.png](./Content/Items/feather.png), [passive-mob-artwork.md](./Content/Artwork/passive-mob-artwork.md) | [terrain.png](./Content/Blocks/terrain.png) (tile 15 only), [Content.mgcb](./Content/Content.mgcb) |
 | Checks | [MobChecks.cs](./Testing/MobChecks.cs), [MobGraphicsChecks.cs](./Testing/MobGraphicsChecks.cs) | [DecorationChecks.cs](./Testing/DecorationChecks.cs), [PigChecks.cs](./Testing/PigChecks.cs), [PigGraphicsChecks.cs](./Testing/PigGraphicsChecks.cs), [WaterChecks.cs](./Testing/WaterChecks.cs), [PrototypeChecks.cs](./Testing/PrototypeChecks.cs), [Program.cs](./Program.cs) |
 | Documentation | None | This README |
 

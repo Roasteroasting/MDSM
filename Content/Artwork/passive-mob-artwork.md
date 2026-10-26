@@ -1,6 +1,6 @@
 # Milestone 9 passive-mob and resource artwork
 
-The final, independently editable assets are [cow.png](./cow.png), [sheep.png](./sheep.png), and [chicken.png](./chicken.png), each **64 x 16 RGBA**, plus [leather.png](./leather.png) and [feather.png](./feather.png), each **16 x 16 RGBA**. White Wool occupies **tile 15 (pixel origin 240, 0)** in [terrain.png](./terrain.png).
+The final, independently editable assets are [cow.png](../Mobs/cow.png), [sheep.png](../Mobs/sheep.png), and [chicken.png](../Mobs/chicken.png), each **64 x 16 RGBA**, plus [leather.png](../Items/leather.png) and [feather.png](../Items/feather.png), each **16 x 16 RGBA**. White Wool occupies **tile 15 (pixel origin 240, 0)** in [terrain.png](../Blocks/terrain.png).
 
 These were generated with the built-in `image_gen` tool, not the fallback CLI. Each generated skin was a square 2 x 2 sheet; one-time preparation sampled each quadrant at the centers of a 16 x 16 grid and assembled the four tiles horizontally. Runtime tile order is **0 body, 1 front face, 2 muzzle/skin/beak, 3 leg/hoof**. Cow horns sample a pale 9 x 3 region at (35, 0) within its muzzle tile, so their texture stays separate from the nostrils.
 

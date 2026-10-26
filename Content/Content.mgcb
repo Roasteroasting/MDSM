@@ -13,7 +13,7 @@
 
 #---------------------------------- Content ---------------------------------#
 
-#begin terrain.png
+#begin Blocks/terrain.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -22,9 +22,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:terrain.png
+/build:Blocks/terrain.png
 
-#begin pig.png
+#begin Mobs/pig.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -33,9 +33,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:pig.png
+/build:Mobs/pig.png
 
-#begin raw-porkchop.png
+#begin Items/raw-porkchop.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -44,9 +44,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:raw-porkchop.png
+/build:Items/raw-porkchop.png
 
-#begin water.png
+#begin Blocks/water.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -55,9 +55,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:water.png
+/build:Blocks/water.png
 
-#begin cow.png
+#begin Mobs/cow.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -66,9 +66,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:cow.png
+/build:Mobs/cow.png
 
-#begin sheep.png
+#begin Mobs/sheep.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -77,9 +77,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:sheep.png
+/build:Mobs/sheep.png
 
-#begin chicken.png
+#begin Mobs/chicken.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -88,9 +88,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:chicken.png
+/build:Mobs/chicken.png
 
-#begin leather.png
+#begin Items/leather.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -99,9 +99,9 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:leather.png
+/build:Items/leather.png
 
-#begin feather.png
+#begin Items/feather.png
 /importer:TextureImporter
 /processor:TextureProcessor
 /processorParam:ColorKeyEnabled=False
@@ -110,4 +110,4 @@
 /processorParam:ResizeToPowerOfTwo=False
 /processorParam:MakeSquare=False
 /processorParam:TextureFormat=Color
-/build:feather.png
+/build:Items/feather.png

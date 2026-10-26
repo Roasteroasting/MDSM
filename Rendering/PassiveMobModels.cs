@@ -8,12 +8,17 @@ internal static class PassiveMobModels
 {
     public static void Append(CuboidModelBuilder mesh, PassiveMob mob)
     {
-        if (mob.Species == MobSpecies.Pig) { PigRenderer.Append(mesh, mob); return; }
         Matrix world = Matrix.CreateRotationY(mob.Yaw) * Matrix.CreateTranslation(mob.Position);
         Color tint = mob.HurtSeconds > 0 ? new Color(255, 85, 85) : Color.White;
         float swing = mob.Walking ? MathF.Sin(mob.WalkPhase) * 0.65f : 0;
         switch (mob.Species)
         {
+            case MobSpecies.Pig:
+                mesh.Cuboid(new(-0.32f,0.35f,-0.4f), new(0.32f,0.85f,0.4f), world, 0, tint);
+                mesh.Cuboid(new(-0.27f,0.45f,-0.65f), new(0.27f,0.95f,-0.25f), world, 0, tint, 1);
+                mesh.Cuboid(new(-0.18f,0.50f,-0.78f), new(0.18f,0.70f,-0.65f), world, 0, tint, 2);
+                Legs(4, 0.22f, 0.25f, 0.35f, 0.11f);
+                break;
             case MobSpecies.Cow:
                 mesh.Cuboid(new(-0.42f,0.65f,-0.6f), new(0.42f,1.4f,0.6f), world, 0, tint);
                 mesh.Cuboid(new(-0.3f,1,-0.86f), new(0.3f,1.6f,-0.42f), world, 0, tint, 1);

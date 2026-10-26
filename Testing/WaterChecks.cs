@@ -145,13 +145,13 @@ internal static class WaterChecks
         var fall = new Player(new Vector3(20, 30, 20));
         for (int i = 0; i < 1200; i++) fall.Update(world, Vector3.Zero, false, 1f / 120);
         Require(fall.Health == 20 && fall.Grounded && fall.Position.Y == 1, "Water did not cancel fall damage/resist descent or terrain collision failed.");
-        var pig = new Pig(new PigState(new Vector3(25, 1, 25), 0, 10), 123);
+        var pig = new PassiveMob(new MobState(MobSpecies.Pig, new Vector3(25, 1, 25), 0, 10), 123);
         for (int i = 0; i < 1200; i++) { pig.Update(world, 1f / 120); Require(!world.IntersectsSolid(pig.Bounds) && pig.Position.Y >= 1, "Pig penetrated lake bed."); }
-        Require(pig.Position.Y > 3 && pig.Health == 10 && pig.Position.X >= Pig.HalfWidth, "Pig did not float safely.");
+        Require(pig.Position.Y > 3 && pig.Health == 10 && pig.Position.X >= 0.8f, "Pig did not float safely.");
         var shore = Floor();
         for (int z = 5; z < 50; z++) for (int x = 5; x < 50; x++)
             shore.SetGeneratedBlock(x, 1, z, x >= 20 && x <= 25 && z >= 20 && z <= 25 ? BlockType.WaterSource : BlockType.Grass);
-        var stranded = new Pig(new PigState(new Vector3(22.5f, 1, 22.5f), 0, 10), 123);
+        var stranded = new PassiveMob(new MobState(MobSpecies.Pig, new Vector3(22.5f, 1, 22.5f), 0, 10), 123);
         bool escaped = false;
         for (int i = 0; i < 24000 && !escaped; i++)
         {

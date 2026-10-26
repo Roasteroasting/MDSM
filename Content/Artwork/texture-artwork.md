@@ -1,10 +1,10 @@
 # Milestone 4 texture artwork
 
-The final editable asset is [terrain.png](./terrain.png), a 256 x 256 PNG with 16 x 16 pixel tiles. Tiles 0-3 retain their original pixels. Tiles 4-14 contain the new bark, end grain, leaves, planks, cobblestone, sand, gravel, bedrock, tall grass, red flower, and yellow flower artwork. All other pixels were preserved, including transparent unused slots.
+The final editable asset is [terrain.png](../Blocks/terrain.png), a 256 x 256 PNG with 16 x 16 pixel tiles. Tiles 0-3 retain their original pixels. Tiles 4-14 contain the new bark, end grain, leaves, planks, cobblestone, sand, gravel, bedrock, tall grass, red flower, and yellow flower artwork. All other pixels were preserved, including transparent unused slots.
 
 The new artwork was created once using the built-in `image_gen` tool with `transparent_background: true`, rather than the fallback CLI. The prompt below produced a 1448 x 1086 image arranged in four columns and three rows. During one-time asset preparation, the center of each logical texel was sampled into a 16 x 16 tile and copied into its assigned atlas slot. Material tiles were made opaque; leaf and plant alpha was thresholded at 128 to retain binary transparency. The top three rows of the plant tiles were cleared to remove stray edge artifacts. No preparation script runs during builds or gameplay.
 
-Original tiles and pixels outside slots 4-14 were checked for exact equality after integration. Keep editing the final PNG directly; no generated source sheet or image-generation service is needed to build or run MDSM. See the [README](../README.md#editing-block-textures) for tile assignments and the normal rebuild workflow.
+Original tiles and pixels outside slots 4-14 were checked for exact equality after integration. Keep editing the final PNG directly; no generated source sheet or image-generation service is needed to build or run MDSM. See the [README](../../README.md#editing-block-textures) for tile assignments and the normal rebuild workflow.
 
 ## Final generation prompt
 

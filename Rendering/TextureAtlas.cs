@@ -28,11 +28,11 @@ public sealed class TextureAtlas
 
     public TextureAtlas(ContentManager content)
     {
-        Texture = content.Load<Texture2D>("terrain");
-        Porkchop = content.Load<Texture2D>("raw-porkchop");
-        Water = content.Load<Texture2D>("water");
-        Leather = content.Load<Texture2D>("leather");
-        Feather = content.Load<Texture2D>("feather");
+        Texture = content.Load<Texture2D>("Blocks/terrain");
+        Porkchop = content.Load<Texture2D>("Items/raw-porkchop");
+        Water = content.Load<Texture2D>("Blocks/water");
+        Leather = content.Load<Texture2D>("Items/leather");
+        Feather = content.Load<Texture2D>("Items/feather");
         if (Leather.Width != 16 || Leather.Height != 16 || Feather.Width != 16 || Feather.Height != 16)
             throw new ContentLoadException("Resource icons must be 16x16.");
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");

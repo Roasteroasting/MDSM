@@ -30,28 +30,28 @@ internal static class PigChecks
         foreach (WorldSize size in Enum.GetValues<WorldSize>())
         {
             World world = Flat(size);
-            PigState[] first = PigPopulation.Generate(world), second = PigPopulation.Generate(world);
+            MobState[] first = PassiveMobPopulation.Generate(world, MobSpecies.Pig), second = PassiveMobPopulation.Generate(world, MobSpecies.Pig);
             Require(first.Length == world.Width * world.Depth / 2048 && first.AsSpan().SequenceEqual(second), "Pig count or seeded spawn repeatability failed.");
-            foreach (PigState pig in first)
+            foreach (MobState pig in first)
             {
-                PigPopulation.Validate(pig, size);
-                Require(pig.Health == 10 && !world.IntersectsSolid(Pig.BoundsAt(pig.Position))
+                PassiveMobPopulation.Validate(pig, size);
+                Require(pig.Species == MobSpecies.Pig && pig.Health == 10 && !world.IntersectsSolid(PassiveMob.BoundsAt(MobSpecies.Pig, pig.Position))
                     && world.GetBlock((int)pig.Position.X, (int)pig.Position.Y - 1, (int)pig.Position.Z) == BlockType.Grass
                     && Vector3.DistanceSquared(pig.Position, world.Spawn) >= 144, "Invalid/obstructed/spawn-adjacent pig.");
             }
             Require(world.Revision == 0 && world.Chunks[0].Revision == 0, "Pig generation modified terrain or dirtied chunk meshes.");
-            Require(new PigPopulation(world).Entities.Count == 0, "Loading empty population spawned pigs.");
+            Require(new PassiveMobPopulation(world).Entities.Count == 0, "Loading empty population spawned pigs.");
         }
         var terrain = new World(173, WorldSize.Small);
-        Require(PigPopulation.Generate(terrain).Length == 8, "Generated terrain did not support a modest pig population.");
+        Require(PassiveMobPopulation.Generate(terrain, MobSpecies.Pig).Length == 8, "Generated terrain did not support a modest pig population.");
     }
 
     public static void MovementAndDamage()
     {
         World world = Flat();
-        var pig = new Pig(State(y: 5), 17);
+        var pig = new PassiveMob(State(y: 5).ToMobState(), 17);
         for (int i = 0; i < 600; i++) pig.Update(world, Dt);
-        Require(pig.Health == Pig.MaximumHealth && pig.Grounded && Math.Abs(pig.Position.Y - 1) < 0.0001f, "Pig gravity/landing/health failed.");
+        Require(pig.Health == 10 && pig.Grounded && Math.Abs(pig.Position.Y - 1) < 0.0001f, "Pig gravity/landing/health failed.");
         bool walked = false, idled = false;
         for (int i = 0; i < 3600; i++)
         {
@@ -59,14 +59,14 @@ internal static class PigChecks
             Require(!world.IntersectsSolid(pig.Bounds), "Wandering pig entered solid terrain.");
         }
         Require(walked && idled && pig.WalkPhase > 0, "Idle/wander alternation or walking animation missing.");
-        var damaged = new Pig(State(), 123); var undamaged = new Pig(State(), 123);
+        var damaged = new PassiveMob(State().ToMobState(), 123); var undamaged = new PassiveMob(State().ToMobState(), 123);
         damaged.Damage(2, Vector3.Right);
         Require(damaged.Health == 8 && damaged.HurtSeconds > 0 && damaged.Yaw == undamaged.Yaw, "Damage changed AI facing, health, or flash failed.");
         damaged.Update(world, Dt);
         Require(damaged.Position.X > 10.5f && damaged.Position.Y > 1, "Missing backward/upward knockback.");
         for (int i = 0; i < 100; i++) damaged.Update(world, Dt);
         Require(damaged.HurtSeconds == 0, "Hurt flash never cleared.");
-        var passive = new Pig(State(50, 1, 50), 321); var control = new Pig(State(50, 1, 50), 321);
+        var passive = new PassiveMob(State(50, 1, 50).ToMobState(), 321); var control = new PassiveMob(State(50, 1, 50).ToMobState(), 321);
         passive.Damage(1, Vector3.Right);
         for (int i = 0; i < 1440; i++)
         {
@@ -75,19 +75,19 @@ internal static class PigChecks
         }
         damaged.Damage(int.MaxValue, Vector3.Zero); damaged.Damage(2, Vector3.Zero);
         Require(damaged.Health == 0 && damaged.IsDead, "Pig health escaped 0-10 or dead pig received repeated damage.");
-        var wallPig = new Pig(State(), 123);
+        var wallPig = new PassiveMob(State().ToMobState(), 123);
         for (int z = 8; z <= 12; z++) for (int y = 1; y < 4; y++) world.SetBlock(12, y, z, BlockType.Stone);
         wallPig.Damage(1, Vector3.Right);
         for (int i = 0; i < 120; i++) wallPig.Update(world, Dt);
-        Require(wallPig.Position.X <= 12 - Pig.HalfWidth + 0.0001f && !world.IntersectsSolid(wallPig.Bounds), "Pig tunneled through a wall.");
-        var edge = new Pig(State(world.Width - Pig.HalfWidth), 12); edge.Damage(1, Vector3.Right);
+        Require(wallPig.Position.X <= 12 - 0.8f + 0.0001f && !world.IntersectsSolid(wallPig.Bounds), "Pig tunneled through a wall.");
+        var edge = new PassiveMob(State(world.Width - 0.8f).ToMobState(), 12); edge.Damage(1, Vector3.Right);
         for (int i = 0; i < 500; i++) edge.Update(world, Dt);
-        Require(edge.Position.X <= world.Width - Pig.HalfWidth && edge.Position.X >= Pig.HalfWidth
-            && edge.Position.Z >= Pig.HalfWidth && edge.Position.Z <= world.Depth - Pig.HalfWidth, "Pig left finite world bounds.");
+        Require(edge.Position.X <= world.Width - 0.8f && edge.Position.X >= 0.8f
+            && edge.Position.Z >= 0.8f && edge.Position.Z <= world.Depth - 0.8f, "Pig left finite world bounds.");
         Vector3? reference = null;
         foreach (int fps in new[] { 5, 30, 60, 144, 240, 360, 997 })
         {
-            var clock = new SimulationClock(); var ratePig = new Pig(State(50, 4, 50), 99);
+            var clock = new SimulationClock(); var ratePig = new PassiveMob(State(50, 4, 50).ToMobState(), 99);
             for (int frame = 0; frame < fps * 5; frame++)
                 for (int step = clock.Advance(1.0 / fps); step > 0; step--) ratePig.Update(world, Dt);
             Require(!reference.HasValue || reference == ratePig.Position, "Pig motion depends on rendering FPS.");
@@ -98,7 +98,7 @@ internal static class PigChecks
 
     public static void Combat()
     {
-        World world = Flat(); var pigs = new PigPopulation(world, new[] { State() });
+        World world = Flat(); var pigs = new PassiveMobPopulation(world, new[] { State() }, default);
         var drops = new DroppedItems(world); PassiveMob pig = pigs.Entities[0];
         Vector3 eye = new(10.5f, 1.5f, 15);
         Require(EntityRaycaster.Cast(world, pigs, eye, Vector3.Forward) == pig, "Pig targeting missed within reach.");
@@ -120,13 +120,13 @@ internal static class PigChecks
         while (pigs.Entities.Count > 0) combat.Update(world, pigs, drops, mining, eye, Vector3.Forward, block, true, Dt);
         Require(pig.IsDead && drops.Entities.Count == 1 && drops.Entities[0].Item == Items.RawPorkchop
             && drops.Entities[0].Count is 1 or 2 && !pigs.Punch(pig, eye, drops), "Death/drop was missed or duplicated.");
-        Require(pigs.Capture().Length == 0, "Killed pig remained in saved population.");
+        Require(pigs.CapturePigs().Length == 0, "Killed pig remained in saved population.");
         for (int i = 0; i < 400; i++) combat.Update(world, pigs, drops, mining, eye, Vector3.Forward,
             BlockRaycaster.Cast(world, eye, Vector3.Forward), true, Dt);
         Require(world.GetBlock(10, 1, 8) == BlockType.Air, "Continuous mining did not resume after pig died.");
         foreach (int fps in new[] { 30, 60, 144, 360 })
         {
-            var population = new PigPopulation(world, new[] { State() }); var input = new CombatController();
+            var population = new PassiveMobPopulation(world, new[] { State() }, default); var input = new CombatController();
             var clock = new SimulationClock(); var items = new DroppedItems(world); var mine = new MiningController();
             for (int frame = 0; frame < fps * 10; frame++)
                 for (int step = clock.Advance(1.0 / fps); step > 0; step--)
@@ -219,7 +219,7 @@ internal static class PigChecks
                 SHA256.HashData(bad.AsSpan(0, bad.Length - 32)).CopyTo(bad, bad.Length - 32);
                 Throws<InvalidDataException>(() => Decode(bad));
             }
-            byte[] oversized = (byte[])bytes.Clone(); BitConverter.GetBytes(PigPopulation.MaximumPigs + 1).CopyTo(oversized, pigOffset - 5);
+            byte[] oversized = (byte[])bytes.Clone(); BitConverter.GetBytes(PassiveMobPopulation.MaximumMobs + 1).CopyTo(oversized, pigOffset - 5);
             SHA256.HashData(oversized.AsSpan(0, oversized.Length - 32)).CopyTo(oversized, oversized.Length - 32);
             Throws<InvalidDataException>(() => Decode(oversized));
             Throws<InvalidDataException>(() => Decode(bytes[..^1]));
@@ -229,16 +229,16 @@ internal static class PigChecks
 
     public static void Geometry()
     {
-        World world = Flat(); var pig = new Pig(State(), 17);
-        var mesh = new CuboidModelBuilder(64, 16); PigRenderer.Append(mesh, pig);
+        World world = Flat(); var pig = new PassiveMob(State().ToMobState(), 17);
+        var mesh = new CuboidModelBuilder(64, 16); PassiveMobModels.Append(mesh, pig);
         Require(mesh.Count == 7 * 36, "Pig lost cuboid body/head/snout/four legs.");
         var idle = mesh.Vertices.AsSpan(0, mesh.Count).ToArray();
         foreach (var vertex in idle) Require(vertex.TextureCoordinate.X > 0 && vertex.TextureCoordinate.X < 1
             && vertex.TextureCoordinate.Y > 0 && vertex.TextureCoordinate.Y < 1 && vertex.Color.A == 255, "Pig UV/vertex alpha invalid.");
-        pig.Damage(1, Vector3.Right); mesh.Clear(); PigRenderer.Append(mesh, pig);
+        pig.Damage(1, Vector3.Right); mesh.Clear(); PassiveMobModels.Append(mesh, pig);
         Require(mesh.Vertices.Take(mesh.Count).Any(v => v.Color.R > v.Color.G * 2), "Pig damage does not tint red.");
         for (int i = 0; i < 600 && !pig.Walking; i++) pig.Update(world, Dt);
-        mesh.Clear(); PigRenderer.Append(mesh, pig);
+        mesh.Clear(); PassiveMobModels.Append(mesh, pig);
         Require(pig.Walking && !idle.AsSpan().SequenceEqual(mesh.Vertices.AsSpan(0, mesh.Count)), "Walking model did not animate.");
         var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 1));
         var selection = ViewModelSelection.Select(GameState.Playing, inventory); var geometry = new ViewModelGeometry(); geometry.Build(selection);
