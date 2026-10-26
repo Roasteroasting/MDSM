@@ -44,10 +44,10 @@ internal static class ItemIcons
     }
     public static void Draw(SpriteBatch sprites, TextureAtlas atlas, Texture2D pixel, ItemStack stack, Rectangle bounds)
     {
-        if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)) return;
+        if (stack.IsEmpty || !Items.IsDefined(stack.Item)) return;
         int inset = Math.Max(3, bounds.Width / 6);
-        sprites.Draw(atlas.Texture, new Rectangle(bounds.X + inset, bounds.Y + inset, bounds.Width - inset * 2, bounds.Height - inset * 2),
-            TextureAtlas.Source(Blocks.Tile(block, Vector3.Up)), Color.White);
+        sprites.Draw(atlas.ItemTexture(stack.Item), new Rectangle(bounds.X + inset, bounds.Y + inset, bounds.Width - inset * 2, bounds.Height - inset * 2),
+            atlas.ItemSource(stack.Item), Color.White);
         string count = Counts[stack.Count];
         int scale = bounds.Width >= 42 ? 2 : 1;
         int x = bounds.Right - 3 - count.Length * 6 * scale, y = bounds.Bottom - 3 - 7 * scale;

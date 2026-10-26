@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 
 using MDSM.Gameplay;
+using MDSM.Entities;
 using MDSM.Input;
 using MDSM.Inventories;
 using MDSM.Persistence;
@@ -36,6 +37,7 @@ public class Game1 : Game
     private MenuController _menu;
     private InventoryScreen _inventoryScreen;
     private FirstPersonRenderer _firstPerson;
+    private PigRenderer _pigs;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private bool _previousBack;
@@ -84,6 +86,7 @@ public class Game1 : Game
         _menu = new MenuController(GraphicsDevice, _atlas, _settings);
         _inventoryScreen = new InventoryScreen(GraphicsDevice, _atlas);
         _firstPerson = new FirstPersonRenderer(GraphicsDevice, _atlas);
+        _pigs = new PigRenderer(GraphicsDevice, Content);
         _mouseLook = new MouseLookInput();
         _previousKeyboard = Keyboard.GetState();
         _previousMouse = Mouse.GetState();
@@ -186,10 +189,15 @@ public class Game1 : Game
             camera.Position = player.EyePosition;
             if (player.IsDead) { EnterDeath(); return; }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
-            _session.Mining.Update(world, _session.Items, _selection, held, dt);
+            _session.Pigs.Update(dt);
+            _session.Combat.Update(world, _session.Pigs, _session.Items, _session.Mining,
+                camera.Position, camera.Forward, _selection, held, dt);
             _session.Items.Update(player, _session.Inventory, dt);
         }
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+        if (!_awaitMouseRelease)
+            ItemUse.TryConsume(player, _session.Inventory, mouse.RightButton == ButtonState.Pressed,
+                _previousMouse.RightButton == ButtonState.Pressed);
         if (_selection is BlockHit hit)
         {
             if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
@@ -197,6 +205,7 @@ public class Game1 : Game
                 BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
+        if (EntityRaycaster.Cast(world, _session.Pigs, camera.Position, camera.Forward) != null) _selection = null;
     }
 
     private void HandleMenuAction(MenuAction action)
@@ -219,7 +228,8 @@ public class Game1 : Game
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
                     var world = new World(seed, _menu.SelectedSize);
                     var camera = new Camera();
-                    var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateStarter());
+                    var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateNewWorld(),
+                        Pigs: PigPopulation.Generate(world));
                     BeginWorld(_saves.Create(save), save);
                     break;
                 case MenuAction.LoadWorld:
@@ -473,6 +483,7 @@ public class Game1 : Game
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress);
+            _pigs.Draw(_session.Camera, _session.Pigs);
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
@@ -513,6 +524,7 @@ public class Game1 : Game
         _inventoryScreen?.Dispose();
         _hud?.Dispose();
         _firstPerson?.Dispose();
+        _pigs?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();
     }

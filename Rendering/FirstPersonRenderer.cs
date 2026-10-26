@@ -9,13 +9,14 @@ using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
-internal enum ViewModelKind { Hidden, Cube, Plant }
+internal enum ViewModelKind { Hidden, Cube, Plant, Sprite }
 internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId Item)
 {
     public static ViewModelSelection Select(GameState state, Inventory inventory)
     {
         if (state != GameState.Playing) return new(ViewModelKind.Hidden, default);
         ItemStack stack = inventory.Selected;
+        if (!stack.IsEmpty && stack.Item == Items.RawPorkchop) return new(ViewModelKind.Sprite, stack.Item);
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)) return new(ViewModelKind.Hidden, default);
         return new(Blocks.Get(block).Shape == BlockShape.Cross ? ViewModelKind.Plant : ViewModelKind.Cube, stack.Item);
     }
@@ -39,16 +40,26 @@ internal static class ViewModelLayout
 internal sealed class ViewModelGeometry
 {
     private readonly ChunkMeshBuilder _builder = new();
-    public VertexPositionColorTexture[] Vertices => _builder.Vertices;
-    public int VertexCount => _builder.VertexCount;
+    private readonly VertexPositionColorTexture[] _sprite = new VertexPositionColorTexture[ItemSpriteGeometry.VertexCount];
+    private bool _isSprite;
+    public VertexPositionColorTexture[] Vertices => _isSprite ? _sprite : _builder.Vertices;
+    public int VertexCount => _isSprite ? _sprite.Length : _builder.VertexCount;
     public void Build(ViewModelSelection selection)
     {
         _builder.Clear();
+        _isSprite = selection.Kind == ViewModelKind.Sprite;
         if (selection.Kind == ViewModelKind.Hidden) return;
-        if (!Items.TryGetBlock(selection.Item, out BlockType block)) return;
-        _builder.AppendItem(block, Vector3.Zero);
-        for (int i = 0; i < _builder.VertexCount; i++)
-            _builder.Vertices[i].Position *= new Vector3(3.5f);
+        if (_isSprite)
+        {
+            ItemSpriteGeometry.Fill(_sprite, 0, Vector3.Zero, Vector3.Right, Vector3.Up);
+        }
+        else
+        {
+            if (!Items.TryGetBlock(selection.Item, out BlockType block)) return;
+            _builder.AppendItem(block, Vector3.Zero);
+        }
+        for (int i = 0; i < VertexCount; i++)
+            Vertices[i].Position *= new Vector3(3.5f);
     }
 }
 
@@ -57,6 +68,7 @@ internal sealed class FirstPersonRenderer : IDisposable
 {
     private readonly GraphicsDevice _device;
     private readonly Texture2D _terrain; // ContentManager owns the atlas.
+    private readonly Texture2D _porkchop;
     private readonly AlphaTestEffect _effect;
     private readonly DynamicVertexBuffer _buffer;
     private readonly ViewModelGeometry _geometry = new();
@@ -65,6 +77,7 @@ internal sealed class FirstPersonRenderer : IDisposable
     public FirstPersonRenderer(GraphicsDevice device, TextureAtlas atlas)
     {
         _device = device; _terrain = atlas.Texture;
+        _porkchop = atlas.Porkchop;
         _effect = new AlphaTestEffect(device)
         {
             VertexColorEnabled = true, View = Matrix.Identity,
@@ -96,7 +109,7 @@ internal sealed class FirstPersonRenderer : IDisposable
             // The world is finished. Clear depth while retaining its color, then draw in camera space.
             _device.Clear(ClearOptions.DepthBuffer, Color.Transparent, 1, 0);
             _device.Viewport = new Viewport(bounds);
-            _effect.Texture = _terrain;
+            _effect.Texture = selection.Kind == ViewModelKind.Sprite ? _porkchop : _terrain;
             _effect.Projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(50), bounds.Width / (float)bounds.Height, 0.05f, 10);
             _effect.World = Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(0.25f) * Matrix.CreateRotationZ(-0.1f) * Matrix.CreateTranslation(0, 0, -2.2f);
             _device.SetVertexBuffer(_buffer);

@@ -74,7 +74,13 @@ internal static class PrototypeChecks
             ("Mouse capture/release flushes transition motion without delaying real input", MouseInputChecks.CaptureTransitions),
             ("F1/F3 independence and F2 press edges at high update rates", InterfaceChecks.PresentationKeys),
             ("Screenshot directory, PNG bytes, unique names, and write failures", InterfaceChecks.ScreenshotFiles),
-            ("Accurate Controls/About information and responsive menu layouts", InterfaceChecks.InformationAndLayouts)
+            ("Accurate Controls/About information and responsive menu layouts", InterfaceChecks.InformationAndLayouts),
+            ("Seeded pig populations, suitable terrain, finite sizes, and no regeneration", PigChecks.Spawning),
+            ("Pig gravity/collisions, wandering, health/knockback, and render-rate independence", PigChecks.MovementAndDamage),
+            ("Pig targeting/occlusion, punching cooldown, death drops, and continuous mining", PigChecks.Combat),
+            ("Porkchop accounting, RMB edges/healing, new-world stock, death/respawn, and pickup", PigChecks.Food),
+            ("Pig/food persistence across all sizes, corruption, and legacy world policy", PigChecks.Persistence),
+            ("Cuboid pig models, cutout food geometry, hurt tint, and animation", PigChecks.Geometry)
         };
 
         int failures = 0;

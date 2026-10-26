@@ -15,7 +15,7 @@ public static class BlockRaycaster
 {
     public const float Reach = 6f;
     // Amanatides-Woo grid traversal visits every voxel crossed by the ray.
-    public static BlockHit? Cast(World world, Vector3 origin, Vector3 direction, float reach = Reach)
+    public static BlockHit? Cast(World world, Vector3 origin, Vector3 direction, float reach = Reach, bool solidOnly = false)
     {
         if (direction.LengthSquared() < 0.000001f || reach < 0)
             return null;
@@ -34,7 +34,7 @@ public static class BlockRaycaster
 
         while (distance <= reach)
         {
-            if (Blocks.IsRenderable(world.GetBlock(x, y, z)))
+            if (solidOnly ? world.IsSolid(x, y, z) : Blocks.IsRenderable(world.GetBlock(x, y, z)))
                 return new BlockHit(new Point3(x, y, z), normal, distance);
 
             if (tx <= ty && tx <= tz)

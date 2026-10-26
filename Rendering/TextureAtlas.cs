@@ -2,6 +2,8 @@ using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
+using MDSM.Inventories;
+using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
@@ -14,10 +16,17 @@ public sealed class TextureAtlas
 
     // Owned by the ContentManager supplied to the constructor, not by this wrapper.
     public Texture2D Texture { get; }
+    public Texture2D Porkchop { get; }
+
+    public Texture2D ItemTexture(ItemId item) => item == Items.RawPorkchop ? Porkchop : Texture;
+    public Rectangle ItemSource(ItemId item) => item == Items.RawPorkchop ? Porkchop.Bounds
+        : Items.TryGetBlock(item, out BlockType block) ? Source(Blocks.Tile(block, Vector3.Up)) : Rectangle.Empty;
 
     public TextureAtlas(ContentManager content)
     {
         Texture = content.Load<Texture2D>("terrain");
+        Porkchop = content.Load<Texture2D>("raw-porkchop");
+        if (Porkchop.Width != 16 || Porkchop.Height != 16) throw new ContentLoadException("raw-porkchop.png must be 16x16.");
         if (Texture.Width != AtlasSize || Texture.Height != AtlasSize)
             throw new ContentLoadException($"terrain.png must be {AtlasSize}x{AtlasSize} pixels with {TileSize}x{TileSize} tiles.");
     }

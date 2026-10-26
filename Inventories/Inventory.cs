@@ -57,6 +57,13 @@ public sealed class Inventory
             inventory._slots[slot++] = new ItemStack(Items.FromBlock(block), ItemStack.Maximum);
         return inventory;
     }
+
+    public static Inventory CreateNewWorld()
+    {
+        Inventory inventory = CreateStarter();
+        inventory._slots[Blocks.Selection.Length] = new ItemStack(Items.RawPorkchop, ItemStack.Maximum);
+        return inventory;
+    }
 }
 
 // No graphics or input-device dependency: mouse clicks are atomic stack operations.

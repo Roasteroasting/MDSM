@@ -204,7 +204,7 @@ internal static class SurvivalChecks
             Require(dead.Health == 0 && session.Player.Health == 20 && session.Player.Position == session.World.Spawn
                 && InventoryCount(session.Inventory) == 0 && session.Items.Entities.Count == 1 && !session.HandleDeath(), "Dead load failed automatic respawn or duplicated death drops.");
             // V2 is exactly V3 without the final health integer; construct it independently.
-            byte[] bytes = Encode(save with { DroppedItems = Array.Empty<DroppedItemState>() });
+            byte[] bytes = PigChecks.ToVersion3(Encode(save with { DroppedItems = Array.Empty<DroppedItemState>() }));
             byte[] old = new byte[bytes.Length - 4]; bytes.AsSpan(0, bytes.Length - 36).CopyTo(old);
             BitConverter.GetBytes(2).CopyTo(old, 4); Sign(old);
             WorldSave v2 = Decode(old);
@@ -214,7 +214,7 @@ internal static class SurvivalChecks
             Require(Decode(v1).Health == 20 && Decode(v1).Inventory[0].Count == 64, "V1 migration lost full health or starter stock.");
             foreach (int bad in new[] { -1, 21 })
             {
-                bytes = Encode(save); BitConverter.GetBytes(bad).CopyTo(bytes, bytes.Length - 36); Sign(bytes);
+                bytes = PigChecks.ToVersion3(Encode(save)); BitConverter.GetBytes(bad).CopyTo(bytes, bytes.Length - 36); Sign(bytes);
                 Throws<InvalidDataException>(() => Decode(bytes));
                 Throws<InvalidDataException>(() => Encode(save with { Health = bad }));
             }

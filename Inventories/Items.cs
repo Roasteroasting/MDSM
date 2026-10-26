@@ -10,7 +10,8 @@ public readonly record struct ItemId(ushort Value);
 
 public static class Items
 {
-    public static bool IsDefined(ItemId item) => TryGetBlock(item, out _);
+    public static readonly ItemId RawPorkchop = new(256); // Non-block IDs begin above the byte block range.
+    public static bool IsDefined(ItemId item) => item == RawPorkchop || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
         ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));
     public static bool TryGetBlock(ItemId item, out BlockType block)
@@ -18,7 +19,8 @@ public static class Items
         block = item.Value <= byte.MaxValue ? (BlockType)item.Value : BlockType.Air;
         return item.Value != 0 && Blocks.IsPlaceable(block);
     }
-    public static string Name(ItemId item) => TryGetBlock(item, out BlockType block) ? Blocks.Get(block).Name : "";
+    public static string Name(ItemId item) => item == RawPorkchop ? "RAW PORKCHOP"
+        : TryGetBlock(item, out BlockType block) ? Blocks.Get(block).Name : "";
 }
 
 public readonly record struct ItemStack

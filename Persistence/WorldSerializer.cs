@@ -14,7 +14,7 @@ namespace MDSM.Persistence;
 
 public static class WorldSerializer
 {
-    public const int FormatVersion = 3;
+    public const int FormatVersion = 4;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -22,7 +22,9 @@ public static class WorldSerializer
     private const int InventoryBytes = 8 + Inventory.SlotCount * 3;
     private const int TailPrefixBytes = InventoryBytes + 4;
     private const int DropBytes = 23;
-    internal const int MaximumFileSize = 512 * World.Height * 512 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes + 4;
+    private const int PigBytes = 20;
+    internal const int MaximumFileSize = 512 * World.Height * 512 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes
+        + 8 + PigPopulation.MaximumPigs * PigBytes;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static string ValidateName(string name)
@@ -43,7 +45,9 @@ public static class WorldSerializer
         ValidateHealth(save.Health);
         Inventory inventory = save.Inventory ?? Inventory.CreateStarter();
         DroppedItemState[] drops = save.DroppedItems ?? Array.Empty<DroppedItemState>();
+        PigState[] pigs = save.Pigs ?? Array.Empty<PigState>();
         if (drops.Length > DroppedItems.MaximumEntities) throw new InvalidDataException("Too many dropped items.");
+        if (pigs.Length > PigPopulation.MaximumPigs) throw new InvalidDataException("Too many pigs.");
         using var payload = new MemoryStream(save.World.BlockCount + 512 + drops.Length * DropBytes);
         using (var writer = new BinaryWriter(payload, Utf8, true))
         {
@@ -79,6 +83,13 @@ public static class WorldSerializer
                 writer.Write(drop.VerticalVelocity); writer.Write(drop.PickupDelay);
             }
             writer.Write(save.Health);
+            writer.Write(pigs.Length);
+            foreach (PigState pig in pigs)
+            {
+                PigPopulation.Validate(pig, save.World.Size);
+                writer.Write(pig.Position.X); writer.Write(pig.Position.Y); writer.Write(pig.Position.Z);
+                writer.Write(pig.Yaw); writer.Write(pig.Health);
+            }
         }
         ReadOnlySpan<byte> bytes = payload.GetBuffer().AsSpan(0, (int)payload.Length);
         destination.Write(bytes);
@@ -119,6 +130,24 @@ public static class WorldSerializer
                 prefixTail.CopyTo(tail, 0);
                 source.ReadExactly(tail.AsSpan(prefixTail.Length));
                 hash.AppendData(tail);
+            }
+            PigState[] pigs = Array.Empty<PigState>();
+            if (metadata.Version >= 4)
+            {
+                byte[] countBytes = new byte[4];
+                source.ReadExactly(countBytes); hash.AppendData(countBytes);
+                int pigCount = BinaryPrimitives.ReadInt32LittleEndian(countBytes);
+                if (pigCount < 0 || pigCount > PigPopulation.MaximumPigs) throw new InvalidDataException("Invalid pig count.");
+                byte[] pigBytes = new byte[pigCount * PigBytes];
+                source.ReadExactly(pigBytes); hash.AppendData(pigBytes);
+                pigs = new PigState[pigCount];
+                using var pigReader = new BinaryReader(new MemoryStream(pigBytes, false));
+                for (int i = 0; i < pigs.Length; i++)
+                {
+                    pigs[i] = new PigState(new Vector3(pigReader.ReadSingle(), pigReader.ReadSingle(), pigReader.ReadSingle()),
+                        pigReader.ReadSingle(), pigReader.ReadInt32());
+                    PigPopulation.Validate(pigs[i], metadata.Size);
+                }
             }
             byte[] checksum = new byte[ChecksumSize];
             source.ReadExactly(checksum);
@@ -170,7 +199,7 @@ public static class WorldSerializer
                 }
                 if (metadata.Version >= 3) { health = extras.ReadInt32(); ValidateHealth(health); }
             }
-            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health);
+            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs);
         }
         catch (EndOfStreamException exception)
         {
@@ -187,7 +216,14 @@ public static class WorldSerializer
         {
             long extra = source.Length - source.Position - metadata.Size.BlockCount() - ChecksumSize;
             if (metadata.Version >= 3) extra -= 4;
-            if (metadata.Version == 1 ? extra != 0 : extra < TailPrefixBytes
+            if (metadata.Version >= 4)
+            {
+                // Only the header is read for listings; validate variable tails fully on load.
+                if (extra < TailPrefixBytes + 4 || extra > TailPrefixBytes + (long)DroppedItems.MaximumEntities * DropBytes
+                    + 4 + (long)PigPopulation.MaximumPigs * PigBytes)
+                    throw new InvalidDataException("Save file has an invalid data length.");
+            }
+            else if (metadata.Version == 1 ? extra != 0 : extra < TailPrefixBytes
                 || (extra - TailPrefixBytes) % DropBytes != 0 || extra > TailPrefixBytes + (long)DroppedItems.MaximumEntities * DropBytes)
                 throw new InvalidDataException("Save file has an invalid data length.");
         }

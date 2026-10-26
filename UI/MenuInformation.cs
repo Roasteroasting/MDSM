@@ -13,8 +13,8 @@ internal static class MenuInformation
     {
         "W / A / S / D - Move",
         "Mouse movement - Look around",
-        "Left mouse (hold) - Mine / break blocks",
-        "Right mouse - Place selected block",
+        "Left mouse (hold) - Mine / break blocks or punch pigs",
+        "Right mouse - Place selected block / eat raw porkchop",
         "Space - Jump",
         "Left Shift (hold) - Crouch",
         "E - Open / close inventory",
