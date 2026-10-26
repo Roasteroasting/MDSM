@@ -4,7 +4,7 @@ if (System.Array.Exists(args, argument => argument == "--self-test"))
 }
 else if (System.Array.Exists(args, argument => argument == "--graphics-test"))
 {
-    System.Environment.ExitCode = System.Math.Max(MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.PigGraphicsChecks.Run());
+    System.Environment.ExitCode = System.Math.Max(System.Math.Max(MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.PigGraphicsChecks.Run()), MDSM.Testing.WaterGraphicsChecks.Run());
 }
 else
 {

@@ -23,6 +23,7 @@ public sealed class Pig
     private readonly Random _random;
     private Vector3 _velocity;
     private float _decisionSeconds;
+    private float _shoreHopSeconds;
     private bool _wandering;
 
     internal Pig(PigState state, int aiSeed)
@@ -53,6 +54,7 @@ public sealed class Pig
         if (IsDead || !float.IsFinite(elapsed) || elapsed <= 0) return;
         float dt = Math.Min(elapsed, 0.1f);
         HurtSeconds = Math.Max(0, HurtSeconds - dt);
+        _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
         if ((_decisionSeconds -= dt) <= 0)
         {
             _wandering = !_wandering;
@@ -61,7 +63,15 @@ public sealed class Pig
         }
         Vector3 before = Position;
         Vector3 walking = _wandering ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) * 0.8f : Vector3.Zero;
-        _velocity.Y = Math.Max(-40, _velocity.Y - 18 * dt);
+        bool swimming = Water.Intersects(world, Bounds);
+        if (swimming)
+        {
+            walking *= 0.45f;
+            bool submerged = Water.Intersects(world, new BoundingBox(Position + new Vector3(-0.1f, 0.55f, -0.1f),
+                Position + new Vector3(0.1f, 0.65f, 0.1f)));
+            _velocity.Y = submerged ? Math.Max(1.5f, _velocity.Y - 4 * dt) : Math.Max(-2, _velocity.Y * MathF.Exp(-3 * dt) - 4 * dt);
+        }
+        else _velocity.Y = Math.Max(-40, _velocity.Y - 18 * dt);
         Vector3 displacement = (walking + _velocity) * dt;
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.15f));
         Vector3 step = displacement / steps;
@@ -77,7 +87,12 @@ public sealed class Pig
                 step.Y = 0; _velocity.Y = 0;
             }
         }
-        if (blocked && _wandering) { _wandering = false; _decisionSeconds = 0.5f; }
+        if (blocked && _wandering)
+        {
+            // A small swimming hop lets wandering pigs leave a one-block shore instead of getting trapped.
+            if (swimming) { _velocity.Y = Math.Max(_velocity.Y, 4.5f); _shoreHopSeconds = 0.7f; }
+            else if (_shoreHopSeconds == 0) { _wandering = false; _decisionSeconds = 0.5f; }
+        }
         float decay = MathF.Exp(-8 * dt);
         _velocity.X *= decay; _velocity.Z *= decay;
         if (Position.Y < -16) { Position = new Vector3(Position.X, -16, Position.Z); _velocity.Y = 0; }

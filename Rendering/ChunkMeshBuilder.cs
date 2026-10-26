@@ -59,7 +59,7 @@ internal sealed class ChunkMeshBuilder
         {
             BlockType block = chunk.GetBlock(x, y, z);
             BlockDefinition definition = Blocks.Get(block);
-            if (!definition.Renderable)
+            if (!definition.Renderable || definition.Shape == BlockShape.Fluid)
                 continue;
 
             int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;

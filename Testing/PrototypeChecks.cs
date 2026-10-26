@@ -80,7 +80,16 @@ internal static class PrototypeChecks
             ("Pig targeting/occlusion, punching cooldown, death drops, and continuous mining", PigChecks.Combat),
             ("Porkchop accounting, RMB edges/healing, new-world stock, death/respawn, and pickup", PigChecks.Food),
             ("Pig/food persistence across all sizes, corruption, and legacy world policy", PigChecks.Persistence),
-            ("Cuboid pig models, cutout food geometry, hurt tint, and animation", PigChecks.Geometry)
+            ("Cuboid pig models, cutout food geometry, hurt tint, and animation", PigChecks.Geometry),
+            ("Water byte states, non-solid/non-item rules, targeting and displacement", WaterChecks.StatesAndPlacement),
+            ("Downward priority, finite horizontal reach, and obstacle/corner flow", WaterChecks.Propagation),
+            ("Source regeneration, removal, remaining supply, and complete flow recession", WaterChecks.RecessionAndRegeneration),
+            ("Fluid boundaries, chunk invalidation, clocks, and bounded scheduling", WaterChecks.BoundariesAndScheduling),
+            ("Water surface levels, shared corners, transparent faces, and terrain culling", WaterChecks.Geometry),
+            ("Player swimming/fall resistance and passive pig water collisions", WaterChecks.Swimming),
+            ("Deterministic all-size lakes, restrained basins, beaches, spawn and stability", WaterChecks.Lakes),
+            ("Extreme seeds, sealed lakes, digging shore/bottom, and solid displacement", WaterChecks.LakeEditsAndSeeds),
+            ("All-size active water round trips, resumed flow, and unchanged v4 compatibility", WaterChecks.Persistence)
         };
 
         int failures = 0;

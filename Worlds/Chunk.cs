@@ -13,6 +13,8 @@ public sealed class Chunk
     public int OriginX => X * Size;
     public int OriginZ => Z * Size;
     public int Revision { get; private set; }
+    public int WaterRevision { get; private set; }
+    public int WaterCount { get; private set; }
     public BoundingBox Bounds { get; }
     internal System.ReadOnlySpan<byte> Blocks => _blocks;
 
@@ -26,7 +28,14 @@ public sealed class Chunk
 
     // Callers validate coordinates. X is contiguous, then Z, then Y.
     internal BlockType GetBlock(int x, int y, int z) => (BlockType)_blocks[(y * Size + z) * Size + x];
-    internal void SetBlock(int x, int y, int z, BlockType block) => _blocks[(y * Size + z) * Size + x] = (byte)block;
+    internal void SetBlock(int x, int y, int z, BlockType block)
+    {
+        int index = (y * Size + z) * Size + x;
+        if (Water.IsWater((BlockType)_blocks[index])) WaterCount--;
+        _blocks[index] = (byte)block;
+        if (Water.IsWater(block)) WaterCount++;
+    }
+    internal void MarkWaterDirty() => WaterRevision++;
     internal void MarkDirty() => Revision++;
 
     internal void RestoreBlocks(System.ReadOnlySpan<byte> blocks)
@@ -34,6 +43,9 @@ public sealed class Chunk
         if (blocks.Length != BlockCount)
             throw new System.ArgumentException("Incorrect chunk data length.", nameof(blocks));
         blocks.CopyTo(_blocks);
+        WaterCount = 0;
+        foreach (byte block in blocks) if (Water.IsWater((BlockType)block)) WaterCount++;
+        MarkWaterDirty();
         MarkDirty();
     }
 }

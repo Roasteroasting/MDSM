@@ -165,6 +165,7 @@ public static class WorldSerializer
                 chunk.RestoreBlocks(blocks);
                 offset += Chunk.BlockCount;
             }
+            world.Fluids.Initialize();
             Inventory inventory;
             DroppedItemState[] drops;
             int health = Player.MaximumHealth;

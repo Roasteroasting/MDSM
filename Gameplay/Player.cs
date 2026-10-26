@@ -50,7 +50,7 @@ public sealed class Player
     }
     public void StopCrouching() => Crouching = false;
 
-    public void Update(World world, Vector3 movement, bool jump, float elapsedSeconds, bool crouch = false)
+    public void Update(World world, Vector3 movement, bool jump, float elapsedSeconds, bool crouch = false, bool swimUp = false)
     {
         if (IsDead || !float.IsFinite(elapsedSeconds) || elapsedSeconds <= 0)
             return;
@@ -61,14 +61,19 @@ public sealed class Player
         if (movement.LengthSquared() > 1)
             movement.Normalize();
 
-        bool jumping = jump && Grounded;
+        bool swimming = Water.Intersects(world, Bounds);
+        bool jumping = jump && Grounded && !swimming;
         bool protectEdge = Crouching && Grounded && !jumping && HasSupport(world, Position);
         if (jumping)
             _verticalSpeed = JumpSpeed;
 
-        _fall.Observe(Position.Y);
-        _verticalSpeed = MathF.Max(_verticalSpeed - Gravity * dt, -40f);
-        Vector3 displacement = movement * MoveSpeed * (Crouching ? 0.35f : 1) * dt + new Vector3(0, _verticalSpeed * dt, 0);
+        if (swimming)
+        {
+            _fall.Reset(Position.Y);
+            _verticalSpeed = swimUp || jump ? 2.8f : MathF.Max(-2, _verticalSpeed * MathF.Exp(-3 * dt) - 4 * dt);
+        }
+        else { _fall.Observe(Position.Y); _verticalSpeed = MathF.Max(_verticalSpeed - Gravity * dt, -40f); }
+        Vector3 displacement = movement * MoveSpeed * (swimming ? 0.45f : 1) * (Crouching ? 0.35f : 1) * dt + new Vector3(0, _verticalSpeed * dt, 0);
         // Each step is narrower than a block, so fast falls cannot tunnel through terrain.
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.2f));
         Vector3 step = displacement / steps;
@@ -87,7 +92,8 @@ public sealed class Player
             _fall.Observe(Position.Y);
         }
 
-        if (Grounded) ApplyDamage(_fall.Land(Position.Y));
+        if (swimming || Water.Intersects(world, Bounds)) _fall.Reset(Position.Y);
+        else if (Grounded) ApplyDamage(_fall.Land(Position.Y));
 
         if (!IsDead && Position.Y < -16)
             MoveToSpawn(world); // Existing void recovery grants no healing or new damage type.

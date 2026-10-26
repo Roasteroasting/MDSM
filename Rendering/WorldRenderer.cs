@@ -16,6 +16,7 @@ public sealed class WorldRenderer : IDisposable
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
     private readonly DroppedItemRenderer _items;
+    private readonly WaterRenderer _water;
     private readonly ChunkMesh[] _meshes;
     private readonly ChunkMesh[] _visible;
     private readonly ChunkMeshBuilder _builder = new();
@@ -31,6 +32,7 @@ public sealed class WorldRenderer : IDisposable
         _device = device;
         _world = world;
         _items = new DroppedItemRenderer(device, atlas);
+        _water = new WaterRenderer(device, atlas, world);
         _meshes = new ChunkMesh[world.ChunkCount];
         _visible = new ChunkMesh[world.ChunkCount];
         for (int i = 0; i < _meshes.Length; i++)
@@ -89,6 +91,8 @@ public sealed class WorldRenderer : IDisposable
             DrawSelection(hit, camera, miningProgress);
     }
 
+    public void DrawWater(Camera camera) => _water.Draw(camera);
+
     private void DrawSelection(BlockHit hit, Camera camera, float miningProgress)
     {
         BoundingBox box = World.Bounds(hit.Cell);
@@ -114,5 +118,6 @@ public sealed class WorldRenderer : IDisposable
         _terrainEffect.Dispose();
         _selectionEffect.Dispose();
         _items.Dispose();
+        _water.Dispose();
     }
 }

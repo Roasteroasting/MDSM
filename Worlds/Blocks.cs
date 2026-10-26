@@ -19,10 +19,13 @@ public enum BlockType : byte
     Bedrock = 10,
     TallGrass = 11,
     RedFlower = 12,
-    YellowFlower = 13
+    YellowFlower = 13,
+    WaterSource = 14,
+    WaterFlow1 = 15, WaterFlow2 = 16, WaterFlow3 = 17, WaterFlow4 = 18,
+    WaterFlow5 = 19, WaterFlow6 = 20, WaterFlow7 = 21, WaterFalling = 22
 }
 
-public enum BlockShape { None, Cube, Cross }
+public enum BlockShape { None, Cube, Cross, Fluid }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2)
@@ -50,7 +53,16 @@ public static class Blocks
         new("BEDROCK", true, true, BlockShape.Cube, 11, MiningSeconds: -1),
         new("TALL GRASS", false, false, BlockShape.Cross, 12, MiningSeconds: 0),
         new("RED FLOWER", false, false, BlockShape.Cross, 13, MiningSeconds: 0),
-        new("YELLOW FLOWER", false, false, BlockShape.Cross, 14, MiningSeconds: 0)
+        new("YELLOW FLOWER", false, false, BlockShape.Cross, 14, MiningSeconds: 0),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
+        new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1)
     };
     private static readonly BlockType[] Palette =
     {

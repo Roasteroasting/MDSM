@@ -15,7 +15,7 @@ internal static class MenuInformation
         "Mouse movement - Look around",
         "Left mouse (hold) - Mine / break blocks or punch pigs",
         "Right mouse - Place selected block / eat raw porkchop",
-        "Space - Jump",
+        "Space - Jump / hold to swim upward in water",
         "Left Shift (hold) - Crouch",
         "E - Open / close inventory",
         "1-9 or numpad 1-9 - Select hotbar slot",

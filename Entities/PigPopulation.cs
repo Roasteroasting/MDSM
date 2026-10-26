@@ -40,7 +40,7 @@ public sealed class PigPopulation
             Vector3 feet = new(x + 0.5f, y + 1, z + 0.5f);
             if (world.GetBlock(x, y, z) != BlockType.Grass || y + 1 + Pig.Height > World.Height
                 || Vector2.DistanceSquared(new Vector2(feet.X, feet.Z), new Vector2(spawn.X, spawn.Z)) < 144
-                || world.IntersectsSolid(Pig.BoundsAt(feet))) continue;
+                || world.IntersectsSolid(Pig.BoundsAt(feet)) || Water.Intersects(world, Pig.BoundsAt(feet))) continue;
             bool suitable = true;
             for (int dz = -1; dz <= 1; dz++)
             for (int dx = -1; dx <= 1; dx++)

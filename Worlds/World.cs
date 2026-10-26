@@ -19,6 +19,7 @@ public sealed class World
     public ReadOnlySpan<Chunk> Chunks => _chunks;
     public int Seed { get; }
     public int Revision { get; private set; }
+    public FluidSimulation Fluids { get; }
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
     public World(int seed = DefaultSeed, WorldSize size = WorldSize.Normal) : this(seed, size, true) { }
@@ -29,6 +30,7 @@ public sealed class World
     internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        Fluids = new FluidSimulation(this);
         _ = size.Width(); // Validate before allocating storage.
         Size = size;
         _chunks = new Chunk[ChunkCount];
@@ -41,6 +43,17 @@ public sealed class World
             new TerrainGenerator(seed).Generate(this);
             new WorldDecorator(seed).Decorate(this);
         }
+    }
+
+    // Explicit new-world pipeline. Base-terrain fixtures and deserialization never add lakes.
+    public static World CreateNew(int seed, WorldSize size = WorldSize.Normal)
+    {
+        var world = new World(seed, size, false);
+        new TerrainGenerator(seed).Generate(world);
+        new LakeGenerator(seed).Generate(world);
+        new WorldDecorator(seed).Decorate(world);
+        world.Fluids.Initialize();
+        return world;
     }
 
     public Chunk GetChunk(int x, int z)
@@ -78,14 +91,26 @@ public sealed class World
         int chunkX = x / Chunk.Size, chunkZ = z / Chunk.Size;
         int localX = x % Chunk.Size, localZ = z % Chunk.Size;
         Chunk chunk = GetChunk(chunkX, chunkZ);
+        BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
-        chunk.MarkDirty();
-        // Only face-sharing neighbors can gain or lose an exposed face.
-        if (localX == 0) MarkDirty(chunkX - 1, chunkZ);
-        if (localX == Chunk.Size - 1) MarkDirty(chunkX + 1, chunkZ);
-        if (localZ == 0) MarkDirty(chunkX, chunkZ - 1);
-        if (localZ == Chunk.Size - 1) MarkDirty(chunkX, chunkZ + 1);
+        // Air/fluid both expose terrain faces; changing a flow level only invalidates water.
+        bool terrainChanged = !(previous == BlockType.Air || Water.IsWater(previous))
+            || !(block == BlockType.Air || Water.IsWater(block));
+        if (terrainChanged)
+        {
+            chunk.MarkDirty();
+            // Only face-sharing neighbors can gain or lose an exposed face.
+            if (localX == 0) MarkDirty(chunkX - 1, chunkZ);
+            if (localX == Chunk.Size - 1) MarkDirty(chunkX + 1, chunkZ);
+            if (localZ == 0) MarkDirty(chunkX, chunkZ - 1);
+            if (localZ == Chunk.Size - 1) MarkDirty(chunkX, chunkZ + 1);
+        }
+        // Shared water corners also depend on diagonally adjacent chunks.
+        for (int cz = chunkZ - (localZ == 0 ? 1 : 0); cz <= chunkZ + (localZ == Chunk.Size - 1 ? 1 : 0); cz++)
+        for (int cx = chunkX - (localX == 0 ? 1 : 0); cx <= chunkX + (localX == Chunk.Size - 1 ? 1 : 0); cx++)
+            if ((uint)cx < ChunksX && (uint)cz < ChunksZ) GetChunk(cx, cz).MarkWaterDirty();
         Revision++;
+        Fluids.Changed(new Point3(x, y, z), previous, block);
         if (!Blocks.SupportsPlant(block) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
             SetBlock(x, y + 1, z, BlockType.Air);
         return true;
@@ -108,7 +133,8 @@ public sealed class World
     {
         BlockDefinition definition = Blocks.Get(block);
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
-            || GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
+            || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
+                && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
             || (definition.Solid && Overlaps(Bounds(cell), playerBounds))
             || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z))))
             return false;

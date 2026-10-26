@@ -184,11 +184,12 @@ public class Game1 : Game
         for (int i = 0; i < steps; i++)
         {
             const float dt = (float)SimulationClock.StepSeconds;
-            player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift));
+            player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space));
             _pendingJump = false;
             camera.Position = player.EyePosition;
             if (player.IsDead) { EnterDeath(); return; }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+            world.Fluids.Update(dt);
             _session.Pigs.Update(dt);
             _session.Combat.Update(world, _session.Pigs, _session.Items, _session.Mining,
                 camera.Position, camera.Forward, _selection, held, dt);
@@ -226,7 +227,7 @@ public class Game1 : Game
                     if (string.IsNullOrWhiteSpace(_menu.SeedText)) seed = Random.Shared.Next();
                     else if (!int.TryParse(_menu.SeedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out seed))
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
-                    var world = new World(seed, _menu.SelectedSize);
+                    var world = World.CreateNew(seed, _menu.SelectedSize);
                     var camera = new Camera();
                     var save = new WorldSave(world, name, world.Spawn, camera.Yaw, camera.Pitch, Inventory.CreateNewWorld(),
                         Pigs: PigPopulation.Generate(world));
@@ -484,6 +485,7 @@ public class Game1 : Game
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress);
             _pigs.Draw(_session.Camera, _session.Pigs);
+            _renderer.DrawWater(_session.Camera);
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
