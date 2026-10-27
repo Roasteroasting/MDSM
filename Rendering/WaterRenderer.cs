@@ -16,7 +16,8 @@ internal sealed class WaterRenderer : IDisposable
     private readonly List<WaterFace>[] _chunks;
     private readonly int[] _revisions;
     private readonly BoundingFrustum _frustum = new(Matrix.Identity);
-    private readonly FaceOrder _order = new();
+    private List<int> _visible = new(), _nextVisible = new();
+    private WaterSortKey[] _order = new WaterSortKey[1024];
     private WaterFace[] _faces = new WaterFace[1024];
     private VertexPositionColorTexture[] _vertices = new VertexPositionColorTexture[6144];
     private DynamicVertexBuffer _buffer;
@@ -73,28 +74,52 @@ internal sealed class WaterRenderer : IDisposable
             || camera.Position != _lastPosition || viewProjection != _lastViewProjection;
         if (changed)
         {
-            _frustum.Matrix = viewProjection; _count = 0;
+            bool faceSetChanged = !_initialized || _geometryChanged || _regionVersion != _region.Version;
+            bool upload = faceSetChanged || camera.Position != _lastPosition;
+            _frustum.Matrix = viewProjection; _nextVisible.Clear();
             foreach (int i in _region.Indices)
             {
-                if (_chunks[i] == null || !_frustum.Intersects(_world.Chunks[i].Bounds)) continue;
-                foreach (WaterFace face in _chunks[i])
-                {
-                    if (_count == _faces.Length) Array.Resize(ref _faces, _faces.Length * 2);
-                    _faces[_count++] = face;
-                }
+                if (_chunks[i] == null || _chunks[i].Count == 0 || !_frustum.Intersects(_world.Chunks[i].Bounds)) continue;
+                int index = _nextVisible.Count;
+                if (index >= _visible.Count || _visible[index] != i) faceSetChanged = upload = true;
+                _nextVisible.Add(i);
             }
-            // Sort all visible faces, not just chunks, to handle overlapping lakes/waterfalls.
-            _order.Position = camera.Position; Array.Sort(_faces, 0, _count, _order);
-            if (_vertices.Length < _count * 6) Array.Resize(ref _vertices, Math.Max(_vertices.Length * 2, _count * 6));
-            for (int i = 0; i < _count; i++) _faces[i].CopyTo(_vertices, i * 6);
-            if (_count > 0)
+            if (_nextVisible.Count != _visible.Count) faceSetChanged = upload = true;
+            // Rotation does not change distance ordering. Reuse the GPU batch while the
+            // visible chunk set, camera position and geometry are unchanged.
+            if (upload)
             {
-                if (_buffer == null || _buffer.VertexCount < _count * 6)
+                if (faceSetChanged)
                 {
-                    _buffer?.Dispose(); _buffer = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), _vertices.Length, BufferUsage.WriteOnly);
+                    _count = 0;
+                    foreach (int index in _nextVisible) foreach (WaterFace face in _chunks[index])
+                    {
+                        if (_count == _faces.Length) Array.Resize(ref _faces, _faces.Length * 2);
+                        _faces[_count++] = face;
+                    }
                 }
-                _buffer.SetData(_vertices, 0, _count * 6, SetDataOptions.Discard);
+                // Sort compact keys, computing each distance once rather than comparing and
+                // repeatedly copying 52-byte faces/averaging four corners during every comparison.
+                if (_order.Length < _count) Array.Resize(ref _order, _faces.Length);
+                for (int i = 0; i < _count; i++)
+                {
+                    int index = faceSetChanged ? i : _order[i].Index;
+                    _order[i] = new WaterSortKey(index, Vector3.DistanceSquared(_faces[index].Center, camera.Position));
+                }
+                if (faceSetChanged) Array.Sort(_order, 0, _count);
+                else UpdateOrder(_order, _count);
+                if (_vertices.Length < _count * 6) Array.Resize(ref _vertices, Math.Max(_vertices.Length * 2, _count * 6));
+                for (int i = 0; i < _count; i++) _faces[_order[i].Index].CopyTo(_vertices, i * 6);
+                if (_count > 0)
+                {
+                    if (_buffer == null || _buffer.VertexCount < _count * 6)
+                    {
+                        _buffer?.Dispose(); _buffer = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), _vertices.Length, BufferUsage.WriteOnly);
+                    }
+                    _buffer.SetData(_vertices, 0, _count * 6, SetDataOptions.Discard);
+                }
             }
+            (_visible, _nextVisible) = (_nextVisible, _visible);
             _initialized = true; _geometryChanged = false; _regionVersion = _region.Version;
             _lastPosition = camera.Position; _lastViewProjection = viewProjection;
         }
@@ -119,15 +144,38 @@ internal sealed class WaterRenderer : IDisposable
             _device.Textures[0] = null; _device.Textures[0] = texture; // Invalidate DesktopGL's cached binding, including after readback.
         }
     }
-    private sealed class FaceOrder : IComparer<WaterFace>
+    internal readonly record struct WaterSortKey(int Index, float Distance) : IComparable<WaterSortKey>
     {
-        public Vector3 Position;
-        public int Compare(WaterFace a, WaterFace b) => Vector3.DistanceSquared(b.Center, Position).CompareTo(Vector3.DistanceSquared(a.Center, Position));
+        public int CompareTo(WaterSortKey other)
+        {
+            int order = other.Distance.CompareTo(Distance);
+            return order != 0 ? order : Index.CompareTo(other.Index);
+        }
+    }
+    // Walking changes an already sorted order slightly. Repair it with bounded work;
+    // fall back to the normal sort after large motion, never quadratic insertion sorting.
+    internal static void UpdateOrder(WaterSortKey[] order, int count)
+    {
+        int moves = 0, limit = count * 4;
+        for (int i = 1; i < count; i++)
+        {
+            WaterSortKey value = order[i]; int j = i - 1;
+            while (j >= 0 && value.CompareTo(order[j]) < 0)
+            {
+                order[j + 1] = order[j]; j--;
+                if (++moves > limit)
+                {
+                    order[j + 1] = value; Array.Sort(order, 0, count); return;
+                }
+            }
+            order[j + 1] = value;
+        }
     }
     public void Dispose()
     {
         _buffer?.Dispose(); _buffer = null; _effect.Dispose(); Array.Clear(_chunks);
         _faces = Array.Empty<WaterFace>(); _vertices = Array.Empty<VertexPositionColorTexture>();
+        _order = Array.Empty<WaterSortKey>(); _visible.Clear(); _nextVisible.Clear();
         _count = CachedChunks = CachedFaces = 0;
     }
 }

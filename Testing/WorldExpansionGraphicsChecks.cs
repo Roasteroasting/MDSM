@@ -28,11 +28,21 @@ internal static class WorldExpansionGraphicsChecks
         private Task<World> _generation;
         private WorldSize _size = WorldSize.Large;
         private TextureAtlas _atlas;
+        private World _lakeWorld;
+        private WorldRenderer _lakeRenderer;
+        private RenderTarget2D _lakeTarget;
+        private Camera _lakeCamera;
+        private readonly System.Diagnostics.Stopwatch _lakeTime = new();
+        private int _lakeFrames;
+        private int _lakePhase;
+        private Vector3 _lakeOrigin;
+        private double _lakeCpu;
         public bool Verified { get; private set; }
         public CheckGame()
         {
             _ = new GraphicsDeviceManager(this) { PreferredBackBufferWidth = 640, PreferredBackBufferHeight = 480,
                 PreferredDepthStencilFormat = DepthFormat.Depth24, SynchronizeWithVerticalRetrace = false };
+            IsFixedTimeStep = false;
             Content.RootDirectory = System.IO.Path.Combine(AppContext.BaseDirectory,"Content");
             Window.Title = "MDSM expanded world GPU verification";
         }
@@ -48,11 +58,48 @@ internal static class WorldExpansionGraphicsChecks
         protected override void Draw(GameTime time)
         {
             GraphicsDevice.Clear(WorldRenderer.SkyColor);
+            if (_lakeWorld != null) { DrawLake(); return; }
             if (!_generation.IsCompleted) return;
             World world = _generation.GetAwaiter().GetResult();
             VerifyTerrainAndWater(world); _generation = null;
-            if (_size == WorldSize.Massive) { Verified = true; Exit(); }
-            else { _size = WorldSize.Massive; StartGeneration(); }
+            BeginLake(world);
+        }
+        private void BeginLake(World world)
+        {
+            _lakeWorld=world;NaturalLake lake=world.GeneratedLakes.OrderByDescending(l=>l.Area).First();
+            _lakeCamera=new Camera{Position=new Vector3(lake.Bounds.Center.X,lake.WaterY+6,lake.Bounds.Bottom-3)};
+            _lakeCamera.RestoreOrientation(0,-.15f);_lakeRenderer=new WorldRenderer(GraphicsDevice,_atlas,world);
+            _lakeOrigin=_lakeCamera.Position;_lakePhase=0;
+            _lakeTarget=new RenderTarget2D(GraphicsDevice,1920,1080,false,SurfaceFormat.Color,DepthFormat.Depth24);
+            _lakeFrames=0;_lakeCpu=0;_lakeTime.Reset();
+        }
+        private void DrawLake()
+        {
+            GraphicsDevice.SetRenderTarget(_lakeTarget);GraphicsDevice.Clear(WorldRenderer.SkyColor);
+            if (!_lakeTime.IsRunning)
+            {
+                if(!_lakeRenderer.PrepareInitialMeshes(_lakeCamera)){GraphicsDevice.SetRenderTarget(null);return;}
+                _lakeTime.Restart();
+            }
+            _lakeCamera.RestoreOrientation(MathF.Sin((float)_lakeTime.Elapsed.TotalSeconds*1.3f)*.3f,-.15f);
+            if(_lakePhase==1)_lakeCamera.Position=_lakeOrigin+new Vector3(MathF.Sin((float)_lakeTime.Elapsed.TotalSeconds)*2,0,MathF.Cos((float)_lakeTime.Elapsed.TotalSeconds*.7f));
+            long start=System.Diagnostics.Stopwatch.GetTimestamp();
+            _lakeRenderer.Draw(_lakeCamera,null);_lakeRenderer.DrawWater(_lakeCamera);
+            _lakeCpu+=System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;_lakeFrames++;
+            GraphicsDevice.SetRenderTarget(null);
+            if(_lakeTime.Elapsed.TotalSeconds<5)return;
+            double benchmarkSeconds=_lakeTime.Elapsed.TotalSeconds;
+            Console.WriteLine($"LAKE GPU {_size} {(_lakePhase==0?"rotating":"rotating+translating")}: {_lakeFrames/benchmarkSeconds:F1} offscreen FPS, CPU draw {_lakeCpu/_lakeFrames:F2} ms, resident {_lakeRenderer.ResidentChunks}, terrain {_lakeRenderer.BufferBytes/1048576.0:F1} MiB, water {_lakeRenderer.Water.BufferBytes/1048576.0:F2} MiB, faces {_lakeRenderer.Water.CachedFaces}.");
+            if(_lakePhase==0){_lakePhase=1;_lakeFrames=0;_lakeCpu=0;_lakeTime.Restart();return;}
+            var pixels=new Color[1920*1080];_lakeTarget.GetData(pixels);
+            int blue=pixels.Count(c=>c!=WorldRenderer.SkyColor && c.B>c.G*1.1f && c.B>c.R*1.2f);
+            if(blue<10000 || _lakeRenderer.BufferBytes>450L*1048576 || _lakeRenderer.Water.BufferBytes>16L*1048576)
+                throw new InvalidOperationException("Major lake pixels missing or GPU residency exceeded its budget.");
+            using(var png=System.IO.File.Create(System.IO.Path.Combine(AppContext.BaseDirectory,$"lake-{_size}.png")))_lakeTarget.SaveAsPng(png,1920,1080);
+            GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=_atlas.Texture;
+            Console.WriteLine($"PASS: {_size} 1080p rotating/translating major lake view, bounded buffers and {blue} blue water pixels.");
+            _lakeRenderer.Dispose();_lakeRenderer=null;_lakeTarget.Dispose();_lakeTarget=null;_lakeWorld=null;
+            if(_size==WorldSize.Massive){Verified=true;Exit();}else{_size=WorldSize.Massive;StartGeneration();}
         }
         private void VerifyTerrainAndWater(World world)
         {

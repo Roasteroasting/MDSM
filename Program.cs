@@ -1,4 +1,8 @@
-if (args.Length >= 2 && args[0] == "--gameplay-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1], out var gameplaySize))
+if (System.Array.Exists(args, argument => argument == "--lake-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.LargeLakeChecks.Run();
+}
+else if (args.Length >= 2 && args[0] == "--gameplay-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1], out var gameplaySize))
 {
     System.Environment.ExitCode = MDSM.Testing.GameplayPerformanceChecks.Run(gameplaySize);
 }

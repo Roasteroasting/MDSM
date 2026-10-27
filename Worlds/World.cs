@@ -22,6 +22,7 @@ public sealed class World
     public FluidSimulation Fluids { get; }
     public FallingBlockSimulation Gravity { get; }
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
+    public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
     public World(int seed = DefaultSeed, WorldSize size = WorldSize.Normal) : this(seed, size, true) { }
@@ -57,6 +58,7 @@ public sealed class World
         new TerrainGenerator(seed).Generate(world);
         progress?.Invoke("CARVING PONDS, RIVERS AND LAKES");
         var water = new LakeGenerator(seed); water.Generate(world); world.GeneratedWaterFeatures = water.Counts;
+        world.GeneratedLakes = new System.Collections.Generic.List<NaturalLake>(water.Lakes);
         progress?.Invoke("PLACING TREES AND VEGETATION");
         new WorldDecorator(seed).Decorate(world);
         progress?.Invoke("INITIALIZING WATER");

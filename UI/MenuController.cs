@@ -27,6 +27,8 @@ internal sealed class MenuController : IDisposable
     private int _informationScroll;
     private Point _informationSize;
     private string[] _informationLines = Array.Empty<string>();
+    private Point _noticeSize;
+    private string[] _noticeLines = Array.Empty<string>();
     private bool _selectAll;
     private Point _mouse;
     private IReadOnlyList<WorldEntry> _worlds = Array.Empty<WorldEntry>();
@@ -278,12 +280,13 @@ internal sealed class MenuController : IDisposable
         Math.Max(16, (viewport.Width - 620) / 2), 110, Math.Min(620, viewport.Width - 32),
         Math.Max(60, Math.Min(360, (viewport.Height - 390) / 60 * 60)));
 
-    private static Rectangle FieldBounds(Viewport viewport, int index) =>
+    private Rectangle FieldBounds(Viewport viewport, int index) => _screen == GameState.WorldCreation ? WorldCreationLayout.Field(viewport, index) :
         new((viewport.Width - Math.Min(520, viewport.Width - 32)) / 2, viewport.Height / 2 - 110 + index * 70,
             Math.Min(520, viewport.Width - 32), 42);
 
     private Rectangle ButtonBounds(Viewport viewport, int index)
     {
+        if (_screen == GameState.WorldCreation) return WorldCreationLayout.Button(viewport, index);
         if (_screen == GameState.Settings) return index < 2 ? SettingsLayout.Information(viewport, index) : SettingsLayout.Back(viewport);
         if (MenuInformation.IsInformation(_screen)) return MenuInformation.Back(viewport);
         if (_screen is GameState.MainMenu or GameState.Paused or GameState.Death)
@@ -309,7 +312,7 @@ internal sealed class MenuController : IDisposable
 
     public void Draw(Viewport viewport, string worldName = null)
     {
-        int scale = viewport.Width >= 900 ? 2 : 1;
+        int scale = _screen == GameState.WorldCreation ? WorldCreationLayout.Scale(viewport) : viewport.Width >= 900 ? 2 : 1;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
         if (_screen is GameState.Paused or GameState.Death
@@ -340,7 +343,8 @@ internal sealed class MenuController : IDisposable
         int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12)
             : _screen == GameState.Death && viewport.Width >= 900 ? 5 : 3;
         int titleY = MenuInformation.IsInformation(_screen) ? 20
-            : _screen == GameState.WorldSelection ? 38 : Math.Max(20, viewport.Height / 2 - 210);
+            : _screen == GameState.WorldSelection ? 38
+            : _screen == GameState.WorldCreation && viewport.Height < 400 ? 12 : Math.Max(20, viewport.Height / 2 - 210);
         Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
         Center(title, viewport, titleY, titleScale, Color.White);
         if (_screen == GameState.Paused)
@@ -380,6 +384,16 @@ internal sealed class MenuController : IDisposable
             DrawField(viewport, 1, "OPTIONAL INTEGER SEED", SeedText, "RANDOM", scale);
             DrawField(viewport, 2, "WORLD SIZE - CLICK OR LEFT/RIGHT",
                 $"{SelectedSize} / {SelectedSize.Width()} X {World.Height} X {SelectedSize.Width()}", "", scale);
+            if (WorldCreationLayout.NoticeVisible(_screen, SelectedSize))
+            {
+                var size = new Point(viewport.Width, viewport.Height);
+                if (_noticeSize != size) { _noticeSize = size; _noticeLines = WorldCreationLayout.Lines(viewport); }
+                Rectangle panel = WorldCreationLayout.Notice(viewport);
+                Fill(panel, Color.Black * .6f);
+                for (int row = 0; row < _noticeLines.Length; row++)
+                    Text(_noticeLines[row], panel.X + 8, panel.Y + 6 + row * 10 * WorldCreationLayout.NoticeScale(viewport),
+                        WorldCreationLayout.NoticeScale(viewport), new Color(220, 203, 151));
+            }
         }
         if (_screen == GameState.WorldRename)
         {
@@ -433,16 +447,16 @@ internal sealed class MenuController : IDisposable
     private void DrawField(Viewport viewport, int index, string label, string value, string placeholder, int scale)
     {
         Rectangle bounds = FieldBounds(viewport, index);
-        Text(label, bounds.X, bounds.Y - 22, scale, Color.LightGray);
+        Text(label, bounds.X, bounds.Y - (bounds.Height < 30 ? 9 : 22), scale, Color.LightGray);
         Fill(bounds, _focus == index ? new Color(235, 216, 135) : new Color(74, 80, 89));
         Fill(new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4), new Color(24, 29, 35));
         if (_selectAll && _focus == index)
             Fill(new Rectangle(bounds.X + 7, bounds.Y + 8, bounds.Width - 14, bounds.Height - 16), new Color(55, 75, 100));
         string display = value.Length == 0 ? placeholder : value;
         display = PixelFont.Fit(display, (bounds.Width - 28) / (6 * scale));
-        Text(display, bounds.X + 8, bounds.Y + 13, scale, value.Length == 0 ? Color.Gray : Color.White);
+        Text(display, bounds.X + 8, bounds.Y + (bounds.Height < 30 ? 7 : 13), scale, value.Length == 0 ? Color.Gray : Color.White);
         if (_focus == index && index < 2)
-            Fill(new Rectangle(bounds.X + 8 + (value.Length == 0 ? 0 : display.Length) * 6 * scale, bounds.Y + 10, scale, 18), Color.White);
+            Fill(new Rectangle(bounds.X + 8 + (value.Length == 0 ? 0 : display.Length) * 6 * scale, bounds.Y + (bounds.Height < 30 ? 5 : 10), scale, bounds.Height < 30 ? 12 : 18), Color.White);
     }
 
     private void EnsureInformation(Viewport viewport)

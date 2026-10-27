@@ -34,17 +34,21 @@ internal static class WaterMeshBuilder
         for (int x = chunk.OriginX; x < chunk.OriginX + Chunk.Size; x++)
         {
             if (!Water.IsWater(world.GetBlock(x, y, z))) continue;
+            bool Visible(int nx, int ny, int nz) => !Water.IsWater(world.GetBlock(nx, ny, nz)) && !Blocks.IsOpaque(world.GetBlock(nx, ny, nz));
+            bool top = Visible(x, y + 1, z), bottom = Visible(x, y - 1, z), near = Visible(x, y, z - 1), far = Visible(x, y, z + 1),
+                left = Visible(x - 1, y, z), right = Visible(x + 1, y, z);
+            // Deep lakes contain mostly enclosed cells: no corner-height work or geometry for them.
+            if (!(top || bottom || near || far || left || right)) continue;
             Vector3 a = new(x, y + Water.CornerHeight(world, x, y, z), z);
             Vector3 b = new(x + 1, y + Water.CornerHeight(world, x + 1, y, z), z);
             Vector3 c = new(x + 1, y + Water.CornerHeight(world, x + 1, y, z + 1), z + 1);
             Vector3 d = new(x, y + Water.CornerHeight(world, x, y, z + 1), z + 1);
-            bool Visible(int nx, int ny, int nz) => !Water.IsWater(world.GetBlock(nx, ny, nz)) && !Blocks.IsOpaque(world.GetBlock(nx, ny, nz));
-            if (Visible(x, y + 1, z)) faces.Add(new WaterFace(d, c, b, a, 1));
-            if (Visible(x, y, z - 1)) faces.Add(new WaterFace(new(x + 1, y, z), new(x, y, z), a, b, 0.9f));
-            if (Visible(x, y, z + 1)) faces.Add(new WaterFace(new(x, y, z + 1), new(x + 1, y, z + 1), c, d, 0.9f));
-            if (Visible(x - 1, y, z)) faces.Add(new WaterFace(new(x, y, z), new(x, y, z + 1), d, a, 0.78f));
-            if (Visible(x + 1, y, z)) faces.Add(new WaterFace(new(x + 1, y, z + 1), new(x + 1, y, z), b, c, 0.78f));
-            if (Visible(x, y - 1, z)) faces.Add(new WaterFace(new(x, y, z), new(x + 1, y, z), new(x + 1, y, z + 1), new(x, y, z + 1), 0.5f));
+            if (top) faces.Add(new WaterFace(d, c, b, a, 1));
+            if (near) faces.Add(new WaterFace(new(x + 1, y, z), new(x, y, z), a, b, 0.9f));
+            if (far) faces.Add(new WaterFace(new(x, y, z + 1), new(x + 1, y, z + 1), c, d, 0.9f));
+            if (left) faces.Add(new WaterFace(new(x, y, z), new(x, y, z + 1), d, a, 0.78f));
+            if (right) faces.Add(new WaterFace(new(x + 1, y, z + 1), new(x + 1, y, z), b, c, 0.78f));
+            if (bottom) faces.Add(new WaterFace(new(x, y, z), new(x + 1, y, z), new(x + 1, y, z + 1), new(x, y, z + 1), 0.5f));
         }
     }
 }

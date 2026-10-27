@@ -222,7 +222,8 @@ internal static class WorldExpansionChecks
                     if(columns.ContainsKey(next) && queued.Add(next))queue.Enqueue(next);
             }
             int extent=Math.Max(maxX-minX+1,maxZ-minZ+1);
-            if(deepest>3){lakes++;Require(deepest>=6 && extent>=30 && high-low<=5,"A large lake is shallow, tiny, or perched on steep terrain.");}
+            if(deepest>3){lakes++;Require(deepest>=12 && deepest<=(world.Size==WorldSize.Massive?24:18)
+                && extent>=100 && extent<=(world.Size==WorldSize.Massive?315:230) && high-low<=24,"A major lake is shallow, tiny, oversized, or crosses excessive terrain relief.");}
             else if(extent>LakeGenerator.MaximumRadius(world.Size)*2+1)
             {rivers++;Require(extent*extent/(float)count>2.5f && high-low<=4,"River is a round pond or crosses a steep hillside.");}
             else {ponds++;Require(high-low<=3,"Pond site is too steep.");}

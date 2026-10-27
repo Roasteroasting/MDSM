@@ -83,6 +83,29 @@ internal static class InterfaceGraphicsChecks
                 ButtonState.Released, ButtonState.Released, ButtonState.Released);
             Call("ProcessInput", default(KeyboardState), mouse, false, new GameTime(), Point.Zero);
         }
+        private void VerifyMassiveNotice()
+        {
+            Call("SetState", GameState.WorldCreation); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Right);
+            Require(Menu.SelectedSize == WorldSize.Large, "Creation size navigation changed.");
+            using var target = new RenderTarget2D(GraphicsDevice,320,240,false,SurfaceFormat.Color,DepthFormat.Depth24);
+            int GoldPixels()
+            {
+                GraphicsDevice.SetRenderTarget(target); GraphicsDevice.Clear(Color.Black); Menu.Draw(GraphicsDevice.Viewport);
+                Rectangle panel=WorldCreationLayout.Notice(GraphicsDevice.Viewport);
+                GraphicsDevice.SetRenderTarget(null);var pixels=new Color[320*240];target.GetData(pixels);
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=Field<MDSM.Rendering.TextureAtlas>("_atlas").Texture;
+                int count=0;for(int y=panel.Top;y<panel.Bottom;y++)for(int x=panel.Left;x<panel.Right;x++)
+                    if(pixels[y*320+x].R>200 && pixels[y*320+x].G>160 && pixels[y*320+x].B<180)count++;
+                return count;
+            }
+            Require(GoldPixels()==0,"Notice rendered for Large.");Press(Keys.Right);
+            Require(Menu.SelectedSize==WorldSize.Massive && GoldPixels()>500,"Massive notice text failed to render at 320x240.");
+            using(var image=File.Create(Path.Combine(AppContext.BaseDirectory,"massive-notice.png")))target.SaveAsPng(image,320,240);
+            GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=Field<MDSM.Rendering.TextureAtlas>("_atlas").Texture;
+            Press(Keys.Left);Require(GoldPixels()==0,"Notice did not hide immediately after leaving Massive.");
+            Call("SetState",GameState.MainMenu);Input();
+            Console.WriteLine("PASS: Massive-only performance notice renders/hides immediately through real size input at 320x240.");
+        }
         private void Capture() { Press(Keys.F2); _capture = true; }
         private void Resize(int width, int height)
         {
@@ -109,6 +132,7 @@ internal static class InterfaceGraphicsChecks
             switch (_frame)
             {
                 case 1:
+                    VerifyMassiveNotice();
                     Click(2); Require(State == GameState.Settings, "Main menu Settings entry failed.");
                     Press(Keys.End); Require(Settings.FpsCap == 360, "Slider no longer reaches 360.");
                     Press(Keys.Down); Press(Keys.Space); Require(Settings.UncappedFps, "Uncapped toggle failed.");

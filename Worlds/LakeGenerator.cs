@@ -11,38 +11,34 @@ public sealed class LakeGenerator
 {
     private readonly int _seed;
     private readonly TerrainGenerator _terrain;
+    private MajorLakeGenerator _major;
+    public IReadOnlyList<NaturalLake> Lakes => _major?.Lakes ?? (IReadOnlyList<NaturalLake>)Array.Empty<NaturalLake>();
     public WaterFeatureCounts Counts { get; private set; }
     public LakeGenerator(int seed) { _seed = seed; _terrain = new TerrainGenerator(seed); }
     public static int MaximumLakes(WorldSize size) => size.Width() * size.Width() / 16384; // Pond budget, retained API.
     public static int MaximumRadius(WorldSize size) => size >= WorldSize.Large ? 9 : 7;
     public static int RiverBudget(WorldSize size) => size == WorldSize.Massive ? 12 : size == WorldSize.Large ? 4 : 0;
-    public static int LakeBudget(WorldSize size) => size == WorldSize.Massive ? 5 : size == WorldSize.Large ? 2 : 0;
+    public static int LakeBudget(WorldSize size) => size == WorldSize.Massive ? 9 : size == WorldSize.Large ? 3 : 0;
 
     public int Generate(World world)
     {
         var random = new Random(unchecked(_seed ^ 0x4C414B45));
         var occupied = new List<Rectangle>();
         int lakes = 0, rivers = 0, ponds = 0;
-        // The rarer, larger footprints get first choice of flat basins.
-        for (int attempt = 0; attempt < LakeBudget(world.Size) * 1500 && lakes < LakeBudget(world.Size); attempt++)
-        {
-            int radius = random.Next(18, world.Size == WorldSize.Massive ? 39 : 31);
-            int x = random.Next(radius + 8, world.Width - radius - 8), z = random.Next(radius + 8, world.Depth - radius - 8);
-            if (TryBasin(world, random, occupied, x, z, radius, true)) lakes++;
-        }
+        _major = new MajorLakeGenerator(world); _major.Generate(); lakes = _major.Lakes.Count;
         for (int attempt = 0; attempt < RiverBudget(world.Size) * 500 && rivers < RiverBudget(world.Size); attempt++)
             if (TryRiver(world, random, occupied)) rivers++;
         for (int attempt = 0; attempt < MaximumLakes(world.Size) * 300 && ponds < MaximumLakes(world.Size); attempt++)
         {
             int radius = random.Next(3, MaximumRadius(world.Size) + 1);
             int x = random.Next(radius + 8, world.Width - radius - 8), z = random.Next(radius + 8, world.Depth - radius - 8);
-            if (TryBasin(world, random, occupied, x, z, radius, false)) ponds++;
+            if (TryPond(world, random, occupied, x, z, radius)) ponds++;
         }
         Counts = new WaterFeatureCounts(ponds, rivers, lakes);
         return ponds + rivers + lakes;
     }
 
-    private bool TryBasin(World world, Random random, List<Rectangle> occupied, int cx, int cz, int radius, bool lake)
+    private bool TryPond(World world, Random random, List<Rectangle> occupied, int cx, int cz, int radius)
     {
         int extent = radius + 8;
         var bounds = new Rectangle(cx - extent, cz - extent, extent * 2 + 1, extent * 2 + 1);
@@ -55,13 +51,7 @@ public sealed class LakeGenerator
             float edge = radius * (0.86f + 0.09f * MathF.Sin(angle * 3 + phase) + 0.05f * MathF.Cos(angle * 5 - phase));
             shape[(z + extent) * bounds.Width + x + extent] = MathF.Sqrt(x * x + z * z / (stretch * stretch)) <= edge;
         }
-        if (lake)
-        {
-            float outer = (_terrain.SurfaceY(cx-radius,cz) + _terrain.SurfaceY(cx+radius,cz)
-                + _terrain.SurfaceY(cx,cz-radius) + _terrain.SurfaceY(cx,cz+radius)) / 4f;
-            if (_terrain.SurfaceY(cx,cz) > outer + 1) return false; // Reject perched hilltops.
-        }
-        return Carve(world, bounds, shape, lake ? 10 : 3, lake ? 5 : 3, occupied);
+        return Carve(world, bounds, shape, 3, 3, occupied);
     }
 
     private bool TryRiver(World world, Random random, List<Rectangle> occupied)
@@ -110,12 +100,13 @@ public sealed class LakeGenerator
         return Carve(world, bounds, shape, 3, 4, occupied);
     }
 
-    private static bool Available(World world, Rectangle bounds, List<Rectangle> occupied)
+    private bool Available(World world, Rectangle bounds, List<Rectangle> occupied)
     {
         if (bounds.Left < 2 || bounds.Top < 2 || bounds.Right >= world.Width-2 || bounds.Bottom >= world.Depth-2) return false;
         // Reserve a generous dry spawn neighborhood; entire rivers must avoid it.
         if (bounds.Intersects(new Rectangle(world.Width/2-28,world.Depth/2-28,56,56))) return false;
         foreach (Rectangle other in occupied) if (bounds.Intersects(other)) return false;
+        if (_major.Intersects(bounds)) return false;
         return true;
     }
 
