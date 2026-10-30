@@ -234,8 +234,8 @@ internal static class InventoryChecks
             first.Inventory.SetSlot(0, default); first.Inventory.SelectedSlot = 8;
             Require(second.Inventory[0].Count == 64 && second.Inventory.SelectedSlot == 0 && save.Inventory[0].Count == 64, "Sessions share mutable inventory state.");
             first.InventoryInteraction.Click(1, false);
-            Throws<InvalidOperationException>(() => first.Capture());
-            first.InventoryInteraction.TryReturnCursor();
+            Require(first.Capture().Inventory[1].Count == 64 && first.InventoryInteraction.Cursor.IsEmpty,
+                "Capture failed to safely return the held stack.");
             Require(first.Capture().Inventory[0].IsEmpty, "Capture replenished an emptied starter slot.");
         }
     }

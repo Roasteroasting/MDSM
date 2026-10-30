@@ -16,6 +16,11 @@ internal static class PrototypeChecks
     {
         (string Name, Action Check)[] checks =
         {
+            ("Shaped crafting, quantities, offsets, strict formations and preview safety", CraftingChecks.Recipes),
+            ("Atomic crafting outputs, stack limits and mixed mouse accounting", CraftingChecks.Transactions),
+            ("Crafting close/overflow, blocked recovery and death item ownership", CraftingChecks.ClosingAndDeath),
+            ("Crafting table placement/mining/persistence and all-size empty starts", CraftingChecks.BlocksAndPersistence),
+            ("Responsive 2x2/3x3 crafting, inventory, hotbar and arrow layouts", CraftingChecks.Layout),
             ("Terrain layers, bounds, and edit revisions", CheckWorld),
             ("Compact storage and world/chunk coordinate conversion", CheckCoordinates),
             ("Seed determinism, terrain layers, and continuous hills", CheckTerrain),
@@ -99,7 +104,7 @@ internal static class PrototypeChecks
             ("Shared all-size spawn budgets, balanced species, grass/water safety, and no replenishment", MobChecks.Spawning),
             ("Species targeting, terrain occlusion, cooldown, exact drops, and mining fallback", MobChecks.CombatAndDrops),
             ("Leather/feather stacks and pickup, non-food resources, and wool placement/mining/UVs", MobChecks.ResourcesAndWool),
-            ("Revised placeable-only starting stock, legacy migration, and empty respawn", MobChecks.StartingAndRespawn),
+            ("Empty survival starts, preserved legacy inventory and empty respawn", MobChecks.StartingAndRespawn),
             ("All-size mixed mobs/resources/water persistence and saved kills", MobChecks.Persistence),
             ("Independent v4 pig/food migration and invalid species/health/count rejection", MobChecks.BackwardCompatibilityAndValidation),
             ("Species cuboid proportions, cutout UVs, animation, and hurt tint", MobChecks.Geometry),

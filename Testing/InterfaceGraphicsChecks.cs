@@ -106,6 +106,75 @@ internal static class InterfaceGraphicsChecks
             Call("SetState",GameState.MainMenu);Input();
             Console.WriteLine("PASS: Massive-only performance notice renders/hides immediately through real size input at 320x240.");
         }
+        private void VerifyCrafting()
+        {
+            World world = PigChecks.Flat(); world.SetGeneratedBlock(64,1,62,BlockType.CraftingTable);
+            var inventory = new Inventory(); inventory.SetSlot(0,new ItemStack(Items.RawPorkchop,2));
+            inventory.SetSlot(1,new ItemStack(Items.FromBlock(BlockType.WoodenPlanks),12));
+            var save = new WorldSave(world,"Crafting graphics",new Vector3(64.5f,1,64.5f),0,-.5f,inventory,Health:10);
+            Call("BeginWorld",Field<WorldSaveManager>("_saves").Create(save),save); WarmRenderer(); Input();
+            using(var modelTarget=new RenderTarget2D(GraphicsDevice,320,240,false,SurfaceFormat.Color,DepthFormat.Depth24))
+            {
+                GraphicsDevice.SetRenderTarget(modelTarget);GraphicsDevice.Clear(WorldRenderer.SkyColor);
+                Field<WorldRenderer>("_renderer").Draw(Session.Camera,null);
+                GraphicsDevice.SetRenderTarget(null);var pixels=new Color[320*240];modelTarget.GetData(pixels);
+                int wood=0;for(int y=70;y<170;y++)for(int x=110;x<210;x++)
+                    if(pixels[y*320+x].R>pixels[y*320+x].G*1.15f && pixels[y*320+x].G>pixels[y*320+x].B*1.2f)wood++;
+                Require(wood>100,"Placed crafting table top/side textures did not render.");
+                using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,"crafting-table-world.png")))modelTarget.SaveAsPng(png,320,240);
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=Field<TextureAtlas>("_atlas").Texture;
+            }
+            void MouseAt(Rectangle bounds,bool right=false,bool release=true)
+            {
+                if(release)Input();
+                var mouse = new MouseState(bounds.Center.X,bounds.Center.Y,0,right?ButtonState.Released:ButtonState.Pressed,
+                    ButtonState.Released,right?ButtonState.Pressed:ButtonState.Released,ButtonState.Released,ButtonState.Released);
+                Call("ProcessInput",default(KeyboardState),mouse,false,new GameTime(),Point.Zero);
+            }
+            MouseAt(new Rectangle(0,0,1,1),true);
+            Require(State==GameState.Inventory && Session.Crafting.Width==3 && Session.Player.Health==10 && Session.Inventory[0].Count==2,
+                "Crafting table did not override food/placement through real RMB input.");
+            MouseAt(InventoryLayout.Slot(GraphicsDevice.Viewport,1));
+            foreach(int slot in new[]{0,1,3,4})for(int click=0;click<2;click++)MouseAt(InventoryLayout.CraftingSlot(GraphicsDevice.Viewport,3,slot),true);
+            MouseAt(InventoryLayout.Output(GraphicsDevice.Viewport,3));
+            Require(Session.InventoryInteraction.Cursor.Count==4 && Session.Crafting[0].Count==2,"Incompatible crafting cursor consumed inputs.");
+            MouseAt(InventoryLayout.Slot(GraphicsDevice.Viewport,1));
+            Rectangle output=InventoryLayout.Output(GraphicsDevice.Viewport,3);MouseAt(output);MouseAt(output,release:false);
+            Require(Session.InventoryInteraction.Cursor.Count==1 && Session.Crafting[0].Count==1,"Held output click repeated crafting.");
+            MouseAt(output);Require(Session.InventoryInteraction.Cursor.Count==2 && Session.Crafting.Preview.IsEmpty,"Release/repress did not craft exactly once.");
+            Press(Keys.E);Require(State==GameState.Playing && Session.Inventory[2].Count==2,"Closing table lost cursor output.");
+            Press(Keys.E);Require(State==GameState.Inventory && Session.Crafting.Width==2,"E did not open personal 2x2 crafting.");
+            void RenderGrid(int width,int w,int h,bool blocked=false)
+            {
+                Require(Session.TryOpenCrafting(width),"Could not switch empty crafting grids.");
+                for(int y=0;y<2;y++)for(int x=0;x<2;x++)Session.Crafting.SetSlot(y*width+x,new ItemStack(Items.FromBlock(BlockType.WoodenPlanks),1));
+                using var target=new RenderTarget2D(GraphicsDevice,w,h,false,SurfaceFormat.Color,DepthFormat.Depth24);
+                GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(Color.Black);
+                InventoryScreen screen=Field<InventoryScreen>("_inventoryScreen");screen.Open();if(blocked)screen.CannotClose();
+                screen.Draw(Session,default,GraphicsDevice.Viewport);
+                Rectangle result=InventoryLayout.Output(GraphicsDevice.Viewport,width);
+                Rectangle panel=InventoryLayout.Panel(GraphicsDevice.Viewport);
+                GraphicsDevice.SetRenderTarget(null);var pixels=new Color[w*h];target.GetData(pixels);
+                int colored=0;for(int y=result.Top+3;y<result.Bottom-3;y++)for(int x=result.Left+3;x<result.Right-3;x++)
+                    if(pixels[y*w+x].R>pixels[y*w+x].B*1.4f)colored++;
+                Require(colored>5,"Crafting result pixels missing.");
+                if(blocked)Require(pixels.Skip((panel.Bottom-20)*w).Take(w*7).Count(c=>c==Color.Salmon)>20,"Recovery message leaves the small window.");
+                using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,$"crafting-{width}x{width}-{w}{(blocked?"-blocked":"")}.png")))target.SaveAsPng(png,w,h);
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=Field<TextureAtlas>("_atlas").Texture;
+                Require(Session.Crafting[0].Count==1,"Rendering consumed crafting preview ingredients.");
+                Require(Session.TryReturnInterfaceItems(),"Rendering fixture could not return ingredients.");
+            }
+            RenderGrid(2,320,240);RenderGrid(3,320,240);RenderGrid(3,1280,720);RenderGrid(3,320,240,true);
+            Session.Crafting.SetSlot(0,new ItemStack(Items.FromBlock(BlockType.WoodenPlanks),3));
+            Session.Crafting.Click(0,Session.InventoryInteraction,true);
+            string craftingId=Session.Id;
+            Call("HandleMenuAction",MenuAction.SaveAndReturn);
+            Require(State==GameState.MainMenu && Session==null,"Save/return with crafting items did not close safely.");
+            WorldSave restored=Field<WorldSaveManager>("_saves").Load(craftingId);
+            Require(Enumerable.Range(0,36).Where(i=>restored.Inventory[i].Item==Items.FromBlock(BlockType.WoodenPlanks)).Sum(i=>restored.Inventory[i].Count)==23
+                && restored.Inventory[2].Count==2 && restored.World.GetBlock(64,1,62)==BlockType.CraftingTable,"Crafting save/return lost inputs, cursor, output or table.");
+            Console.WriteLine("PASS: RMB table priority, 2x2/3x3 UI slots/output, press edges, full cursor safety, E close, responsive GPU pixels and safe crafting save/return.");
+        }
         private void Capture() { Press(Keys.F2); _capture = true; }
         private void Resize(int width, int height)
         {
@@ -132,6 +201,7 @@ internal static class InterfaceGraphicsChecks
             switch (_frame)
             {
                 case 1:
+                    VerifyCrafting();
                     VerifyMassiveNotice();
                     Click(2); Require(State == GameState.Settings, "Main menu Settings entry failed.");
                     Press(Keys.End); Require(Settings.FpsCap == 360, "Slider no longer reaches 360.");

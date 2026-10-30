@@ -121,7 +121,7 @@ internal static class PigGraphicsChecks
                     var creationWait = System.Diagnostics.Stopwatch.StartNew();
                     while (State != GameState.Playing && creationWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
                     Require(State == GameState.Playing && Session.World.Size == WorldSize.Small && Session.Mobs.Entities.Count == 32
-                        && Session.Inventory[13] == new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64), "New-world menu did not grant mixed mobs and revised block stock exactly once.");
+                        && System.Linq.Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty), "New-world menu did not create mixed mobs with an empty survival inventory.");
                     WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 32 && initial.Mobs.Length > 0, "Initial new-world save omitted the shared mob population."); break;
                 case 13:
                     Verified = true; Exit(); break;

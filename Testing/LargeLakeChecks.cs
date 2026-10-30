@@ -48,16 +48,57 @@ internal static class LargeLakeChecks
     }
     public static void Generation()
     {
+        int[] exceptionalSeeds=DimensionsAndRarity();int index=0;
         foreach(WorldSize size in new[]{WorldSize.Large,WorldSize.Massive})
-        foreach(int seed in new[]{173,-907,137}){CheckWorld(size,seed);GC.Collect();GC.WaitForPendingFinalizers();}
+        {
+            int exceptionalSeed=exceptionalSeeds[index++];
+            foreach(int seed in new[]{173,-907,137,exceptionalSeed}.Distinct())
+            {CheckWorld(size,seed,seed==exceptionalSeed);GC.Collect();GC.WaitForPendingFinalizers();}
+        }
+    }
+    private static int[] DimensionsAndRarity()
+    {
+        var seeds=new int[2];int index=0;
+        foreach(WorldSize size in new[]{WorldSize.Large,WorldSize.Massive})
+        {
+            bool massive=size==WorldSize.Massive;
+            int total=0,exceptional=0,exceptionalWorlds=0,min=int.MaxValue,max=0,firstExceptionalSeed=-1;
+            long typicalSum=0,exceptionalSum=0;int typical=0;
+            for(int seed=0;seed<128;seed++)
+            {
+                bool hasExceptional=false;
+                for(int slot=0;slot<MajorLakeGenerator.TargetCount(size,seed);slot++)
+                {
+                    var plan=MajorLakeGenerator.CreatePlan(size,seed,slot);
+                    int extent=Math.Max(plan.WetBounds.Width,plan.WetBounds.Height);
+                    bool rare=plan.Span>(massive?130:80);
+                    Require(extent>=(rare?(massive?130:80):(massive?80:40))
+                        && extent<=(rare?(massive?180:120):(massive?125:70)),$"Actual outline misses reduced size policy: {size}, seed {seed}, slot {slot}, span {plan.Span}, actual {extent}, exceptional {rare}.");
+                    Require(plan.Depth>=4 && plan.Depth<=(massive?18:13) && plan.Depth<=extent*.18f+1,"Reduced lake depth is disproportionate.");
+                    min=Math.Min(min,extent);max=Math.Max(max,extent);total++;
+                    if(rare){exceptional++;exceptionalSum+=extent;hasExceptional=true;if(firstExceptionalSeed<0)firstExceptionalSeed=seed;}
+                    else{typical++;typicalSum+=extent;}
+                }
+                if(hasExceptional)exceptionalWorlds++;
+            }
+            float mean=typicalSum/(float)typical;
+            Require(exceptional>0 && exceptional<total*.04f && exceptionalWorlds<128*.2f,"Exceptional lakes are absent or too common across seeds.");
+            Require(mean>=(massive?90:45) && mean<=(massive?115:60),"Typical actual lake size drifted from its target.");
+            float exceptionalMean=exceptionalSum/(float)exceptional;
+            Require(exceptionalMean>=(massive?140:90) && exceptionalMean<=(massive?165:115),"Exceptional actual lake size drifted from its target.");
+            seeds[index++]=firstExceptionalSeed;
+            Console.WriteLine($"LAKE OUTLINES {size}: {total} lakes / 128 seeds, {exceptional} exceptional in {exceptionalWorlds} worlds; typical mean={mean:F1}, exceptional mean={exceptionalMean:F1}, all spans={min}-{max}; first exceptional seed={firstExceptionalSeed}.");
+        }
+        return seeds;
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void CheckWorld(WorldSize size,int seed)
+    private static void CheckWorld(WorldSize size,int seed,bool requireExceptional)
     {
         var watch=Stopwatch.StartNew();World world=World.CreateNew(seed,size);
         Console.WriteLine($"LAKES {size} seed={seed}: {world.GeneratedWaterFeatures}, generation={watch.Elapsed.TotalSeconds:F2}s, managedMiB={GC.GetTotalMemory(false)/1048576.0:F1}");
-        Require(world.GeneratedLakes.Count>=(size==WorldSize.Large?2:6) && world.GeneratedLakes.Count<=LakeGenerator.LakeBudget(size),"Representative seed missed lake population.");
+        Require(world.GeneratedLakes.Count==MajorLakeGenerator.TargetCount(size,seed),"Representative seed missed its unchanged lake population target.");
         Require(world.GeneratedWaterFeatures.Ponds==LakeGenerator.MaximumLakes(size) && world.GeneratedWaterFeatures.Rivers==LakeGenerator.RiverBudget(size),"Major lakes displaced pond/river budgets.");
+        Require(!requireExceptional || world.GeneratedLakes.Any(l=>Math.Max(l.Bounds.Width,l.Bounds.Height)>(size==WorldSize.Massive?130:75)),"Exceptional sample did not produce an actual exceptional lake.");
         foreach(NaturalLake lake in world.GeneratedLakes)Measure(world,lake,true);
         Require(world.Fluids.PendingCount==0 && world.Gravity.PendingCount==0,"Generated water/gravity frontier is active.");
         int revision=world.Revision;for(int i=0;i<10;i++)world.Fluids.Tick();
@@ -120,8 +161,8 @@ internal static class LargeLakeChecks
         }
         Require(deepest==lake.MaximumDepth,"Actual lake depth differs from metadata.");
         int width=maxX-minX+1,height=maxZ-minZ+1,extent=Math.Max(width,height);
-        Require(extent>=100 && extent<=(world.Size==WorldSize.Massive?315:230) && deepest>=(world.Size==WorldSize.Massive?15:12)
-            && deepest<=(world.Size==WorldSize.Massive?24:18),"Actual lake dimensions/depth missed policy.");
+        Require(extent>=(world.Size==WorldSize.Massive?80:40) && extent<=(world.Size==WorldSize.Massive?180:120)
+            && deepest>=4 && deepest<=(world.Size==WorldSize.Massive?18:13) && deepest<=extent*.18f+1,"Actual lake dimensions/depth missed policy.");
         Require(count/(float)(width*height)<.88f && count/(float)(width*height)>.3f,"Rectangular/thin lake.");
         for(int z=Math.Max(1,b.Top-30);z<Math.Min(world.Depth-2,b.Bottom+30);z+=3)
         for(int x=Math.Max(1,b.Left-30);x<Math.Min(world.Width-2,b.Right+30);x+=3)

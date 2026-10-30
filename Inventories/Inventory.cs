@@ -59,14 +59,7 @@ public sealed class Inventory
         return inventory;
     }
 
-    public static Inventory CreateNewWorld()
-    {
-        var inventory = new Inventory();
-        int slot = 0;
-        foreach (BlockType block in Blocks.Selection)
-            inventory._slots[slot++] = new ItemStack(Items.FromBlock(block), ItemStack.Maximum);
-        return inventory;
-    }
+    public static Inventory CreateNewWorld() => new();
 }
 
 // No graphics or input-device dependency: mouse clicks are atomic stack operations.
@@ -79,27 +72,50 @@ public sealed class InventoryInteraction(Inventory inventory)
     public void Click(int slot, bool right)
     {
         if (slot < 0 || slot >= Inventory.SlotCount) return; // Outside clicks never delete items.
-        ItemStack existing = Inventory[slot];
+        bool pickingUp = Cursor.IsEmpty && !Inventory[slot].IsEmpty;
+        Inventory.SetSlot(slot, ClickStack(Inventory[slot], right));
+        if (pickingUp) _originalSlot = slot;
+    }
+
+    // The same cursor and mouse rules serve real crafting inputs and inventory slots.
+    public ItemStack ClickStack(ItemStack existing, bool right)
+    {
         if (Cursor.IsEmpty)
         {
-            if (existing.IsEmpty) return;
+            if (existing.IsEmpty) return existing;
             int count = right ? Math.Max(1, existing.Count / 2) : existing.Count;
             Cursor = new ItemStack(existing.Item, count);
-            Inventory.SetSlot(slot, existing.WithCount(existing.Count - count));
-            _originalSlot = slot;
+            _originalSlot = -1;
+            return existing.WithCount(existing.Count - count);
         }
         else if (right)
         {
-            int remainder = Inventory.Insert(slot, Cursor.Item, 1);
-            if (remainder == 0) Cursor = Cursor.WithCount(Cursor.Count - 1);
+            if ((existing.IsEmpty || existing.Item == Cursor.Item) && existing.Count < ItemStack.Maximum)
+            {
+                existing = new ItemStack(Cursor.Item, existing.Count + 1);
+                Cursor = Cursor.WithCount(Cursor.Count - 1);
+            }
         }
         else if (existing.IsEmpty || existing.Item == Cursor.Item)
-            Cursor = Cursor.WithCount(Inventory.Insert(slot, Cursor.Item, Cursor.Count));
+        {
+            int accepted = Math.Min(ItemStack.Maximum - existing.Count, Cursor.Count);
+            existing = new ItemStack(Cursor.Item, existing.Count + accepted);
+            Cursor = Cursor.WithCount(Cursor.Count - accepted);
+        }
         else
         {
-            Inventory.SetSlot(slot, Cursor);
-            Cursor = existing;
+            (existing, Cursor) = (Cursor, existing);
         }
+        return existing;
+    }
+
+    // Crafting is all-or-nothing: a partial output must never consume a whole recipe.
+    public bool TryReceive(ItemStack output)
+    {
+        if (output.IsEmpty || (!Cursor.IsEmpty && (Cursor.Item != output.Item || Cursor.Count + output.Count > ItemStack.Maximum))) return false;
+        if (Cursor.IsEmpty) _originalSlot = -1;
+        Cursor = new ItemStack(output.Item, Cursor.Count + output.Count);
+        return true;
     }
 
     public bool TryReturnCursor()

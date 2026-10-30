@@ -72,7 +72,7 @@ internal static class WaterGraphicsChecks
                     World world = WaterChecks.Floor();
                     for (int z = 55; z <= 66; z++) for (int x = 58; x <= 70; x++)
                     for (int y = 1; y <= 3; y++) world.SetGeneratedBlock(x, y, z, BlockType.WaterSource);
-                    var inventory = Inventory.CreateNewWorld();
+                    var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.FromBlock(BlockType.Grass), 64)); // Explicit held-item rendering fixture.
                     var save = new WorldSave(world, "Water runtime", new Vector3(64.5f, 3, 70.5f), 0, -0.3f, inventory);
                     Call("BeginWorld", _store.Create(save), save); WarmRenderer(); break;
                 case 2: Press(Keys.F1); break;

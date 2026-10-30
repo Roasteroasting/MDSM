@@ -141,7 +141,11 @@ public class Game1 : Game
             if (Pressed(keyboard, Keys.Escape))
                 Pause();
             else if (Pressed(keyboard, Keys.E))
+            {
+                bool opened = _session.TryOpenCrafting(2);
                 SetState(GameState.Inventory);
+                if (!opened) _inventoryScreen.CannotClose(); // Retained ingredients remain accessible after exceptional death/drop failures.
+            }
             else
             {
                 UpdateGameplay(keyboard, mouse, gameTime, lookDelta);
@@ -158,7 +162,7 @@ public class Game1 : Game
         {
             if (Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
             {
-                if (_session.InventoryInteraction.TryReturnCursor()) SetState(GameState.Playing);
+                if (_session.TryReturnInterfaceItems()) SetState(GameState.Playing);
                 else _inventoryScreen.CannotClose();
             }
             else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport);
@@ -212,6 +216,14 @@ public class Game1 : Game
         }
         _fallingInterpolation = _simulationClock.Fraction;
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+        if (!_awaitMouseRelease && mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released
+            && _selection is BlockHit tableHit && world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) == BlockType.CraftingTable)
+        {
+            bool opened = _session.TryOpenCraftingTable(tableHit);
+            SetState(GameState.Inventory);
+            if (!opened) _inventoryScreen.CannotClose();
+            return;
+        }
         if (!_awaitMouseRelease)
             ItemUse.TryConsume(player, _session.Inventory, mouse.RightButton == ButtonState.Pressed,
                 _previousMouse.RightButton == ButtonState.Pressed);
@@ -409,7 +421,7 @@ public class Game1 : Game
     {
         if (_session == null) return true;
         if (_session.Player.IsDead) EnterDeath();
-        if (!_session.InventoryInteraction.TryReturnCursor())
+        if (!_session.TryReturnInterfaceItems())
         {
             if (_session.Player.IsDead) _menu.Message("ITEMS COULD NOT DROP. RESPAWN TO ORGANIZE RETAINED ITEMS BEFORE SAVING.", true);
             else { SetState(GameState.Inventory); _inventoryScreen.CannotClose(); }
@@ -558,7 +570,7 @@ public class Game1 : Game
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
                 _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics);
-            if (State == GameState.Inventory) _inventoryScreen.Draw(_session.InventoryInteraction, Mouse.GetState(), GraphicsDevice.Viewport);
+            if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }

@@ -108,9 +108,7 @@ internal static class MobGraphicsChecks
                     while (State != GameState.Playing && creationWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
                     Require(State == GameState.Playing && Session.Mobs.Entities.Count == 32 && Session.Mobs.Entities.Select(m => m.Species).Distinct().Count() == 4,
                         "Creation menu did not use one shared mixed population budget.");
-                    Require(Session.Inventory[13] == new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64)
-                        && Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty || Items.TryGetBlock(Session.Inventory[i].Item, out _)),
-                        "New-world menu granted food/resources or omitted wool.");
+                    Require(Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty), "New-world menu granted starting items.");
                     WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 32, "Initial save omitted mixed species.");
                     string reloadId = Session.Id; Vector3 reloadPosition = Session.Player.Position;
                     Session.World.SetBlock(15, 125, 15, BlockType.WhiteWool);

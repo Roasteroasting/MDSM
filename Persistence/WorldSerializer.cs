@@ -50,7 +50,7 @@ public static class WorldSerializer
         string name = ValidateName(save.Name);
         ValidatePose(save.PlayerPosition, save.Yaw, save.Pitch, save.World.Size);
         ValidateHealth(save.Health);
-        Inventory inventory = save.Inventory ?? Inventory.CreateStarter();
+        Inventory inventory = save.Inventory ?? Inventory.CreateNewWorld();
         DroppedItemState[] drops = save.DroppedItems ?? Array.Empty<DroppedItemState>();
         PigState[] pigs = save.Pigs ?? Array.Empty<PigState>();
         MobState[] mobs = save.Mobs ?? Array.Empty<MobState>();

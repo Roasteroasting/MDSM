@@ -24,15 +24,11 @@ internal sealed class MajorLakeGenerator
     public void Generate()
     {
         if (_world.Size < WorldSize.Large) return;
-        // Avalanche the seed instead of using Random's correlated first sample for nearby seeds.
-        uint population = Hash(_world.Width, _world.Depth, _world.Seed);
-        int target = _world.Size == WorldSize.Large ? 2 + (int)(population % 2) : 6 + (int)(population % 4);
+        int target = TargetCount(_world.Size, _world.Seed);
         for (int slot = 0; slot < target; slot++)
         {
-            bool massive = _world.Size == WorldSize.Massive, exceptional = _random.Next(7) == 0;
-            int span = massive ? _random.Next(exceptional ? 275 : 155, exceptional ? 301 : 251)
-                : _random.Next(exceptional ? 200 : 130, exceptional ? 221 : 186);
-            var plan = new Plan(span, massive ? _random.Next(15, 25) : _random.Next(12, 19), _random);
+            Plan plan = CreatePlan(_world.Size, _world.Seed, slot);
+            int span = plan.Span;
             // Ranked, jittered candidates are cheap; only promising sites get full footprint validation.
             var candidates = new List<(Point Position, float Score)>(256);
             int margin = plan.Extent + 3;
@@ -63,6 +59,22 @@ internal sealed class MajorLakeGenerator
             }
         }
     }
+    internal static int TargetCount(WorldSize size, int seed)
+    {
+        // Preserve the existing population target, independently of lake dimensions.
+        uint population = Hash(size.Width(), size.Width(), seed);
+        return size < WorldSize.Large ? 0 : size == WorldSize.Large ? 2 + (int)(population % 2) : 6 + (int)(population % 4);
+    }
+    internal static Plan CreatePlan(WorldSize size, int seed, int slot)
+    {
+        // Shape/rarity is stable per lake, independent of placement attempts.
+        var random = new Random(unchecked((int)Hash(size.Width(), slot, seed ^ 0x42415349)));
+        bool massive = size == WorldSize.Massive, exceptional = random.Next(64) == 0;
+        int span = massive ? random.Next(exceptional ? 158 : 100, exceptional ? 171 : 116)
+            : random.Next(exceptional ? 105 : 48, exceptional ? 117 : 61);
+        int depth = Math.Max(4, (int)MathF.Round(span * .1f) + random.Next(-1, 2));
+        return new Plan(span, depth, random);
+    }
     // Reserve changed terrain, not a huge bounding rectangle. Ponds/rivers retain ample space.
     public bool Intersects(Rectangle bounds)
     {
@@ -84,7 +96,8 @@ internal sealed class MajorLakeGenerator
             int top = _world.SurfaceY(plan.Bounds.X + x, plan.Bounds.Y + z);
             low = Math.Min(low, top); high = Math.Max(high, top); sum += top; count++;
         }
-        if (count < 4000 || high - low > 24 || _world.SurfaceY(center.X, center.Y) > sum / (float)count + 2) return false;
+        if (count == 0 || count < plan.WetBounds.Width * plan.WetBounds.Height / 3 || high - low > 24
+            || _world.SurfaceY(center.X, center.Y) > sum / (float)count + 2) return false;
         int waterY = Math.Min(low + 1, TerrainGenerator.MaximumSurface);
         // Only now write blocks. The complete source volume has a solid floor and sealed, graded rim.
         int deepest = 0;
@@ -127,9 +140,10 @@ internal sealed class MajorLakeGenerator
         uint h = unchecked((uint)(seed ^ x * 374761393 ^ z * 668265263));
         h = (h ^ (h >> 13)) * 1274126177u; return h ^ (h >> 16);
     }
-    private sealed class Plan
+    internal sealed class Plan
     {
         public int X, Z;
+        public int Span { get; }
         public int Extent { get; }
         public int Radius { get; }
         public int Width => Extent * 2 + 1;
@@ -141,6 +155,7 @@ internal sealed class MajorLakeGenerator
         public Rectangle Bounds => new(X - Extent, Z - Extent, Width, Width);
         public Plan(int span, int depth, Random random)
         {
+            Span = span;
             Radius = span / 2 + 12; Extent = Radius + Blend; Depth = depth;
             int n = Width * Width; Distance = new int[n]; Modified = new bool[n];
             var wet = new bool[n]; float rx = span / 2f, rz = rx * (.65f + random.NextSingle() * .2f);

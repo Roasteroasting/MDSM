@@ -161,13 +161,12 @@ internal static class PigChecks
         var dead = new Player(new Vector3(10, 1, 10), 0);
         Require(!ItemUse.TryConsume(dead, inventory, true, false) && dead.Health == 0 && inventory[0].Count == 1, "Eating revived a dead player.");
         inventory = Inventory.CreateNewWorld();
-        for (int i = 0; i < 13; i++) Require(inventory[i].Item == Items.FromBlock(Blocks.Selection[i]) && inventory[i].Count == 64, "Existing starting stock changed.");
-        Require(inventory[13] == new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64) && inventory[14].IsEmpty
-            && Inventory.CreateStarter()[13].IsEmpty && !inventory[13].Item.Equals(Items.RawPorkchop), "New-world and legacy stock were confused.");
+        for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New-world survival inventory is not empty.");
+        Require(Inventory.CreateStarter()[0].Count == 64 && Inventory.CreateStarter()[13].IsEmpty, "Legacy migration stock changed.");
         World world = Flat();
         var session = new GameSession("food", new WorldSave(world, "Food", new Vector3(20, 1, 20), 0, 0, inventory));
         session.Player.ApplyDamage(20); session.HandleDeath(); session.Respawn();
-        Require(session.Inventory[13].IsEmpty && session.Items.Entities.Count == 14 && session.Player.Health == 20, "Death/respawn replenished or lost food.");
+        Require(session.Inventory[13].IsEmpty && session.Items.Entities.Count == 0 && session.Player.Health == 20, "Death/respawn replenished food or blocks.");
         var drops = new DroppedItems(world); inventory = new Inventory();
         drops.Spawn(Items.RawPorkchop, 2, new Vector3(20, 1.125f, 20), 0);
         drops.Update(new Player(new Vector3(20, 1, 20)), inventory, Dt);

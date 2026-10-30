@@ -12,10 +12,10 @@ namespace MDSM.UI;
 
 internal static class InventoryLayout
 {
-    public static int SlotSize(Viewport viewport) => Math.Clamp(Math.Min((viewport.Width - 40) / 9, (viewport.Height - 100) / 4), 16, 52);
+    public static int SlotSize(Viewport viewport) => Math.Clamp(Math.Min((viewport.Width - 40) / 9, (viewport.Height - 72) / 7), 16, 52);
     public static Rectangle Panel(Viewport viewport)
     {
-        int size = SlotSize(viewport), width = size * 9 + 24, height = size * 4 + 88;
+        int size = SlotSize(viewport), width = size * 9 + 24, height = size * 7 + 64;
         return new Rectangle((viewport.Width - width) / 2, (viewport.Height - height) / 2, width, height);
     }
     public static Rectangle Slot(Viewport viewport, int slot)
@@ -24,7 +24,22 @@ internal static class InventoryLayout
         int size = SlotSize(viewport);
         int row = slot < Inventory.HotbarSlots ? 3 : (slot - Inventory.HotbarSlots) / 9;
         int column = slot % 9;
-        return new Rectangle(panel.X + 12 + column * size, panel.Y + 32 + row * size + (row == 3 ? 14 : 0), size - 2, size - 2);
+        return new Rectangle(panel.X + 12 + column * size, panel.Y + 34 + 3 * size + row * size + (row == 3 ? 10 : 0), size - 2, size - 2);
+    }
+    public static Rectangle CraftingSlot(Viewport viewport, int width, int slot)
+    {
+        Rectangle panel = Panel(viewport); int size = SlotSize(viewport);
+        return new Rectangle(panel.X + 12 + size + slot % width * size, panel.Y + 24 + slot / width * size, size - 2, size - 2);
+    }
+    public static Rectangle Output(Viewport viewport, int width)
+    {
+        Rectangle input = CraftingSlot(viewport, width, 0); int size = SlotSize(viewport);
+        return new Rectangle(input.X + (width + 2) * size, input.Y + (width - 1) * size / 2, size - 2, size - 2);
+    }
+    public static Rectangle Arrow(Viewport viewport, int width)
+    {
+        Rectangle output = Output(viewport, width); int size = SlotSize(viewport);
+        return new Rectangle(output.X - size - size / 2, output.Center.Y - size / 8, size, Math.Max(2, size / 4));
     }
     public static Rectangle HotbarSlot(Viewport viewport, int slot)
     {
@@ -70,7 +85,7 @@ internal sealed class InventoryScreen : IDisposable
         _pixel.SetData(new[] { Color.White });
     }
     public void Open() => Message = "";
-    public void CannotClose() => Message = "PLACE THE HELD STACK BEFORE CLOSING.";
+    public void CannotClose() => Message = "MAKE ROOM FOR HELD ITEMS AND INGREDIENTS.";
     public void Update(GameSession session, MouseState mouse, MouseState previous, Viewport viewport)
     {
         InventoryInteraction interaction = session.InventoryInteraction;
@@ -84,30 +99,49 @@ internal sealed class InventoryScreen : IDisposable
                 Message = "";
                 return;
             }
+        CraftingGrid crafting = session.Crafting;
+        for (int slot = 0; slot < crafting.SlotCount; slot++)
+            if (InventoryLayout.CraftingSlot(viewport, crafting.Width, slot).Contains(mouse.Position))
+            { crafting.Click(slot, interaction, right && !left); Message = ""; return; }
+        if (InventoryLayout.Output(viewport, crafting.Width).Contains(mouse.Position))
+        { crafting.TryCraft(interaction); Message = ""; return; }
         if (left && !interaction.Cursor.IsEmpty && !InventoryLayout.Panel(viewport).Contains(mouse.Position))
             Message = session.DropCursor() ? "" : "NO ROOM TO DROP ITEMS.";
     }
-    public void Draw(InventoryInteraction interaction, MouseState mouse, Viewport viewport)
+    public void Draw(GameSession session, MouseState mouse, Viewport viewport)
     {
+        InventoryInteraction interaction = session.InventoryInteraction;
+        CraftingGrid crafting = session.Crafting;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, DepthStencilState.None, RasterizerState.CullNone);
         Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.6f);
         Rectangle panel = InventoryLayout.Panel(viewport);
         Fill(panel, new Color(150, 141, 125));
         Fill(new Rectangle(panel.X + 3, panel.Y + 3, panel.Width - 6, panel.Height - 6), new Color(51, 48, 43));
-        Text("INVENTORY", panel.X + 12, panel.Y + 12, 1, Color.White);
+        Text(crafting.Width == 3 ? "CRAFTING TABLE" : "CRAFTING", panel.X + 12, panel.Y + 8, 1, Color.White);
+        for (int slot = 0; slot < crafting.SlotCount; slot++)
+            DrawSlot(crafting[slot], InventoryLayout.CraftingSlot(viewport, crafting.Width, slot), mouse, false);
+        Rectangle arrow = InventoryLayout.Arrow(viewport, crafting.Width);
+        Fill(new Rectangle(arrow.X, arrow.Center.Y - 1, arrow.Width - 3, 3), Color.LightGray);
+        for (int i = 0; i < 5; i++) Fill(new Rectangle(arrow.Right - 5 + i, arrow.Center.Y - 4 + i, 1, 9 - i * 2), Color.LightGray);
+        DrawSlot(crafting.Preview, InventoryLayout.Output(viewport, crafting.Width), mouse, false);
+        Text("INVENTORY", panel.X + 12, InventoryLayout.Slot(viewport, 9).Y - 10, 1, Color.LightGray);
         for (int slot = 0; slot < Inventory.SlotCount; slot++)
         {
             Rectangle bounds = InventoryLayout.Slot(viewport, slot);
-            Fill(bounds, slot == interaction.Inventory.SelectedSlot ? new Color(235, 216, 135) : new Color(125, 119, 107));
-            Fill(new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4), bounds.Contains(mouse.Position)
-                ? new Color(83, 82, 73) : new Color(32, 34, 33));
-            ItemIcons.Draw(_sprites, _atlas, _pixel, interaction.Inventory[slot], bounds);
+            DrawSlot(interaction.Inventory[slot], bounds, mouse, slot == interaction.Inventory.SelectedSlot);
         }
         string help = PixelFont.Fit("E / ESC CLOSE   LMB OUTSIDE DROPS HELD STACK", (panel.Width - 24) / 6);
-        Text(help, panel.X + 12, panel.Bottom - 20, 1, Color.LightGray);
-        if (Message.Length > 0) Text(Message, Math.Max(8, (viewport.Width - Message.Length * 6) / 2), panel.Bottom + 6, 1, Color.Salmon);
+        Text(Message.Length > 0 ? PixelFont.Fit(Message, (panel.Width - 24) / 6) : help,
+            panel.X + 12, panel.Bottom - 20, 1, Message.Length > 0 ? Color.Salmon : Color.LightGray);
         ItemIcons.Draw(_sprites, _atlas, _pixel, interaction.Cursor, new Rectangle(mouse.X + 8, mouse.Y + 8, 42, 42));
         _sprites.End();
+    }
+    private void DrawSlot(ItemStack stack, Rectangle bounds, MouseState mouse, bool selected)
+    {
+        Fill(bounds, selected ? new Color(235, 216, 135) : new Color(125, 119, 107));
+        Fill(new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4), bounds.Contains(mouse.Position)
+            ? new Color(83, 82, 73) : new Color(32, 34, 33));
+        ItemIcons.Draw(_sprites, _atlas, _pixel, stack, bounds);
     }
     private void Text(string text, int x, int y, int scale, Color color) => PixelFont.Draw(_sprites, _pixel, text, x, y, scale, color);
     private void Fill(Rectangle rectangle, Color color) => _sprites.Draw(_pixel, rectangle, color);

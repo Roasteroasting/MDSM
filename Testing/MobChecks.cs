@@ -184,13 +184,13 @@ internal static class MobChecks
     public static void StartingAndRespawn()
     {
         Inventory inventory = Inventory.CreateNewWorld();
-        Require(Blocks.Selection.Length == 14, "Placeable palette omitted wool.");
-        for (int i = 0; i < Inventory.SlotCount; i++) Require(i < 14 ? inventory[i] == new ItemStack(Items.FromBlock(Blocks.Selection[i]), 64) : inventory[i].IsEmpty,
-            "New-world stock missing, contains food/resources, or has wrong order.");
+        Require(Blocks.Selection.Length == 15 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
+            "Placeable palette omitted wool/table or reordered existing blocks.");
+        for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New worlds must not grant starting items.");
         Require(Inventory.CreateStarter()[13].IsEmpty, "Legacy migration granted new wool.");
         var session = new GameSession("new", new WorldSave(PigChecks.Flat(), "New", new Vector3(40, 1, 40), 0, 0, inventory));
         session.Player.ApplyDamage(20); session.HandleDeath(); session.Respawn();
-        Require(Enumerable.Range(0, 36).All(i => session.Inventory[i].IsEmpty) && session.Items.Entities.Count == 14, "Death/respawn replenished or discarded new-world stock.");
+        Require(Enumerable.Range(0, 36).All(i => session.Inventory[i].IsEmpty) && session.Items.Entities.Count == 0, "Death/respawn replenished new-world stock.");
     }
 
     internal static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.Write(stream, save); return stream.ToArray(); }

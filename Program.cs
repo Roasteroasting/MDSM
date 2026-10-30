@@ -1,4 +1,8 @@
-if (System.Array.Exists(args, argument => argument == "--lake-test"))
+if (System.Array.Exists(args, argument => argument == "--crafting-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.CraftingChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--lake-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.LargeLakeChecks.Run();
 }

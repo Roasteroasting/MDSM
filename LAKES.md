@@ -10,11 +10,39 @@ The previous large-lake path reused the small pond outline and rejected more tha
 
 A mixed seed selects 2-3 target lakes for Large and 6-9 for Massive. Each slot receives 256 bounded, deterministic candidate positions, ranked by elevation, broad relief and central basin suitability. Full footprints are then checked before writing any blocks. Sites reject hilltops/excessive relief, finite edges and the spawn neighborhood; major lakes maintain generous separation. Search exhaustion skips an unsuitable slot rather than forcing a basin into mountains. Ordinary tested seeds met their full targets.
 
-Water sits at one level near the lowest original land in the footprint. Deepest water ranges from 12-18 blocks in Large and 15-24 in Massive, with a smooth depth profile from shallow shores toward the interior. Shoreline grading cuts or gently fills the immediate rim and blends into the original heightmap, capped at a 56-column search apron; unchanged outer land is left alone. Actual modified terrain, not that entire apron rectangle, is reserved against subsequent ponds/rivers. Beds and beaches use existing Sand, Gravel, Dirt and Grass with solid support. The regular decoration stage runs afterward.
+Water sits at one level near the lowest original land in the footprint. Depth scales to approximately one tenth of the proposed span, with one block of variation, and retains the smooth depth profile from shallow shores toward the interior. Typical depths are 4-7 blocks in Large and 9-13 in Massive; exceptional lakes reach roughly 9-13 / 15-18. Shoreline grading cuts or gently fills the immediate rim and blends into the original heightmap, capped at a 56-column search apron; unchanged outer land is left alone. Actual modified terrain, not that entire apron rectangle, is reserved against subsequent ponds/rivers. Beds and beaches use existing Sand, Gravel, Dirt and Grass with solid support. The regular decoration stage runs afterward.
 
 Pond radius/depth/density and river routing/width/length/depth/budgets remain unchanged. Their positions in newly generated Large/Massive worlds can differ as feature layout changes. Small/Normal take the original pond-only path. Existing saves never run this generation stage.
 
-## Measured complete worlds
+## Size reduction (October 30, 2026)
+
+New Large lakes are typically about **50 blocks across**, with rare exceptions about **100**. Massive lakes are typically about **100**, with rare exceptions about **150**. Exceptional selection changed from 1-in-7 to **1-in-64 per lake**, independently seeded by world seed, size and lake slot so placement attempts do not influence rarity. The fixed 4,000-column minimum was replaced with a proportional footprint-area guard to admit the smaller basins. Shapes, materials, terrain suitability, candidate search, shore grading, population targets, pond/river algorithms and water rules are unchanged. Existing saved terrain is never regenerated.
+
+Production footprint generation was exercised for seeds 0-127 in each size, using each world's unchanged target count. The following spans are the **actual longest horizontal extents of the connected water masks**, not the configured input spans. This is an outline/rarity sample, not 256 complete generated worlds:
+
+| Size | Lake outlines | Exceptional outlines / worlds | Typical mean span | Exceptional mean span |
+| --- | ---: | ---: | ---: | ---: |
+| Large | 319 | 7 / 7 of 128 | 52.0 | 104.7 |
+| Massive | 958 | 18 / 18 of 128 | 101.6 | 152.9 |
+
+Complete-world verification also measures carved water blocks, stable source volumes, supported beds, graded banks, protected spawn/edges, unchanged pond/river counts and deterministic regeneration. The focused lake suite passed all eight full-world cases below, each followed by an independent regeneration:
+
+| Size / seed | Lakes | Actual longest spans | Actual maximum-depth range |
+| --- | ---: | --- | --- |
+| Large / 173 | 3 | 46-53 | 5-6 |
+| Large / -907 | 3 | 44-46 | 4-5 |
+| Large / 137 | 2 | 49-55 | 6 |
+| Large / 33 | 3 | 55-110 | 5-10 |
+| Massive / 173 | 8 | 96-109 | 9-12 |
+| Massive / -907 | 8 | 92-113 | 10-12 |
+| Massive / 137 | 6 | 91-114 | 10-13 |
+| Massive / 2 | 7 | 103-140 | 9-17 |
+
+The exceptional carved lakes measured 78x110/depth 10 (Large, seed 33) and 132x140/depth 17 (Massive, seed 2). Every Large case retained 64 ponds/4 rivers; every Massive case retained 256 ponds/12 rivers. No initial fluid/gravity work was scheduled, and idle fluid ticks left terrain revisions unchanged. `dotnet build` completed with zero warnings/errors, the focused `--lake-test` passed, and the complete `--self-test` suite passed **103/103 groups**, including all-size full-world hash/save restoration and legacy-height migration. No new graphics or physical-input testing was performed for this parameter update; rendering code and assets are unchanged.
+
+The measurements and graphics benchmarks below are historical results for the larger lakes before this reduction, not current size/performance measurements.
+
+## Historical measured complete worlds (before reduction)
 
 Debug build, i5-11400 and 16 GB RAM. Each row comes from a complete generated world, not configured radii or a cropped terrain fixture. Entries list **actual water-column bounding width x depth / maximum water depth**, all in blocks. Each major lake's largest connected source body was measured independently; a separate pond can legitimately occupy a cove's bounding rectangle and is excluded from that measurement.
 
@@ -55,7 +83,7 @@ The existing fixed-camera full-scene benchmark, including water, mobs and 120 Hz
 
 These are five-second scripted render phases with continuous camera rotation, followed by rotation plus translation over actual major lakes; offscreen FPS is not a gameplay FPS guarantee. They perform one final readback for pixel verification, outside the measured interval. Existing screenshot regressions continue comparing consecutive frames and exact PNG pixels. Buffer bytes are estimates from live application buffers, not driver-reported total VRAM. Viewing distance and fog settings were not changed.
 
-## Verification and compatibility
+## Earlier update verification and compatibility
 
 `dotnet build` and `dotnet publish --no-restore -c Release` completed with zero warnings/errors; all nine texture assets are present in the published Content tree. The complete graphics suite passed, including the actual 320x240 notice/input path, all four mob models, water/terrain depth and graphics-state restoration, falling blocks, inventory and exact screenshot pixels. Repeated/alternating HUD-hidden and HUD-visible captures, resize and failed-save regressions remained intact. Actual Large/Massive WorldRenderer lifecycle checks exercised bounded residency, frustum/elevation/edges, turns/movement, edits/re-entry, water eviction and GPU cleanup. Both representative lake PNGs and the compact notice PNG were visually inspected.
 
