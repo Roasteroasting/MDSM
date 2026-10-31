@@ -22,6 +22,7 @@ public sealed class World
     public FluidSimulation Fluids { get; }
     public FallingBlockSimulation Gravity { get; }
     public BlockEntities Containers { get; }
+    public VegetationSimulation Vegetation { get; }
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
     public OreGenerationStats GeneratedOres { get; private set; }
     public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
@@ -35,6 +36,7 @@ public sealed class World
     internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        Vegetation=new VegetationSimulation(this);
         Containers=new BlockEntities(this);
         Fluids = new FluidSimulation(this);
         Gravity = new FallingBlockSimulation(this);
@@ -65,6 +67,7 @@ public sealed class World
         progress?.Invoke("PLACING TREES AND VEGETATION");
         new WorldDecorator(seed).Decorate(world);
         progress?.Invoke("PLACING COAL, IRON AND DIAMONDS");
+        UndergroundDeposits.Generate(world);
         world.GeneratedOres=OreGenerator.Generate(world);
         progress?.Invoke("INITIALIZING WATER");
         world.Fluids.Initialize();
@@ -97,6 +100,7 @@ public sealed class World
     public bool SetBlock(int x, int y, int z, BlockType block)
     {
         if (!Contains(x, y, z) || !Blocks.IsDefined(block)
+            || block==BlockType.Sapling && !Vegetation.CanPlant
             || GetBlock(x, y, z) == block || !Containers.CanChange(new Point3(x,y,z),block))
             return false;
 
@@ -106,6 +110,7 @@ public sealed class World
         BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
         Containers.Changed(new Point3(x,y,z),block);
+        Vegetation.Changed(new Point3(x,y,z),previous,block);
         // Air/fluid both expose terrain faces; changing a flow level only invalidates water.
         bool terrainChanged = !(previous == BlockType.Air || Water.IsWater(previous))
             || !(block == BlockType.Air || Water.IsWater(block));
@@ -125,7 +130,7 @@ public sealed class World
         Revision++;
         Fluids.Changed(new Point3(x, y, z), previous, block);
         Gravity.Changed(x, z, previous, block);
-        if (!Blocks.SupportsPlant(block) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
+        if (!Blocks.SupportsPlant(block,GetBlock(x,y+1,z)) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
             SetBlock(x, y + 1, z, BlockType.Air);
         return true;
     }
@@ -137,6 +142,7 @@ public sealed class World
         if (Blocks.Falls(block) && (y == 0 || !IsSolid(x, y - 1, z)))
             throw new InvalidOperationException("Generated Sand and Gravel require solid support.");
         _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size].SetBlock(x % Chunk.Size, y, z % Chunk.Size, block);
+        if(block==BlockType.Leaves)Vegetation.MarkNatural(new Point3(x,y,z));
     }
 
     private void MarkDirty(int x, int z)
@@ -153,7 +159,7 @@ public sealed class World
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
             || (definition.Solid && Overlaps(Bounds(cell), playerBounds))
             || (definition.Solid && Gravity.Intersects(Bounds(cell)))
-            || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z))))
+            || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z),block)))
             return false;
 
         return SetBlock(cell.X, cell.Y, cell.Z, block);

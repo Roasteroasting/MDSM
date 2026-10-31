@@ -138,8 +138,10 @@ internal static class WaterChecks
         var world = Floor();
         for (int z = 10; z <= 35; z++) for (int x = 10; x <= 35; x++) for (int y = 1; y <= 5; y++) world.SetGeneratedBlock(x, y, z, BlockType.WaterSource);
         var dry = new Player(new Vector3(50, 1, 50)); var wet = new Player(new Vector3(15, 1, 15));
+        for(int i=0;i<120;i++){dry.Update(world,Vector3.Right,false,1f/120);wet.Update(world,Vector3.Right,false,1f/120);}
+        float dryStart=dry.Position.X,wetStart=wet.Position.X;
         for (int i = 0; i < 120; i++) { dry.Update(world, Vector3.Right, false, 1f / 120); wet.Update(world, Vector3.Right, false, 1f / 120); }
-        Require(MathF.Abs(dry.Position.X - 55) < 0.001f && MathF.Abs(wet.Position.X - 17.25f) < 0.001f, "Water speed reduction changed normal movement.");
+        Require(MathF.Abs(dry.Position.X-dryStart-Player.MoveSpeed) < 0.001f && MathF.Abs(wet.Position.X-wetStart-Player.MoveSpeed*.45f) < 0.001f, "Water speed reduction changed normal movement.");
         for (int i = 0; i < 180; i++) wet.Update(world, Vector3.Zero, false, 1f / 120, swimUp: true);
         Require(wet.Position.Y > 4.5f && wet.Health == 20 && !world.IntersectsSolid(wet.Bounds), "Space swimming failed or collided with water.");
         var fall = new Player(new Vector3(20, 30, 20));
@@ -258,7 +260,7 @@ internal static class WaterChecks
             using var bytes = new MemoryStream();
             var inventory = Inventory.CreateNewWorld(); inventory.SelectedSlot = 5;
             var pigs = new[] { new PigState(new Vector3(40, 1, 40), 0.5f, 7) };
-            var drops = new[] { new DroppedItemState(Items.RawPorkchop, 3, new Vector3(30, 1, 30), -1, 0.7f) };
+            var drops = new[] { new DroppedItemState(Items.Coal, 3, new Vector3(30, 1, 30), -1, 0.7f) };
             WorldSerializer.Write(bytes, new WorldSave(original, "Water round trip", new Vector3(45, 1, 45), 0.4f, 0.2f, inventory, drops, 13, pigs));
             bytes.Position = 0; WorldSave saved = WorldSerializer.Read(bytes); Equal(original, saved.World);
             Require(saved.Health == 13 && saved.Pigs[0] == pigs[0] && saved.DroppedItems[0] == drops[0]
@@ -271,7 +273,7 @@ internal static class WaterChecks
             bytes.SetLength(0); var dry = new World(12, size);
             bytes.Write(MobChecks.Version4(new WorldSave(dry, "Existing dry world", dry.Spawn, 0, 0))); bytes.Position = 0;
             WorldSave old = WorldSerializer.Read(bytes); Equal(dry, old.World);
-            Require(old.World.Fluids.PendingCount == 0 && WorldSerializer.FormatVersion == 8, "Loading old terrain introduced water or changed the expected save version.");
+            Require(old.World.Fluids.PendingCount == 0 && WorldSerializer.FormatVersion == 9, "Loading old terrain introduced water or changed the expected save version.");
         }
     }
 }

@@ -16,31 +16,20 @@ public sealed class TextureAtlas
 
     // Owned by the ContentManager supplied to the constructor, not by this wrapper.
     public Texture2D Texture { get; }
-    public Texture2D Porkchop { get; }
     public Texture2D Water { get; }
-    public Texture2D Leather { get; }
-    public Texture2D Feather { get; }
-    public Texture2D Survival { get; }
+    public Texture2D ItemAtlas { get; }
 
-    public Texture2D ItemTexture(ItemId item) => item == Items.RawPorkchop ? Porkchop
-        : item == Items.Leather ? Leather : item == Items.Feather ? Feather : Items.IsSprite(item)?Survival:Texture;
-    public Rectangle ItemSource(ItemId item) => item.Value>=259 && Items.IsSprite(item)?new(Items.Get(item).Sprite%8*16,Items.Get(item).Sprite/8*16,16,16)
-        : Items.IsSprite(item) ? ItemTexture(item).Bounds
+    public Texture2D ItemTexture(ItemId item) => Items.IsSprite(item)?ItemAtlas:Texture;
+    public Rectangle ItemSource(ItemId item) => Items.IsSprite(item)?Source(Items.Get(item).Sprite)
         : Items.TryGetBlock(item, out BlockType block) ? Source(Blocks.Get(block).FrontTile>=0?Blocks.Get(block).FrontTile:Blocks.Tile(block, Vector3.Up)) : Rectangle.Empty;
 
     public TextureAtlas(ContentManager content)
     {
         Texture = content.Load<Texture2D>("Blocks/terrain");
-        Porkchop = content.Load<Texture2D>("Items/raw-porkchop");
         Water = content.Load<Texture2D>("Blocks/water");
-        Leather = content.Load<Texture2D>("Items/leather");
-        Feather = content.Load<Texture2D>("Items/feather");
-        Survival=content.Load<Texture2D>("Items/survival");
-        if(Survival.Width!=128 || Survival.Height!=64)throw new ContentLoadException("survival.png must be 128x64.");
-        if (Leather.Width != 16 || Leather.Height != 16 || Feather.Width != 16 || Feather.Height != 16)
-            throw new ContentLoadException("Resource icons must be 16x16.");
+        ItemAtlas=content.Load<Texture2D>("Items/items");
+        if(ItemAtlas.Width!=AtlasSize || ItemAtlas.Height!=AtlasSize)throw new ContentLoadException("items.png must be 256x256.");
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");
-        if (Porkchop.Width != 16 || Porkchop.Height != 16) throw new ContentLoadException("raw-porkchop.png must be 16x16.");
         if (Texture.Width != AtlasSize || Texture.Height != AtlasSize)
             throw new ContentLoadException($"terrain.png must be {AtlasSize}x{AtlasSize} pixels with {TileSize}x{TileSize} tiles.");
     }

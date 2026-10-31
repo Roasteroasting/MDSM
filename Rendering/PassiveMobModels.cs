@@ -29,9 +29,10 @@ internal static class PassiveMobModels
                 Legs(4, 0.28f, 0.4f, 0.65f, 0.13f);
                 break;
             case MobSpecies.Sheep:
-                mesh.Cuboid(new(-0.4f,0.35f,-0.5f), new(0.4f,1.15f,0.5f), world, 0, tint);
+                if(mob.Sheared)mesh.Cuboid(new(-.3f,.45f,-.43f),new(.3f,1.02f,.43f),world,2,tint);
+                else mesh.Cuboid(new(-0.4f,0.35f,-0.5f), new(0.4f,1.15f,0.5f), world, 0, tint);
                 mesh.Cuboid(new(-0.22f,0.75f,-0.73f), new(0.22f,1.2f,-0.35f), world, 2, tint, 1);
-                mesh.Cuboid(new(-0.25f,1.12f,-0.65f), new(0.25f,1.3f,-0.35f), world, 0, tint);
+                if(!mob.Sheared)mesh.Cuboid(new(-0.25f,1.12f,-0.65f), new(0.25f,1.3f,-0.35f), world, 0, tint);
                 Legs(4, 0.24f, 0.32f, 0.45f, 0.11f);
                 break;
             case MobSpecies.Chicken:

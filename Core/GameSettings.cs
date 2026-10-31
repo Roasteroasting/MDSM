@@ -10,6 +10,7 @@ public sealed class GameSettings
     private int _fpsCap = DefaultFps;
     public int FpsCap { get => _fpsCap; set => _fpsCap = Math.Clamp(value, MinimumFps, MaximumFps); }
     public bool UncappedFps { get; set; }
+    public bool ViewBobbing { get; set; } = true;
     public int? EffectiveFps => UncappedFps ? null : FpsCap;
 }
 
@@ -34,6 +35,8 @@ public sealed class SettingsStore
             if (root.TryGetProperty("FpsCap", out var cap) && cap.TryGetInt32(out int value)) settings.FpsCap = value;
             if (root.TryGetProperty("UncappedFps", out var uncapped) && uncapped.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 settings.UncappedFps = uncapped.GetBoolean();
+            if(root.TryGetProperty("ViewBobbing",out var bobbing) && bobbing.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                settings.ViewBobbing=bobbing.GetBoolean();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
@@ -51,7 +54,7 @@ public sealed class SettingsStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps }, new JsonSerializerOptions { WriteIndented = true });
+                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing }, new JsonSerializerOptions { WriteIndented = true });
                 file.Flush(true);
             }
             if (File.Exists(FilePath)) File.Replace(temporary, FilePath, null);

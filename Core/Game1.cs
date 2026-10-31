@@ -118,6 +118,7 @@ public class Game1 : Game
 
     private void ProcessInput(KeyboardState keyboard, MouseState mouse, bool back, GameTime gameTime, Point lookDelta)
     {
+        _menu.UpdateMessage(gameTime.ElapsedGameTime.TotalSeconds);
         _presentation.Update(keyboard, _previousKeyboard, IsActive, _session != null);
         if (_creation != null || _created.HasValue)
         {
@@ -209,6 +210,7 @@ public class Game1 : Game
         {
             const float dt = (float)SimulationClock.StepSeconds;
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space));
+            _session.Bobbing.Update(player,_settings.ViewBobbing,dt);
             _pendingJump = false;
             camera.Position = player.EyePosition;
             if (player.IsDead) { EnterDeath(); return; }
@@ -216,6 +218,7 @@ public class Game1 : Game
             world.Fluids.Update(dt);
             world.Gravity.Update(dt);
             world.Containers.Update(dt);
+            world.Vegetation.Update(dt,_session.Items);
             _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items);
             _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
                 camera.Position, camera.Forward, _selection, held, dt,_session.Inventory);
@@ -226,6 +229,13 @@ public class Game1 : Game
         string equipmentNotice=_session.TakeEquipmentNotice();
         if(equipmentNotice!=null){_notice=equipmentNotice;_noticeSeconds=3;}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+        // Entity interaction takes priority; holding shears never falls through to placement/food.
+        if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released
+            && _session.Inventory.Selected.Item==Items.Shears)
+        {
+            PassiveMob target=EntityRaycaster.Cast(world,_session.Mobs,camera.Position,camera.Forward);
+            if(target?.Species==MobSpecies.Sheep){_session.Mobs.TryShear(target,_session.Inventory,_session.Items);return;}
+        }
         if (!_awaitMouseRelease && mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released
             && _selection is BlockHit tableHit && (world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) == BlockType.CraftingTable
                 || BlockEntities.HasState(world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z))))
@@ -365,7 +375,7 @@ public class Game1 : Game
                         _saves.SetActiveWorld(null);
                         _selection = null;
                         SetState(GameState.MainMenu);
-                        _menu.Message("WORLD SAVED.");
+                        _menu.Message("WORLD SAVED.",seconds:8);
                     }
                     break;
                 case MenuAction.Exit:
@@ -448,7 +458,7 @@ public class Game1 : Game
             _autosaveElapsed = 0;
             _notice = "WORLD SAVED";
             _noticeSeconds = 4;
-            _menu.Message("WORLD SAVED.");
+            _menu.Message("WORLD SAVED.",seconds:8);
             return true;
         }
         catch (Exception exception) when (IsStorageError(exception))
@@ -497,6 +507,7 @@ public class Game1 : Game
     {
         _session?.Mining.Reset();
         _session?.Bow.Cancel();
+        _session?.Bobbing.Reset();
         _simulationClock.Reset();
         _pendingJump = false;
         _hotbarScroll.Reset();
@@ -574,6 +585,8 @@ public class Game1 : Game
         if (GraphicsDevice.Viewport.Width <= 0 || GraphicsDevice.Viewport.Height <= 0) return;
         if (_session != null)
         {
+            Vector2 bob=State==GameState.Playing && _settings.ViewBobbing?_session.Bobbing.Offset:Vector2.Zero;
+            _session.Camera.PresentationOffset=_session.Camera.Right*bob.X+Vector3.Up*bob.Y;
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);

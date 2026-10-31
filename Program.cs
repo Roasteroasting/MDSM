@@ -1,4 +1,12 @@
-if (System.Array.Exists(args, argument => argument == "--survival-test"))
+if (System.Array.Exists(args, argument => argument == "--interface-graphics-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.InterfaceGraphicsChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--refinement-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.RefinementChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--survival-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.ProgressionChecks.Run();
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
@@ -151,7 +151,7 @@ internal static class WorldExpansionChecks
         var population=new PassiveMobPopulation(world,generated);var drops=new DroppedItems(world);
         PassiveMob victim=population.Entities[0];while(!victim.IsDead)Require(population.Punch(victim,world.Spawn,drops),"Could not set pending respawn fixture.");
         drops.Spawn(Items.FromBlock(BlockType.Dirt),7,world.Spawn+Vector3.Up,0.5f);
-        var inventory=Inventory.CreateNewWorld();inventory.SetSlot(15,new ItemStack(Items.RawPorkchop,23));inventory.SelectedSlot=8;
+        var inventory=Inventory.CreateNewWorld();inventory.SetSlot(15,new ItemStack(Items.Coal,23));inventory.SelectedSlot=8;
         inventory.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Iron,ToolKind.Pickaxe),1,47));
         var chestCell=new Point3(world.Width-2,126,world.Depth-2);world.SetBlock(chestCell.X,chestCell.Y,chestCell.Z,BlockType.Chest);
         world.Containers.Get(chestCell).SetSlot(26,new ItemStack(Items.Tool(ToolTier.Diamond,ToolKind.Sword),1,931));
@@ -255,7 +255,7 @@ internal static class WorldExpansionChecks
             && save.DroppedItems.AsSpan().SequenceEqual(expected.Drops),"Entity state changed in a large-world save.");
         Require(save.Population.Targets.AsSpan().SequenceEqual(expected.Population.Targets) && save.Population.Pending.AsSpan().SequenceEqual(expected.Population.Pending)
             && save.World.Gravity.CaptureActive().AsSpan().SequenceEqual(expected.Falling) && save.World.Gravity.CaptureColumns().AsSpan().SequenceEqual(expected.Queued),"Pending population/falling state changed.");
-        Require(save.Inventory.SelectedSlot==8 && save.Inventory[15]==new ItemStack(Items.RawPorkchop,23)
+        Require(save.Inventory.SelectedSlot==8 && save.Inventory[15]==new ItemStack(Items.Coal,23)
             && save.World.GetBlock(save.World.Width-1,127,save.World.Depth-1)==BlockType.Cobblestone,"Inventory/high-Y data changed.");
         for(int i=0;i<36;i++)Require(save.Inventory[i]==expected.Slots[i],"A saved inventory slot changed in a large world.");
         var containers=save.World.Containers.Capture();Require(containers.Length==expected.Containers.Length && save.Arrows.AsSpan().SequenceEqual(expected.Arrows),"Container or active arrow state missing.");
@@ -277,7 +277,7 @@ internal static class WorldExpansionChecks
         if(version==7)world.Gravity.Update(0.1);
         var population=new PassiveMobPopulation(world,new[]{MobChecks.State(MobSpecies.Pig),MobChecks.State(MobSpecies.Cow,new Vector3(30,1,30),1)});
         var drops=new DroppedItems(world);population.Punch(population.Entities[1],world.Spawn,drops);
-        var inventory=Inventory.CreateNewWorld();inventory.SetSlot(15,new ItemStack(Items.RawPorkchop,23));inventory.SelectedSlot=5;
+        var inventory=Inventory.CreateNewWorld();inventory.SetSlot(15,new ItemStack(Items.Coal,23));inventory.SelectedSlot=5;
         var save=new WorldSave(world,"Legacy "+size,new Vector3(60,45,60),1.2f,-0.3f,inventory,drops.Capture(),13,
             population.CapturePigs(),population.CaptureOthers(),population.CapturePopulation());
         byte[] bytes=LegacyBytes(save,version);

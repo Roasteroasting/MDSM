@@ -12,10 +12,12 @@ public sealed class Player
     public const int MaximumHealth = 20;
     public const float StandingEyeHeight = 1.62f;
     public const float CrouchingEyeHeight = 1.50f;
-    private const float MoveSpeed = 5f;
-    private const float Gravity = 24f;
-    private const float JumpSpeed = 8f;
+    public const float MoveSpeed = 4.3f;
+    public const float Gravity = 28f;
+    public const float JumpSpeed = 8.4f;
+    public const float TerminalVelocity = 60f;
     private float _verticalSpeed;
+    private Vector3 _horizontalSpeed;
     private readonly FallTracker _fall = new();
     public int Health { get; private set; }
     public bool IsDead => Health == 0;
@@ -46,7 +48,7 @@ public sealed class Player
     }
     public void StopMovement()
     {
-        _verticalSpeed = 0; Grounded = false; Crouching = false; _fall.Reset(Position.Y);
+        _verticalSpeed = 0; _horizontalSpeed=Vector3.Zero; Grounded = false; Crouching = false; _fall.Reset(Position.Y);
     }
     public void StopCrouching() => Crouching = false;
 
@@ -72,16 +74,23 @@ public sealed class Player
             _fall.Reset(Position.Y);
             _verticalSpeed = swimUp || jump ? 2.8f : MathF.Max(-2, _verticalSpeed * MathF.Exp(-3 * dt) - 4 * dt);
         }
-        else { _fall.Observe(Position.Y); _verticalSpeed = MathF.Max(_verticalSpeed - Gravity * dt, -40f); }
-        Vector3 displacement = movement * MoveSpeed * (swimming ? 0.45f : 1) * (Crouching ? 0.35f : 1) * dt + new Vector3(0, _verticalSpeed * dt, 0);
+        else { _fall.Observe(Position.Y); _verticalSpeed = MathF.Max(_verticalSpeed - Gravity * dt, -TerminalVelocity); }
+        Vector3 target=movement*MoveSpeed*(swimming ? .45f : 1)*(Crouching ? .35f : 1);
+        if(movement.LengthSquared()==0)_horizontalSpeed*=MathF.Exp(-(swimming?8:Grounded?24:2)*dt);
+        else
+        {
+            Vector3 change=target-_horizontalSpeed;float acceleration=(swimming?12:Grounded?60:12)*dt;
+            _horizontalSpeed+=change.LengthSquared()<=acceleration*acceleration?change:Vector3.Normalize(change)*acceleration;
+        }
+        Vector3 displacement = _horizontalSpeed*dt + new Vector3(0, _verticalSpeed * dt, 0);
         // Each step is narrower than a block, so fast falls cannot tunnel through terrain.
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.2f));
         Vector3 step = displacement / steps;
         Grounded = false;
         for (int i = 0; i < steps; i++)
         {
-            MoveAxis(world, protectEdge ? SupportedMovement(world, step.X, 0) : step.X, 0);
-            MoveAxis(world, protectEdge ? SupportedMovement(world, step.Z, 2) : step.Z, 2);
+            if(MoveAxis(world, protectEdge ? SupportedMovement(world, step.X, 0) : step.X, 0))_horizontalSpeed.X=0;
+            if(MoveAxis(world, protectEdge ? SupportedMovement(world, step.Z, 2) : step.Z, 2))_horizontalSpeed.Z=0;
             if (MoveAxis(world, step.Y, 1))
             {
                 if (step.Y < 0)

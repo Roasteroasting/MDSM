@@ -11,7 +11,7 @@ public static class Smelting
     public const double Seconds=10;
     public const double MaximumBurnSeconds=80;
     public static readonly SmeltingRecipe[] Recipes={new(Items.FromBlock(BlockType.Sand),Items.FromBlock(BlockType.Glass)),
-        new(Items.FromBlock(BlockType.IronOre),Items.IronIngot),new(Items.FromBlock(BlockType.WoodLog),Items.Charcoal)};
+        new(Items.FromBlock(BlockType.IronOre),Items.IronIngot),new(Items.FromBlock(BlockType.WoodLog),Items.Charcoal),new(Items.RawPorkchop,Items.CookedPorkchop)};
     public static ItemId Result(ItemId input){foreach(var recipe in Recipes)if(recipe.Input==input)return recipe.Output;return default;}
     public static bool CoalLike(ItemId item)=>item==Items.Coal || item==Items.Charcoal;
     public static double Fuel(ItemId item)=>CoalLike(item)?MaximumBurnSeconds:Items.TryGetBlock(item,out var block)&&block is BlockType.WoodLog or BlockType.WoodenPlanks?15:0;

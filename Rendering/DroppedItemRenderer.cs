@@ -41,24 +41,22 @@ internal sealed class DroppedItemRenderer : IDisposable
         {
             DroppedItem item = items.Entities[i];
             if (!_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
-            if (Items.TryGetBlock(item.Item, out BlockType block)) _builder.AppendItem(block, item.Position);
+            if (!Items.IsSprite(item.Item) && Items.TryGetBlock(item.Item, out BlockType block)) _builder.AppendItem(block, item.Position);
         }
         _effect.View = camera.View;
         _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
         DrawBatch(_builder.Vertices, _builder.VertexCount, _atlas.Texture);
-        for(int group=0;group<4;group++)
         {
-            ItemId type=group<3?Items.Sprites[group]:default;
             int spriteCount = 0;
             for (int i = 0; i < items.Entities.Count; i++)
             {
                 DroppedItem item = items.Entities[i];
-                if ((group<3?item.Item!=type:item.Item.Value<259 || !Items.IsSprite(item.Item)) || !_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
+                if (!Items.IsSprite(item.Item) || !_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
                 if (spriteCount + ItemSpriteGeometry.VertexCount > _sprites.Length) Array.Resize(ref _sprites, _sprites.Length * 2);
                 ItemSpriteGeometry.Fill(_sprites, spriteCount, item.Position, camera.Right, Vector3.Up,item.Item);
                 spriteCount += ItemSpriteGeometry.VertexCount;
             }
-            DrawBatch(_sprites, spriteCount, group<3?_atlas.ItemTexture(type):_atlas.Survival);
+            DrawBatch(_sprites, spriteCount, _atlas.ItemAtlas);
         }
 
         void DrawBatch(VertexPositionColorTexture[] vertices, int count, Texture2D texture)

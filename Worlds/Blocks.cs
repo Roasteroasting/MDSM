@@ -25,7 +25,7 @@ public enum BlockType : byte
     WaterFlow5 = 19, WaterFlow6 = 20, WaterFlow7 = 21, WaterFalling = 22,
     WhiteWool = 23,
     CraftingTable = 24,
-    Glass = 25, IronOre = 26, CoalOre = 27, DiamondOre = 28, Furnace = 29, Chest = 30
+    Glass = 25, IronOre = 26, CoalOre = 27, DiamondOre = 28, Furnace = 29, Chest = 30, Sapling = 31
 }
 
 public enum BlockShape { None, Cube, Cross, Fluid }
@@ -73,14 +73,15 @@ public static class Blocks
         new("COAL ORE",true,true,BlockShape.Cube,20,MiningSeconds:4.5f),
         new("DIAMOND ORE",true,true,BlockShape.Cube,21,MiningSeconds:4.5f),
         new("FURNACE",true,true,BlockShape.Cube,23,22,22,MiningSeconds:5.25f,FrontTile:24),
-        new("CHEST",true,true,BlockShape.Cube,26,25,25,MiningSeconds:3.75f,FrontTile:27)
+        new("CHEST",true,true,BlockShape.Cube,26,25,25,MiningSeconds:3.75f,FrontTile:27),
+        new("SAPLING",false,false,BlockShape.Cross,28,MiningSeconds:0)
     };
     private static readonly BlockType[] Palette =
     {
         BlockType.Grass, BlockType.Dirt, BlockType.Stone, BlockType.WoodLog, BlockType.Leaves,
         BlockType.WoodenPlanks, BlockType.Cobblestone, BlockType.Sand, BlockType.Gravel,
         BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable,
-        BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest
+        BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest,BlockType.Sapling
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
     public static bool IsDefined(BlockType block) => (int)block < Definitions.Length;
@@ -91,5 +92,6 @@ public static class Blocks
     public static bool IsPlaceable(BlockType block) => Get(block).Placeable;
     public static int Tile(BlockType block, Vector3 normal) => Get(block).Tile(normal);
     public static bool SupportsPlant(BlockType block) => block == BlockType.Grass;
+    public static bool SupportsPlant(BlockType ground,BlockType plant) => SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
 }

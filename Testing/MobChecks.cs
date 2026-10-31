@@ -122,8 +122,8 @@ internal static class MobChecks
             for (int i = 0; i < 20; i++) combat.Update(world, population, drops, mining, eye, Vector3.Forward, target, true, Dt);
             Require(mob.Health == health, "Species attack cooldown changed.");
             for (int i = 0; i < 1000 && !mob.IsDead; i++) combat.Update(world, population, drops, mining, eye, Vector3.Forward, target, true, Dt);
-            Require(mob.IsDead && population.Entities.Count == 0 && drops.Entities.Count == 1 && drops.Entities[0].Item == mob.Definition.Drop
-                && drops.Entities[0].Count >= 1 && drops.Entities[0].Count <= mob.Definition.MaximumDrop && !population.Punch(mob, eye, drops), "Species death/drop missing, wrong, or duplicated.");
+            Require(mob.IsDead && population.Entities.Count == 0 && drops.Entities.All(d=>d.Item==mob.Definition.Drop && d.Count<=Items.StackLimit(d.Item))
+                && drops.Entities.Sum(d=>d.Count) >= 1 && drops.Entities.Sum(d=>d.Count) <= mob.Definition.MaximumDrop && !population.Punch(mob, eye, drops), "Species death/drop missing, wrong, or duplicated.");
             var harvest=new Inventory();harvest.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Wood,ToolKind.Pickaxe),1));
             for (int i = 0; i < 420; i++) combat.Update(world, population, drops, mining, eye, Vector3.Forward, BlockRaycaster.Cast(world, eye, Vector3.Forward), true, Dt,harvest);
             Require(world.GetBlock(20, y, 18) == BlockType.Air, "Continuous mining did not resume after species death.");
@@ -133,7 +133,7 @@ internal static class MobChecks
                 // Vary world seeds for independent deterministic combat random streams.
                 World seeded = new World(i, WorldSize.Small, false);
                 var wounded = new PassiveMobPopulation(seeded, new[] { State(species, health: 1) }); var items = new DroppedItems(seeded);
-                Require(wounded.Punch(wounded.Entities[0], eye, items), "Fatal hit failed with available drop capacity."); amounts.Add(items.Entities[0].Count);
+                Require(wounded.Punch(wounded.Entities[0], eye, items), "Fatal hit failed with available drop capacity."); amounts.Add(items.Entities.Sum(d=>d.Count));
             }
             Require(amounts.Count == mob.Definition.MaximumDrop && amounts.Min() == 1 && amounts.Max() == mob.Definition.MaximumDrop, "Death drop range missing values.");
         }
@@ -185,7 +185,7 @@ internal static class MobChecks
     public static void StartingAndRespawn()
     {
         Inventory inventory = Inventory.CreateNewWorld();
-        Require(Blocks.Selection.Length == 21 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
+        Require(Blocks.Selection.Length == 22 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
             "Placeable palette omitted wool/table or reordered existing blocks.");
         for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New worlds must not grant starting items.");
         Require(Inventory.CreateStarter()[13].IsEmpty, "Legacy migration granted new wool.");
@@ -201,7 +201,7 @@ internal static class MobChecks
         foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(173, size, false); world.SetBlock(15, 8, 15, Water.Flow(3)); world.SetBlock(16, 7, 15, BlockType.WhiteWool);
-            var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 23)); inventory.SetSlot(1, new ItemStack(Items.Leather, 7));
+            var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.Coal, 23)); inventory.SetSlot(1, new ItemStack(Items.Leather, 7));
             inventory.SetSlot(2, new ItemStack(Items.Feather, 12)); inventory.SetSlot(13, new ItemStack(Items.FromBlock(BlockType.WhiteWool), 9));
             var pigs = new[] { new PigState(new Vector3(40, 1, 40), 1.25f, 3) };
             MobState[] mobs = { State(MobSpecies.Cow, new Vector3(50, 1, 50), 6) with { Yaw = 0.5f },
@@ -217,7 +217,7 @@ internal static class MobChecks
             while (!dead.IsDead) session.Mobs.Punch(dead, session.Player.Position, session.Items);
             WorldSave killed = Decode(Encode(session.Capture()));
             Require(killed.Mobs.Length == 2 && new GameSession("killed", killed).Mobs.Entities.Count == 3, "Killed species respawned on load.");
-            using var metadata = new MemoryStream(bytes); Require(WorldSerializer.ReadMetadata(metadata).Version == 8, "Version 8 metadata listing failed.");
+            using var metadata = new MemoryStream(bytes); Require(WorldSerializer.ReadMetadata(metadata).Version == 9, "Version 8 metadata listing failed.");
         }
     }
 
@@ -243,17 +243,17 @@ internal static class MobChecks
     public static void BackwardCompatibilityAndValidation()
     {
         World world = PigChecks.Flat(); world.SetBlock(15, 3, 15, BlockType.WaterSource);
-        var oldInventory = Inventory.CreateStarter(); oldInventory.SetSlot(13, new ItemStack(Items.RawPorkchop, 47));
+        var oldInventory = Inventory.CreateStarter(); oldInventory.SetSlot(13, ItemStack.ReadLegacyFood(Items.RawPorkchop, 47));
         var save = new WorldSave(world, "Pre-mob expansion", new Vector3(40, 1, 40), 0.2f, 0.3f, oldInventory, Health: 17,
             Pigs: new[] { new PigState(new Vector3(30, 1, 30), -1, 4) });
         WorldSave old = Decode(Version4(save));
-        Require(old.Pigs.AsSpan().SequenceEqual(save.Pigs) && old.Mobs.Length == 0 && old.Inventory[13] == oldInventory[13]
+        Require(old.Pigs.AsSpan().SequenceEqual(save.Pigs) && old.Mobs.Length == 0 && old.Inventory[13].Count == 1 && old.DroppedItems.Sum(d=>d.Count)+Enumerable.Range(0,36).Where(i=>old.Inventory[i].Item==Items.RawPorkchop).Sum(i=>old.Inventory[i].Count)==47
             && old.World.GetBlock(15, 3, 15) == BlockType.WaterSource && old.Health == 17, "V4 migration changed pig/water/food/health.");
         var session = new GameSession("old", old); WorldSave upgraded = Decode(Encode(session.Capture()));
-        Require(session.Mobs.Entities.Count == 1 && upgraded.Mobs.Length == 0 && upgraded.Inventory[13].Count == 47, "An old world was repopulated or inventory refilled.");
+        Require(session.Mobs.Entities.Count == 1 && upgraded.Mobs.Length == 0 && upgraded.Inventory[13].Count == 1 && upgraded.DroppedItems.Sum(d=>d.Count)+Enumerable.Range(0,36).Where(i=>upgraded.Inventory[i].Item==Items.RawPorkchop).Sum(i=>upgraded.Inventory[i].Count)==47, "An old world was repopulated or inventory refilled.");
         byte[] emptyV4 = Version4(save with { Pigs = Array.Empty<PigState>() });
         Require(new GameSession("oldempty", Decode(emptyV4)).Mobs.Entities.Count == 0, "Killed/empty old population was regenerated.");
-        var single = save with { Pigs = Array.Empty<PigState>(), Mobs = new[] { State(MobSpecies.Chicken) } };
+        var single = save with { Inventory=old.Inventory, Pigs = Array.Empty<PigState>(), Mobs = new[] { State(MobSpecies.Chicken) } };
         byte[] bytes = Encode(single); int record = SaveLayout.MobRecords(bytes);
         foreach ((int Offset, byte[] Value) bad in new[] { (record, new byte[] { 255 }), (record + 17, BitConverter.GetBytes(7)),
             (record + 1, BitConverter.GetBytes(float.NaN)), (record + 13, BitConverter.GetBytes(float.PositiveInfinity)), (record - 4, BitConverter.GetBytes(257)) })

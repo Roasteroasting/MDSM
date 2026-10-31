@@ -148,8 +148,13 @@ public sealed class PassiveMobPopulation
     public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems items)
     {
         if (mob == null || mob.IsDead || !_mobs.Contains(mob) || damage<=0) return false;
-        if (damage >= mob.Health && !items.TrySpawn(new ItemStack(mob.Definition.Drop, _random.Next(1, mob.Definition.MaximumDrop + 1)),
-            mob.Position + Vector3.Up * 0.25f, 0.35f)) return false;
+        if(damage>=mob.Health)
+        {
+            int count=mob.Species==MobSpecies.Sheep && mob.Sheared?0:_random.Next(1,mob.Definition.MaximumDrop+1);
+            int limit=Items.StackLimit(mob.Definition.Drop),entities=(count+limit-1)/limit;
+            if(!items.CanSpawn(entities))return false;
+            while(count>0){int take=Math.Min(count,limit);items.TrySpawn(new ItemStack(mob.Definition.Drop,take),mob.Position+Vector3.Up*.25f,.35f);count-=take;}
+        }
         mob.Damage(damage, mob.Position - attacker);
         if (mob.IsDead && _mobs.Remove(mob))
         {
@@ -157,6 +162,14 @@ public sealed class PassiveMobPopulation
             _pending.Add(new MobRespawnState(mob.Species, MinimumRespawnSeconds + _respawnRandom.NextDouble() * (MaximumRespawnSeconds - MinimumRespawnSeconds)));
         }
         return true;
+    }
+    public bool TryShear(PassiveMob mob,Inventory inventory,DroppedItems drops)
+    {
+        if(mob==null || !_mobs.Contains(mob) || mob.IsDead || mob.Species!=MobSpecies.Sheep || mob.Sheared
+            || inventory.Selected.Item!=Items.Shears || !drops.CanSpawn(1))return false;
+        int count=_random.Next(1,5);
+        if(!drops.TrySpawn(new ItemStack(Items.FromBlock(BlockType.WhiteWool),count),mob.Position+Vector3.Up*.4f,.7f))return false;
+        mob.Shear();inventory.WearSelected();return true;
     }
     public MobState[] CaptureAll()
     {
@@ -183,6 +196,8 @@ public sealed class PassiveMobPopulation
         if (!float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z)
             || p.X < d.HalfWidth || p.X > size.Width() - d.HalfWidth || p.Z < d.HalfWidth || p.Z > size.Width() - d.HalfWidth
             || p.Y < -16 || p.Y > World.Height + 16 || !float.IsFinite(state.Yaw) || MathF.Abs(state.Yaw) > MathHelper.Pi
-            || state.Health < 1 || state.Health > d.MaximumHealth) throw new InvalidDataException("Save contains an invalid passive mob.");
+            || state.Health < 1 || state.Health > d.MaximumHealth
+            || !double.IsFinite(state.WoolSeconds) || state.WoolSeconds<0 || state.WoolSeconds>360
+            || (state.Sheared ? state.Species!=MobSpecies.Sheep || state.WoolSeconds<=0 : state.WoolSeconds!=0)) throw new InvalidDataException("Save contains an invalid passive mob.");
     }
 }

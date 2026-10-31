@@ -22,7 +22,7 @@ public static class OreGenerator
                 Point3 cell=new(cx*16+random.Next(16),random.Next(4,ceiling+1),cz*16+random.Next(16));
                 for(int step=0;step<32 && count<target;step++)
                 {
-                    if(world.Contains(cell.X,cell.Y,cell.Z) && cell.Y>=4 && cell.Y<=ceiling && world.GetBlock(cell.X,cell.Y,cell.Z)==BlockType.Stone
+                    if(world.Contains(cell.X,cell.Y,cell.Z) && cell.Y>=4 && cell.Y<=ceiling && world.GetBlock(cell.X,cell.Y,cell.Z) is BlockType.Stone or BlockType.Sand or BlockType.Gravel
                         && !cells[..count].Contains(cell))cells[count++]=cell;
                     cell=(count>0?cells[random.Next(count)]:cell)+Directions[random.Next(6)];
                 }

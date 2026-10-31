@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Xna.Framework;
@@ -117,11 +118,12 @@ internal static class InventoryChecks
             inventory.SetSlot(0,MiningRules.Profile(block).Category==MiningCategory.Mineral?new ItemStack(Items.Tool(ToolTier.Diamond,ToolKind.Pickaxe),1):default);
             world.SetBlock(15,10,16,block);int before=drops.Entities.Count;float duration=MiningRules.Seconds(block,inventory.Selected);
             if(block==BlockType.Bedrock){Require(duration<0 && !Mine(hit,true,100) && world.GetBlock(15,10,16)==block && drops.Entities.Count==before,"Bedrock broke/dropped.");continue;}
-            bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower;
+            bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower or BlockType.Sapling;
             Require(instant?duration==0:duration>0,"Mining duration policy invalid.");
             if(!instant)Require(!Mine(hit,true,duration-.01f) && mining.Progress>0,"Block broke too early.");
             Require(Mine(hit,true,instant?0:.02f) && world.GetBlock(15,10,16)==BlockType.Air && mining.Progress==0,"Block did not break at duration.");
-            if(block==BlockType.Glass){Require(drops.Entities.Count==before,"Glass should not drop a block.");continue;}
+            if(block is BlockType.Glass or BlockType.TallGrass){Require(drops.Entities.Count==before,"Glass/tall grass should not drop a block.");continue;}
+            if(block==BlockType.Leaves){Require(drops.Entities.Skip(before).All(d=>d.Item==Items.Sapling || d.Item==Items.Stick || d.Item==Items.Apple),"Leaves bypassed the loot table.");continue;}
             ItemId expected=block==BlockType.Stone?Items.FromBlock(BlockType.Cobblestone):block==BlockType.CoalOre?Items.Coal:block==BlockType.DiamondOre?Items.Diamond:Items.FromBlock(block);
             Require(drops.Entities.Count==before+1 && (drops.Entities[^1].Item==expected || block==BlockType.Gravel && drops.Entities[^1].Item==Items.Flint)
                 && drops.Entities[^1].Count==1,"Harvested block produced an incorrect drop.");

@@ -117,7 +117,7 @@ internal static class LargeLakeChecks
     private static int Ground(World w,int x,int z)
     {
         int y=w.SurfaceY(x,z);
-        while(y>0 && w.GetBlock(x,y,z) is not (BlockType.Grass or BlockType.Dirt or BlockType.Stone or BlockType.Gravel or BlockType.Sand or BlockType.Bedrock))y--;
+        while(y>0 && w.GetBlock(x,y,z) is not (BlockType.Grass or BlockType.Dirt or BlockType.Stone or BlockType.Gravel or BlockType.Sand or BlockType.Bedrock or BlockType.CoalOre or BlockType.IronOre or BlockType.DiamondOre))y--;
         return y;
     }
     private static void Measure(World world,NaturalLake lake,bool print)

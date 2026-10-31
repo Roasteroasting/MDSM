@@ -35,18 +35,21 @@ public sealed class MiningController
         if (Progress < 1) return false;
         BlockType above = world.GetBlock(hit.Cell.X, hit.Cell.Y + 1, hit.Cell.Z);
         bool removesPlant = Blocks.Get(above).NeedsGrass;
-        ItemId? drop=MiningRules.Drop(block,tool,_random);
+        if(block==BlockType.Leaves && !items.CanSpawn(3))return false;
+        Span<ItemId> loot=stackalloc ItemId[3];
+        int lootCount=MiningRules.Drops(block,tool,_random,loot);
         BlockContainer container=world.Containers.Get(hit.Cell);
-        int drops=(drop.HasValue?1:0)+(removesPlant?1:0);
+        bool plantDrop=removesPlant && above!=BlockType.TallGrass;
+        int drops=lootCount+(plantDrop?1:0);
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)drops++;
         if (!items.CanSpawn(drops)) return false;
         world.Containers.Detach(hit.Cell);
         if (!world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air)) { world.Containers.Reattach(container);Reset(); return false; }
         Vector3 center = new(hit.Cell.X + 0.5f, hit.Cell.Y + 0.5f, hit.Cell.Z + 0.5f);
-        if(drop.HasValue)items.Spawn(drop.Value,1,center);
+        for(int i=0;i<lootCount;i++)items.Spawn(loot[i],1,center);
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)items.TrySpawn(container[i],center,.35f);
-        if (removesPlant) items.Spawn(Items.FromBlock(above), 1, center + Vector3.Up);
-        if(inventory!=null && MiningRules.Wears(tool))inventory.WearSelected();
+        if (plantDrop) items.Spawn(Items.FromBlock(above), 1, center + Vector3.Up);
+        if(inventory!=null && (MiningRules.Wears(tool) || block==BlockType.Leaves && tool.Item==Items.Shears))inventory.WearSelected();
         Reset();
         return true;
     }

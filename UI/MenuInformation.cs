@@ -15,6 +15,7 @@ internal static class MenuInformation
         "Mouse movement - Look around",
         "Left mouse (hold) - Mine / break blocks or punch passive mobs",
         "Right mouse - Use table/chest/furnace, place block or eat",
+        "Shears: Right mouse a Sheep to collect wool; hold Left mouse on Leaves",
         "Bow: hold Right mouse to draw; release to fire (needs arrows)",
         "Space - Jump / hold to swim upward in water",
         "Left Shift (hold) - Crouch",
@@ -43,6 +44,7 @@ internal static class MenuInformation
         "FPS slider: Drag or Left / Right - Adjust by 1",
         "FPS slider: Home / End - Minimum / maximum",
         "Uncapped FPS: Click / Space / Enter - Toggle",
+        "View Bobbing: Click / Space / Enter - Toggle",
         "Controls / About: Wheel / Up / Down / Page Up / Page Down / Home / End - Scroll"
     };
 

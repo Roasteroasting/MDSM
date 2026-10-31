@@ -10,9 +10,9 @@ internal static class ItemSpriteGeometry
     public static void Fill(VertexPositionColorTexture[] vertices, int start, Vector3 center, Vector3 right, Vector3 up,ItemId item=default)
     {
         right *= 0.125f; up *= 0.125f;
-        float left=.5f/16,rightUv=15.5f/16,top=.5f/16,bottom=15.5f/16;
-        if(item.Value>=259 && Items.IsSprite(item))
-        {int tile=Items.Get(item).Sprite;left=(tile%8*16+.5f)/128;rightUv=(tile%8*16+15.5f)/128;top=(tile/8*16+.5f)/64;bottom=(tile/8*16+15.5f)/64;}
+        int tile=Items.IsSprite(item)?Items.Get(item).Sprite:0;
+        Vector2 low=TextureAtlas.Uv(tile,0,0),high=TextureAtlas.Uv(tile,1,1);
+        float left=low.X,rightUv=high.X,top=low.Y,bottom=high.Y;
         var a = new VertexPositionColorTexture(center - right - up, Color.White, new(left, bottom));
         var b = new VertexPositionColorTexture(center + right - up, Color.White, new(rightUv, bottom));
         var c = new VertexPositionColorTexture(center + right + up, Color.White, new(rightUv, top));

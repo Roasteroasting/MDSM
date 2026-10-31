@@ -38,7 +38,12 @@ public sealed class Inventory
     public int Add(ItemId item, int count)
     {
         if (!Items.IsDefined(item) || count < 0) throw new ArgumentException("Invalid inventory insertion.");
-        if(Items.StackLimit(item)==1)return count==0?0:Add(new ItemStack(item,count)).Count;
+        if(Items.StackLimit(item)==1)
+        {
+            for(int i=0;i<SlotCount && count>0;i++)if(_slots[i].IsEmpty){_slots[i]=new ItemStack(item,1);count--;}
+            return count;
+        }
+
         for (int i = 0; i < SlotCount && count > 0; i++)
             if (!_slots[i].IsEmpty && _slots[i].Item == item)
                 count = Insert(i, item, count);

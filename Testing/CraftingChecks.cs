@@ -32,7 +32,7 @@ internal static class CraftingChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length == 29, "Survival recipe registry is incomplete.");
+        Require(CraftingRecipes.All.Length == 31, "Survival recipe registry is incomplete.");
         foreach (int width in new[] { 2, 3 }) for (int y = 0; y <= width - 2; y++) for (int x = 0; x <= width - 2; x++)
         {
             var grid = Fill(width, 3, x, y);

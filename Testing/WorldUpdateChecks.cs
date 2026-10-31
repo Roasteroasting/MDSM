@@ -33,9 +33,14 @@ internal static class WorldUpdateChecks
             MobChecks.State(MobSpecies.Sheep, new Vector3(40,1,40), 1), MobChecks.State(MobSpecies.Chicken, new Vector3(45,1,45), 1) };
         var population = new PassiveMobPopulation(world, states); var drops = new DroppedItems(world);
         int[] targets = Counts(population); PassiveMob[] original = population.Entities.ToArray();
-        foreach (PassiveMob mob in original) Kill(population, mob, drops);
-        Require(population.Entities.Count == 0 && population.PendingRespawns.Count == states.Length && drops.Entities.Count == states.Length,
-            "Deaths did not create exactly one replacement and drop apiece.");
+        foreach (PassiveMob mob in original)
+        {
+            int before=drops.Entities.Sum(d=>d.Count);Kill(population, mob, drops);
+            Require(drops.Entities.Sum(d=>d.Count)-before is >=1 and <=4,"Death lost its species drops.");
+        }
+        int deathDrops=drops.Entities.Count;
+        Require(population.Entities.Count == 0 && population.PendingRespawns.Count == states.Length && deathDrops>=states.Length,
+            "Deaths did not create exactly one replacement and valid drops apiece.");
         Require(population.PendingRespawns.All(p => p.RemainingSeconds >= 30 && p.RemainingSeconds <= 60)
             && population.PendingRespawns.Select(p => p.RemainingSeconds).Distinct().Count() == states.Length, "Respawn delays are not independent 30-60 second values.");
         foreach (PassiveMob mob in original) Require(!population.Punch(mob, Vector3.Zero, drops), "Dead mob scheduled twice.");
@@ -61,7 +66,7 @@ internal static class WorldUpdateChecks
         }
         Require(Counts(population).AsSpan().SequenceEqual(targets) && population.PendingRespawns.Count == 0, "Population was not replenished by 60 seconds.");
         for (int i = 0; i < 600; i++) population.Update(1f / 60);
-        Require(population.Entities.Count == states.Length && drops.Entities.Count == states.Length && world.Revision == 0, "Replenishment duplicated mobs/drops or edited terrain.");
+        Require(population.Entities.Count == states.Length && drops.Entities.Count == deathDrops && world.Revision == 0, "Replenishment duplicated mobs/drops or edited terrain.");
     }
     public static void RetryAndClearance()
     {
@@ -132,7 +137,7 @@ internal static class WorldUpdateChecks
     }
     public static void LegacyPopulationAndCorruption()
     {
-        World world = PigChecks.Flat(); var inventory = Inventory.CreateNewWorld(); inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 23));
+        World world = PigChecks.Flat(); var inventory = Inventory.CreateNewWorld(); inventory.SetSlot(0, new ItemStack(Items.Coal, 23));
         var save = new WorldSave(world, "Legacy survivors", new Vector3(60,1,60), 0.1f, 0.2f, inventory, Health: 13,
             Pigs: new[] { new PigState(new Vector3(30,1,30), 1, 4) }, Mobs: new[] { MobChecks.State(MobSpecies.Cow, new Vector3(40,1,40), 7) });
         WorldSave old = WorldSerializer.Read(new MemoryStream(Version5(save))); var session = new GameSession("legacy", old);

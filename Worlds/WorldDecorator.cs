@@ -57,16 +57,16 @@ public sealed class WorldDecorator
     }
 
     // Checks every affected cell before writing, so rejected candidates leave no partial tree.
-    internal static bool TryTree(World world, int x, int ground, int z, int trunkHeight, int radius, uint shape)
+    internal static bool TryTree(World world, int x, int ground, int z, int trunkHeight, int radius, uint shape,bool growing=false)
     {
         if (trunkHeight < 4 || trunkHeight > 6 || radius != 2
             || x - radius < 0 || x + radius >= world.Width || z - radius < 0 || z + radius >= world.Depth
             || ground < 0 || ground + trunkHeight + 1 >= World.Height
-            || world.GetBlock(x, ground, z) != BlockType.Grass)
+            || !Blocks.SupportsPlant(world.GetBlock(x,ground,z),growing?BlockType.Sapling:BlockType.TallGrass))
             return false;
         int top = ground + trunkHeight;
         for (int y = ground + 1; y <= top; y++)
-            if (world.GetBlock(x, y, z) != BlockType.Air) return false;
+            if (world.GetBlock(x, y, z) != BlockType.Air && !(growing && y==ground+1 && world.GetBlock(x,y,z)==BlockType.Sapling)) return false;
         for (int layer = -2; layer <= 1; layer++)
         for (int dz = -radius; dz <= radius; dz++)
         for (int dx = -radius; dx <= radius; dx++)
@@ -77,13 +77,18 @@ public sealed class WorldDecorator
         }
 
         for (int y = ground + 1; y <= top; y++)
-            world.SetGeneratedBlock(x, y, z, BlockType.WoodLog);
+            Write(x,y,z,BlockType.WoodLog);
         for (int layer = -2; layer <= 1; layer++)
         for (int dz = -radius; dz <= radius; dz++)
         for (int dx = -radius; dx <= radius; dx++)
             if (CanopyCell(dx, layer, dz, radius, shape) && world.GetBlock(x + dx, top + layer, z + dz) == BlockType.Air)
-                world.SetGeneratedBlock(x + dx, top + layer, z + dz, BlockType.Leaves);
+                Write(x + dx, top + layer, z + dz, BlockType.Leaves);
         return true;
+        void Write(int px,int py,int pz,BlockType block)
+        {
+            if(!growing)world.SetGeneratedBlock(px,py,pz,block);
+            else if(world.SetBlock(px,py,pz,block) && block==BlockType.Leaves)world.Vegetation.MarkNatural(new Point3(px,py,pz));
+        }
     }
 
     private static bool CanopyCell(int dx, int layer, int dz, int radius, uint shape)

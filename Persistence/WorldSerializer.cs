@@ -15,7 +15,7 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
-    public const int FormatVersion = 8;
+    public const int FormatVersion = 9;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -31,7 +31,7 @@ public static partial class WorldSerializer
     internal const long MaximumFileSize = 2048L * World.Height * 2048 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes
         + 8 + PassiveMobPopulation.MaximumMobs * MobBytes + PopulationPrefixBytes
         + PassiveMobPopulation.MaximumMobs * RespawnBytes + 4 + 2048L * 2048 * 4
-        + 4 + FallingBlockSimulation.MaximumActiveBlocks * FallingBytes + 128L*1024*1024;
+        + 4 + FallingBlockSimulation.MaximumActiveBlocks * FallingBytes + 192L*1024*1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static string ValidateName(string name)
@@ -125,6 +125,7 @@ public static partial class WorldSerializer
             foreach (FallingBlockState block in falling)
             { writer.Write((byte)block.Block); writer.Write(block.X); writer.Write(block.Z); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
             WriteSurvival(writer,save,inventory,drops,containers);
+            WriteRefinements(writer,save.World.Vegetation.Capture(),mobs);
         }
         destination.Write(hash.GetHashAndReset());
     }
@@ -191,16 +192,16 @@ public static partial class WorldSerializer
                     ItemId item = new(extras.ReadUInt16());
                     int quantity = extras.ReadByte();
                     if (item.Value == 0 && quantity == 0) continue;
-                    if (!Items.IsDefined(item) || quantity < 1 || quantity > Items.StackLimit(item))
+                    if (!Items.IsDefined(item) || quantity < 1 || quantity > (metadata.Version<9 && item==Items.RawPorkchop?64:Items.StackLimit(item)))
                         throw new InvalidDataException("Save has an invalid inventory stack.");
-                    inventory.SetSlot(slot, new ItemStack(item, quantity));
+                    inventory.SetSlot(slot, metadata.Version<9 && item==Items.RawPorkchop?ItemStack.ReadLegacyFood(item,quantity):new ItemStack(item, quantity));
                 }
                 drops = new DroppedItemState[extras.ReadInt32()];
                 for (int i = 0; i < drops.Length; i++)
                 {
                     var drop = new DroppedItemState(new ItemId(extras.ReadUInt16()), extras.ReadByte(),
                         new Vector3(extras.ReadSingle(), extras.ReadSingle(), extras.ReadSingle()), extras.ReadSingle(), extras.ReadSingle());
-                    if(metadata.Version<8 || Items.Get(drop.Item).Durability==0)DroppedItems.Validate(drop, metadata.Size);
+                    if(metadata.Version<8 || Items.Get(drop.Item).Durability==0)ValidateLoadedDrop(drop,metadata.Size,metadata.Version<9);
                     drops[i] = drop;
                 }
                 if (metadata.Version >= 3) { health = extras.ReadInt32(); ValidateHealth(health); }
@@ -266,7 +267,8 @@ public static partial class WorldSerializer
             if(metadata.Version>=8)
             {
                 using var extension=new BinaryReader(new HashedReadStream(source,hash),Utf8,true);
-                arrows=ReadSurvival(extension,world,inventory,drops);
+                arrows=ReadSurvival(extension,world,inventory,drops,metadata.Version<9);
+                if(metadata.Version>=9)ReadRefinements(extension,world,mobs);
             }
             byte[] checksum = new byte[ChecksumSize];
             source.ReadExactly(checksum);
@@ -275,6 +277,9 @@ public static partial class WorldSerializer
             if (!CryptographicOperations.FixedTimeEquals(hash.GetHashAndReset(), checksum))
                 throw new InvalidDataException("Save checksum failed. The file is damaged or incomplete.");
 
+            if(metadata.Version<9)drops=MigrateFood(world,inventory,drops,metadata.PlayerPosition);
+            foreach(var drop in drops)DroppedItems.Validate(drop,world.Size);
+            ValidateOwnership(inventory,drops,world.Containers.Capture());
             world.Fluids.Initialize();
             world.Gravity.Restore(gravityColumns, fallingBlocks); // No global scan/rewrite of legacy terrain.
             return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population,arrows);

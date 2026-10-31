@@ -7,7 +7,7 @@ namespace MDSM.Entities;
 
 // Persistent species IDs. All species share passive movement/combat; differences stay here.
 public enum MobSpecies : byte { Pig = 0, Cow = 1, Sheep = 2, Chicken = 3 }
-public readonly record struct MobState(MobSpecies Species, Vector3 Position, float Yaw, int Health);
+public readonly record struct MobState(MobSpecies Species, Vector3 Position, float Yaw, int Health,bool Sheared=false,double WoolSeconds=0);
 // Legacy pig-only save representation; binary readers/writers retain its existing fields.
 public readonly record struct PigState(Vector3 Position, float Yaw, int Health)
 {

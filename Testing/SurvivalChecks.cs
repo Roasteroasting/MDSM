@@ -260,8 +260,10 @@ internal static class SurvivalChecks
     public static void CrouchMovement()
     {
         var world = Flat(); var normal = new Player(new Vector3(20.5f, 1, 20.5f)); var crouch = new Player(normal.Position);
+        Step(normal,world,30,Vector3.Right);Step(crouch,world,30,Vector3.Right,true);
+        float normalStart=normal.Position.X,crouchStart=crouch.Position.X;
         Step(normal, world, 60, Vector3.Right); Step(crouch, world, 60, Vector3.Right, true);
-        Require(Near(normal.Position.X - 20.5f, 5) && Near(crouch.Position.X - 20.5f, 1.75f)
+        Require(Near(normal.Position.X - normalStart, Player.MoveSpeed) && Near(crouch.Position.X - crouchStart, Player.MoveSpeed*.35f)
             && Near(crouch.EyePosition.Y - crouch.Position.Y, Player.CrouchingEyeHeight), "Crouch speed or camera height is wrong.");
         crouch.Update(world, Vector3.Zero, false, 1f / 60);
         Require(!crouch.Crouching && Near(crouch.EyePosition.Y - crouch.Position.Y, 1.62f), "Releasing crouch did not restore eye height.");

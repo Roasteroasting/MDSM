@@ -118,8 +118,8 @@ internal static class PigChecks
         for (int i = 0; i < 20; i++) combat.Update(world, pigs, drops, mining, eye, Vector3.Forward, block, true, Dt);
         Require(pig.Health == afterPunch, "Attack cooldown allowed per-frame damage.");
         while (pigs.Entities.Count > 0) combat.Update(world, pigs, drops, mining, eye, Vector3.Forward, block, true, Dt);
-        Require(pig.IsDead && drops.Entities.Count == 1 && drops.Entities[0].Item == Items.RawPorkchop
-            && drops.Entities[0].Count is 1 or 2 && !pigs.Punch(pig, eye, drops), "Death/drop was missed or duplicated.");
+        Require(pig.IsDead && drops.Entities.Count is 1 or 2 && drops.Entities.All(d=>d.Item==Items.RawPorkchop && d.Count==1)
+            && !pigs.Punch(pig, eye, drops), "Death/drop was missed or duplicated.");
         Require(pigs.CapturePigs().Length == 0, "Killed pig remained in saved population.");
         var harvest=new Inventory();harvest.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Wood,ToolKind.Pickaxe),1));
         for (int i = 0; i < 400; i++) combat.Update(world, pigs, drops, mining, eye, Vector3.Forward,
@@ -132,7 +132,7 @@ internal static class PigChecks
             for (int frame = 0; frame < fps * 10; frame++)
                 for (int step = clock.Advance(1.0 / fps); step > 0; step--)
                     input.Update(world, population, items, mine, eye, Vector3.Forward, null, true, Dt);
-            Require(population.Entities.Count == 0 && items.Entities.Count == 1, "Combat depends on rendering FPS.");
+            Require(population.Entities.Count == 0 && items.Entities.Count is 1 or 2 && items.Entities.All(d=>d.Count==1), "Combat depends on rendering FPS.");
         }
     }
 
@@ -140,19 +140,20 @@ internal static class PigChecks
     {
         Require(Items.RawPorkchop.Value == 256 && Items.IsDefined(Items.RawPorkchop)
             && !Items.TryGetBlock(Items.RawPorkchop, out _), "Food item ID conflicts with blocks or is placeable.");
-        var inventory = new Inventory(); inventory.SetSlot(4, new ItemStack(Items.RawPorkchop, 60));
-        Require(inventory.Add(Items.RawPorkchop, 10) == 0 && inventory[4].Count == 64 && inventory[0].Count == 6, "Food stacking overflow failed.");
+        var inventory = new Inventory(); inventory.SetSlot(4, new ItemStack(Items.RawPorkchop, 1));
+        Require(inventory.Add(Items.RawPorkchop, 10) == 0 && Enumerable.Range(0,36).Sum(i=>inventory[i].Count)==11
+            && Enumerable.Range(0,36).All(i=>inventory[i].Count<=1), "Nonstackable food overflow failed.");
         var interaction = new InventoryInteraction(inventory);
-        interaction.Click(0, true); Require(interaction.Cursor.Count == 3 && inventory[0].Count == 3, "Food split failed.");
-        interaction.Click(1, true); Require(interaction.Cursor.Count == 2 && inventory[1].Count == 1, "Food single placement failed.");
+        interaction.Click(0, true); Require(interaction.Cursor.Count == 1 && inventory[0].IsEmpty, "Single food pickup failed.");
+        interaction.Click(1, true); Require(interaction.Cursor.Count == 1 && inventory[1].Count == 1, "Nonstackable food merged.");
         Require(interaction.TryReturnCursor(), "Food cursor return failed.");
         foreach (int health in new[] { 10, 18, 19, 20 })
         {
             var player = new Player(new Vector3(10, 1, 10), health);
-            inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 2));
+            inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 1));
             bool used = ItemUse.TryConsume(player, inventory, true, false);
-            Require(player.Health == Math.Min(20, health + 3) && used == (health < 20)
-                && inventory[0].Count == (health < 20 ? 1 : 2), "Healing cap or consumption quantity failed.");
+            Require(player.Health == Math.Min(20, health + 2) && used == (health < 20)
+                && inventory[0].Count == (health < 20 ? 0 : 1), "Healing cap or consumption quantity failed.");
             Require(!ItemUse.TryConsume(player, inventory, true, true) && !ItemUse.TryConsume(player, inventory, false, true), "Held/released RMB consumed food.");
         }
         var wounded = new Player(new Vector3(10, 1, 10), 10);
@@ -171,12 +172,12 @@ internal static class PigChecks
         var drops = new DroppedItems(world); inventory = new Inventory();
         drops.Spawn(Items.RawPorkchop, 2, new Vector3(20, 1.125f, 20), 0);
         drops.Update(new Player(new Vector3(20, 1, 20)), inventory, Dt);
-        Require(drops.Entities.Count == 0 && inventory[0].Count == 2, "Non-block drop could not be picked up.");
-        for (int slot = 0; slot < Inventory.SlotCount; slot++) inventory.SetSlot(slot, new ItemStack(Items.RawPorkchop, 64));
-        inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 63));
+        Require(drops.Entities.Count == 0 && inventory[0].Count == 1 && inventory[1].Count==1, "Non-block drop could not be picked up.");
+        for (int slot = 0; slot < Inventory.SlotCount; slot++) inventory.SetSlot(slot, new ItemStack(Items.RawPorkchop, 1));
+        inventory.SetSlot(0, default);
         drops.Spawn(Items.RawPorkchop, 2, new Vector3(20, 1.125f, 20), 0);
         drops.Update(new Player(new Vector3(20, 1, 20)), inventory, Dt);
-        Require(inventory[0].Count == 64 && drops.Entities.Count == 1 && drops.Entities[0].Count == 1,
+        Require(inventory[0].Count == 1 && drops.Entities.Count == 1 && drops.Entities[0].Count == 1,
             "Full inventory lost the uncollected porkchop remainder.");
         Require(!BlockPlacement.TryPlace(world, inventory, new Point3(20, 1, 21), new Player(new Vector3(10, 1, 10)).Bounds), "Food placed a terrain block.");
     }
@@ -187,7 +188,7 @@ internal static class PigChecks
         {
             World world = new(173, size, false);
             var save = new WorldSave(world, "Pig persistence", new Vector3(20, 10, 20), 0.1f, 0.2f, Inventory.CreateNewWorld(),
-                new[] { new DroppedItemState(Items.RawPorkchop, 2, new Vector3(30, 5, 30), -1, 0.5f) }, 12,
+                new[] { new DroppedItemState(Items.RawPorkchop, 1, new Vector3(30, 5, 30), -1, 0.5f),new DroppedItemState(Items.RawPorkchop,1,new Vector3(30,5,30),-1,.5f) }, 12,
                 new[] { State(50, 5, 50, 3) with { Yaw = 1.25f } });
             byte[] bytes = Encode(save); WorldSave restored = Decode(bytes);
             Require(restored.Pigs.AsSpan().SequenceEqual(save.Pigs) && restored.DroppedItems.AsSpan().SequenceEqual(save.DroppedItems)

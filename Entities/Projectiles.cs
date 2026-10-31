@@ -76,6 +76,8 @@ public sealed class BowController
     public bool Update(Inventory inventory,Projectiles projectiles,Vector3 origin,Vector3 direction,bool right,float elapsed)
     {
         if(inventory.Selected.Item!=Items.Bow || !float.IsFinite(elapsed) || elapsed<0){Cancel();return false;}
+        bool ammunition=false;for(int i=0;i<Inventory.SlotCount;i++)if(inventory[i].Item==Items.Arrow && !inventory[i].IsEmpty){ammunition=true;break;}
+        if(!ammunition){Cancel();return false;}
         if(_bow!=Guid.Empty && _bow!=inventory.Selected.InstanceId)Cancel();
         if(right){_bow=inventory.Selected.InstanceId;DrawSeconds=Math.Min(1,DrawSeconds+elapsed);return false;}
         bool shot=_bow!=Guid.Empty && DrawSeconds>=.1f && projectiles.Shoot(inventory,origin,direction,Power,_bow);

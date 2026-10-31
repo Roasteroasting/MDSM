@@ -76,7 +76,7 @@ internal static class MobGraphicsChecks
                     world.SetBlock(61, 3, 62, BlockType.Sand); world.SetBlock(67, 3, 62, BlockType.Gravel); world.Gravity.Tick();
                     var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.FromBlock(BlockType.WhiteWool), 64));
                     inventory.SetSlot(1, new ItemStack(Items.Leather, 3)); inventory.SetSlot(2, new ItemStack(Items.Feather, 4));
-                    inventory.SetSlot(3, new ItemStack(Items.RawPorkchop, 23));
+                    inventory.SetSlot(3, new ItemStack(Items.Coal, 23));
                     var save = new WorldSave(world, "Mixed runtime", new Vector3(64.5f, 1, 65.5f), 0, -0.1f, inventory, Health: 10,
                         Pigs: new[] { new PigState(new Vector3(59.5f, 1, 60.5f), MathHelper.Pi, 10) }, Mobs: new[] {
                             MobChecks.State(MobSpecies.Cow, new Vector3(62.5f, 1, 60.5f)) with { Yaw = MathHelper.Pi },
@@ -113,7 +113,7 @@ internal static class MobGraphicsChecks
                     string reloadId = Session.Id; Vector3 reloadPosition = Session.Player.Position;
                     Session.World.SetBlock(15, 125, 15, BlockType.WhiteWool);
                     Call("HandleMenuAction", MenuAction.SaveAndReturn);
-                    Require(State == GameState.MainMenu && ChunkMesh.LiveBufferBytes == 0, "Save/return retained terrain GPU buffers.");
+                    Require(State == GameState.MainMenu && ChunkMesh.LiveBufferBytes == 0, $"Save/return retained terrain GPU buffers: state={State}, bytes={ChunkMesh.LiveBufferBytes}.");
                     Call("RefreshWorlds", reloadId); Call("HandleMenuAction", MenuAction.LoadWorld);
                     var loadingWait = System.Diagnostics.Stopwatch.StartNew();
                     while (State != GameState.Playing && loadingWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
@@ -140,7 +140,7 @@ internal static class MobGraphicsChecks
             foreach (MobSpecies species in new[] { MobSpecies.Cow, MobSpecies.Sheep, MobSpecies.Chicken })
             {
                 World world = PigChecks.Flat(); var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.Leather, 2));
-                inventory.SetSlot(4, new ItemStack(Items.RawPorkchop, 23));
+                inventory.SetSlot(4, new ItemStack(Items.Coal, 23));
                 var save = new WorldSave(world, "Input " + species, new Vector3(64.5f, 1, 64.5f), 0, -0.1f, inventory, Health: 11,
                     Mobs: new[] { MobChecks.State(species, new Vector3(64.5f, 1, 61.5f), 3) });
                 Call("BeginWorld", _store.Create(save), save); WarmRenderer(); Input();
@@ -317,7 +317,7 @@ internal static class MobGraphicsChecks
                 Color[] held = Read(); Require(held.Count(c => c != background) > 10 && (last == null || !held.AsSpan().SequenceEqual(last)), "Resource/wool held representation missing."); last = held;
                 if (Items.IsSprite(item))
                 {
-                    var data = new Color[256]; atlas.ItemTexture(item).GetData(data);
+                    var data = new Color[256]; atlas.ItemTexture(item).GetData(0,atlas.ItemSource(item),data,0,data.Length);
                     Require(data.Any(c => c.A == 0) && data.Any(c => c.A == 255), "Resource icon lost its binary transparency.");
                     GraphicsDevice.Textures[0] = null; GraphicsDevice.Textures[0] = atlas.Texture;
                 }

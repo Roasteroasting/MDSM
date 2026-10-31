@@ -15,14 +15,14 @@ public static partial class WorldSerializer
     private static Guid ReadGuid(BinaryReader reader){Span<byte> bytes=stackalloc byte[16];reader.BaseStream.ReadExactly(bytes);return new Guid(bytes);}
     internal static void WriteStack(BinaryWriter writer,ItemStack stack)
     {writer.Write(stack.Item.Value);writer.Write((byte)stack.Count);writer.Write(stack.Durability);WriteGuid(writer,stack.InstanceId);}
-    internal static ItemStack ReadStack(BinaryReader reader)
+    internal static ItemStack ReadStack(BinaryReader reader,bool legacyFood=false)
     {
         ItemId item=new(reader.ReadUInt16());int count=reader.ReadByte(),durability=reader.ReadInt32();Guid id=ReadGuid(reader);
         if(item.Value==0 && count==0 && durability==0 && id==Guid.Empty)return default;
         int maximum=Items.Get(item).Durability;
         if(maximum>0 ? id==Guid.Empty || durability<1 || durability>maximum : durability!=0 || id!=Guid.Empty)
             throw new InvalidDataException("Invalid saved equipment identity/durability.");
-        try{return new(item,count,durability,id);}catch(ArgumentException e){throw new InvalidDataException("Invalid saved stack metadata.",e);}
+        try{return legacyFood && item==Items.RawPorkchop?ItemStack.ReadLegacyFood(item,count):new(item,count,durability,id);}catch(ArgumentException e){throw new InvalidDataException("Invalid saved stack metadata.",e);}
     }
     private static int EquipmentCount(Inventory inventory,DroppedItemState[] drops)
     {int count=0;for(int i=0;i<36;i++)if(inventory[i].Durability>0)count++;foreach(var drop in drops)if(Items.Get(drop.Item).Durability>0)count++;return count;}
@@ -30,7 +30,10 @@ public static partial class WorldSerializer
     {
         var identities=new HashSet<Guid>();
         void Check(ItemStack stack)
-        {if(stack.Durability>0 && (stack.InstanceId==Guid.Empty || !identities.Add(stack.InstanceId)))throw new InvalidDataException("Duplicate/missing equipment instance identity.");}
+        {
+            if(!stack.IsEmpty){try{_=new ItemStack(stack.Item,stack.Count,stack.Durability,stack.InstanceId);}catch(ArgumentException e){throw new InvalidDataException("Invalid stored stack.",e);}}
+            if(stack.Durability>0 && (stack.InstanceId==Guid.Empty || !identities.Add(stack.InstanceId)))throw new InvalidDataException("Duplicate/missing equipment instance identity.");
+        }
         for(int i=0;i<36;i++)Check(inventory[i]);foreach(var drop in drops)Check(drop.Stack);
         foreach(var container in containers)foreach(var stack in container.Slots)Check(stack);
     }
@@ -57,7 +60,7 @@ public static partial class WorldSerializer
             writer.Write(arrow.Age);writer.Write(arrow.Damage);WriteGuid(writer,arrow.Bow);
         }
     }
-    private static ArrowState[] ReadSurvival(BinaryReader reader,World world,Inventory inventory,DroppedItemState[] drops)
+    private static ArrowState[] ReadSurvival(BinaryReader reader,World world,Inventory inventory,DroppedItemState[] drops,bool legacyFood)
     {
         int count=reader.ReadInt32();if(count<0 || count>36+drops.Length || count!=EquipmentCount(inventory,drops))throw new InvalidDataException("Invalid equipment metadata count.");
         var locations=new HashSet<long>();
@@ -73,17 +76,17 @@ public static partial class WorldSerializer
             try{stack=new(type,1,durability,id);}catch(ArgumentException e){throw new InvalidDataException("Invalid equipment durability.",e);}
             if(owner==0)inventory.SetSlot(index,stack);else drops[index]=drops[index] with {Durability=durability,InstanceId=id};
         }
-        foreach(var drop in drops)DroppedItems.Validate(drop,world.Size);
+        foreach(var drop in drops)ValidateLoadedDrop(drop,world.Size,legacyFood);
         int containers=reader.ReadInt32();if(containers<0 || containers>BlockEntities.Maximum)throw new InvalidDataException("Invalid container count.");
         var states=new BlockEntityState[containers];
         for(int i=0;i<containers;i++)
         {
             Point3 cell=new(reader.ReadInt32(),reader.ReadInt32(),reader.ReadInt32());BlockType block=(BlockType)reader.ReadByte();int slots=reader.ReadInt32();
             if(!BlockEntities.HasState(block) || slots!=(block==BlockType.Chest?27:3))throw new InvalidDataException("Invalid container layout.");
-            var items=new ItemStack[slots];for(int j=0;j<slots;j++)items[j]=ReadStack(reader);
+            var items=new ItemStack[slots];for(int j=0;j<slots;j++)items[j]=ReadStack(reader,legacyFood);
             states[i]=new(cell,block,items,reader.ReadDouble(),reader.ReadDouble(),reader.ReadDouble());
         }
-        world.Containers.Restore(states);ValidateOwnership(inventory,drops,states);
+        world.Containers.Restore(states);
         int arrowCount=reader.ReadInt32();if(arrowCount<0 || arrowCount>Projectiles.Maximum)throw new InvalidDataException("Invalid arrow count.");
         var arrows=new ArrowState[arrowCount];
         for(int i=0;i<arrowCount;i++)

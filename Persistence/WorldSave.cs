@@ -33,6 +33,7 @@ public sealed class GameSession
     public DroppedItems Items { get; }
     public Projectiles Projectiles { get; }
     public BowController Bow { get; }=new();
+    public ViewBobbing Bobbing { get; }=new();
     internal Action<Guid> ProjectileWear { get; }
     public Point3? ContainerCell { get; private set; }
     public BlockContainer ActiveContainer=>ContainerCell.HasValue?World.Containers.Get(ContainerCell.Value):null;

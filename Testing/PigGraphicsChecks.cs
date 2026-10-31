@@ -72,7 +72,7 @@ internal static class PigGraphicsChecks
                 case 1:
                     VerifyModels();
                     World world = PigChecks.Flat();
-                    var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 2));
+                    var inventory = new Inventory(); inventory.SetSlot(0, new ItemStack(Items.RawPorkchop, 1));inventory.SetSlot(2,new ItemStack(Items.RawPorkchop,1));
                     inventory.SetSlot(1, new ItemStack(Items.FromBlock(BlockType.Dirt), 1));
                     var save = new WorldSave(world, "Pig runtime", new Vector3(64.5f, 1, 64.5f), 0, -0.3f,
                         inventory, Health: 10, Pigs: new[] { new PigState(new Vector3(64.5f, 1, 61.5f), MathHelper.Pi, 10) });
@@ -82,12 +82,13 @@ internal static class PigGraphicsChecks
                 case 3: Input(); break;
                 case 4: Press(Keys.F2); break;
                 case 5:
-                    Input(left: true, right: true); Require(Session.Player.Health == 13 && Session.Inventory[0].Count == 1,
+                    Input(left: true, right: true); Require(Session.Player.Health == 12 && Session.Inventory[0].IsEmpty,
                         "RMB did not heal/consume once without a block target, including while LMB is held."); break;
                 case 6:
-                    Input(right: true); Require(Session.Player.Health == 13 && Session.Inventory[0].Count == 1, "Holding RMB repeatedly ate food."); break;
+                    Input(right: true); Require(Session.Player.Health == 12 && Session.Inventory[0].IsEmpty, "Holding RMB repeatedly ate food."); break;
                 case 7:
-                    Input(); Input(right: true); Require(Session.Player.Health == 16 && Session.Inventory[0].IsEmpty, "RMB release/repress did not consume last item."); break;
+                    Session.Inventory.SetSlot(0,Session.Inventory[2]);Session.Inventory.SetSlot(2,default);
+                    Input(); Input(right: true); Require(Session.Player.Health == 14 && Session.Inventory[0].IsEmpty, "RMB release/repress did not consume last item."); break;
                 case 8:
                     Input(left: true, seconds: 1f / 60); // TimeSpan quantization must span at least one full simulation tick.
                     _punchedHealth = Session.Mobs.Entities[0].Health;
@@ -102,12 +103,12 @@ internal static class PigGraphicsChecks
                         Session.Camera.RestoreOrientation(MathF.Atan2(-delta.X, -delta.Z), MathF.Atan2(delta.Y, new Vector2(delta.X, delta.Z).Length()));
                         Input(left: true, seconds: (float)SimulationClock.StepSeconds);
                     }
-                    Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count == 1
+                    Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count is 1 or 2
                         && Session.Items.Entities[0].Item == Items.RawPorkchop, "Held LMB could not kill/drop porkchops.");
                     _store.Save(Session.Id, Session.Capture());
                     string id = Session.Id; Call("BeginWorld", id, _store.Load(id)); WarmRenderer();
-                    Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count == 1 && Session.Inventory[0].IsEmpty
-                        && Session.Player.Health == 16, "Reload resurrected a pig or changed food/player/drop state."); break;
+                    Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count is 1 or 2 && Session.Inventory[0].IsEmpty
+                        && Session.Player.Health == 14, "Reload resurrected a pig or changed food/player/drop state."); break;
                 case 11:
                     Session.Player.ApplyDamage(20); Input(); Call("HandleMenuAction", MenuAction.Respawn);
                     Require(Session.Player.Health == 20 && Session.Inventory[0].IsEmpty && Session.Mobs.Entities.Count == 0,
@@ -203,7 +204,7 @@ internal static class PigGraphicsChecks
                 var pixels = new Color[320 * 240]; target.GetData(pixels);
                 Require(pixels.Count(c => c != Color.CornflowerBlue) > 5, "Dropped food was invisible.");
             }
-            var iconPixels = new Color[16 * 16]; atlas.Porkchop.GetData(iconPixels);
+            var iconPixels = new Color[16 * 16]; atlas.ItemTexture(Items.RawPorkchop).GetData(0,atlas.ItemSource(Items.RawPorkchop),iconPixels,0,iconPixels.Length);
             Require(iconPixels.Any(c => c.A == 0) && iconPixels.Any(c => c.A == 255), "Food icon lost transparent/opaque pixels.");
             Console.WriteLine("PASS: Textured cuboid pig, hurt tint, animated legs, terrain depth occlusion, restored graphics state, and held/dropped food cutouts.");
         }

@@ -50,7 +50,7 @@ internal static class ProgressionChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length==29,"Recipe registration count wrong.");
+        Require(CraftingRecipes.All.Length==31,"Recipe registration count wrong.");
         ItemId P=Block(BlockType.WoodenPlanks),C=Block(BlockType.Cobblestone),S=Items.Stick,T=Items.String;
         void Check(int w,int h,ItemId result,int quantity,params ItemId[] cells)
         {
@@ -160,7 +160,7 @@ internal static class ProgressionChecks
         session.Mining.Update(world,session.Items,new BlockHit(a,default,3),true,100,session.Inventory);
         Require(world.GetBlock(a.X,a.Y,a.Z)==BlockType.Air && session.Items.Entities.Sum(i=>i.Count)==52 && session.Items.Entities.Any(i=>i.Stack==tool),"Chest break lost contents or block.");
         var furnaceCell=new Point3(255,1,255);world.SetBlock(furnaceCell.X,furnaceCell.Y,furnaceCell.Z,BlockType.Furnace);var furnace=world.Containers.Get(furnaceCell);
-        foreach(var recipe in Smelting.Recipes)foreach(ItemId fuel in new[]{Items.Coal,Items.Charcoal})
+        foreach(var recipe in Smelting.Recipes.Where(r=>Items.StackLimit(r.Input)>1))foreach(ItemId fuel in new[]{Items.Coal,Items.Charcoal})
         {
             var f=new BlockContainer(default,BlockType.Furnace,null);f.SetSlot(0,Stack(recipe.Input,64));f.SetSlot(1,Stack(fuel));
             f.Update(79.999);Require(f[2].Count==7 && f[0].Count==57,"Input/output consumed early.");f.Update(.001);
@@ -225,7 +225,7 @@ internal static class ProgressionChecks
             WorldSave restored=Decode(Encode(session.Capture()));Require(restored.Inventory[3]==tool && restored.Inventory.SelectedSlot==3 && restored.World.Containers.Get(cell)[26].Durability==59
                 && restored.DroppedItems.Single().Durability==29,"Equipment/container/drop metadata changed in save roundtrip.");
         }
-        var simple=Session().Capture();byte[] modern=Encode(simple);var legacy=new byte[modern.Length-12];
+        var simple=Session().Capture();byte[] modern=Encode(simple);var legacy=new byte[SaveLayout.Survival(modern)+32];
         Array.Copy(modern,legacy,legacy.Length-32);BitConverter.GetBytes(7).CopyTo(legacy,4);SHA256.HashData(legacy.AsSpan(0,legacy.Length-32)).CopyTo(legacy.AsSpan(legacy.Length-32));
         WorldSave old=Decode(legacy);Require(old.Inventory[0].IsEmpty && old.World.Containers.Entries.Count==0 && old.Arrows.Length==0,"Version 7 migration reset/created player/container state.");
         var duplicate=Session();var shared=Stack(Items.Bow);duplicate.Inventory.SetSlot(0,shared);duplicate.Items.TrySpawn(shared,new Vector3(41,2,40),1);

@@ -109,7 +109,7 @@ internal static class InterfaceGraphicsChecks
         private void VerifyCrafting()
         {
             World world = PigChecks.Flat(); world.SetGeneratedBlock(64,1,62,BlockType.CraftingTable);
-            var inventory = new Inventory(); inventory.SetSlot(0,new ItemStack(Items.RawPorkchop,2));
+            var inventory = new Inventory(); inventory.SetSlot(0,new ItemStack(Items.RawPorkchop,1));
             inventory.SetSlot(1,new ItemStack(Items.FromBlock(BlockType.WoodenPlanks),12));
             var save = new WorldSave(world,"Crafting graphics",new Vector3(64.5f,1,64.5f),0,-.5f,inventory,Health:10);
             Call("BeginWorld",Field<WorldSaveManager>("_saves").Create(save),save); WarmRenderer(); Input();
@@ -132,7 +132,7 @@ internal static class InterfaceGraphicsChecks
                 Call("ProcessInput",default(KeyboardState),mouse,false,new GameTime(),Point.Zero);
             }
             MouseAt(new Rectangle(0,0,1,1),true);
-            Require(State==GameState.Inventory && Session.Crafting.Width==3 && Session.Player.Health==10 && Session.Inventory[0].Count==2,
+            Require(State==GameState.Inventory && Session.Crafting.Width==3 && Session.Player.Health==10 && Session.Inventory[0].Count==1,
                 "Crafting table did not override food/placement through real RMB input.");
             MouseAt(InventoryLayout.Slot(GraphicsDevice.Viewport,1));
             foreach(int slot in new[]{0,1,3,4})for(int click=0;click<2;click++)MouseAt(InventoryLayout.CraftingSlot(GraphicsDevice.Viewport,3,slot),true);
@@ -205,6 +205,7 @@ internal static class InterfaceGraphicsChecks
             {
                 case 1:
                     ProgressionGraphicsChecks.Verify(this);
+                    RefinementGraphicsChecks.Verify(this);
                     VerifyCrafting();
                     VerifyMassiveNotice();
                     Click(2); Require(State == GameState.Settings, "Main menu Settings entry failed.");
@@ -213,7 +214,7 @@ internal static class InterfaceGraphicsChecks
                     Click(0); Require(State == GameState.Controls, "Controls entry failed.");
                     Press(Keys.End); Require(FieldScroll() > 0, "Controls cannot scroll to last binding.");
                     Click(0); Require(State == GameState.Settings, "Controls Back skipped Settings.");
-                    Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Enter);
+                    Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Enter);
                     Require(State == GameState.About, "Keyboard About entry failed.");
                     Capture(); break;
                 case 2:

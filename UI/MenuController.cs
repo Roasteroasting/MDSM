@@ -35,6 +35,8 @@ internal sealed class MenuController : IDisposable
     private string[] _worldDetails = Array.Empty<string>();
     private string _message = "";
     private bool _messageIsError;
+    private double _messageSeconds;
+    internal string CurrentMessage=>_message;
     public string NameText { get; private set; } = "";
     public string SeedText { get; private set; } = "";
     public WorldSize SelectedSize { get; private set; } = WorldSize.Normal;
@@ -80,7 +82,7 @@ internal sealed class MenuController : IDisposable
         _ => MainButtons
     };
     private int FocusOffset => _screen == GameState.WorldCreation ? 3
-        : _screen == GameState.Settings ? 2 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+        : _screen == GameState.Settings ? 3 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
     public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
     {
@@ -127,11 +129,14 @@ internal sealed class MenuController : IDisposable
         _scroll = _selected;
     }
 
-    public void Message(string text, bool error = false)
+    public void Message(string text, bool error = false,double seconds=double.PositiveInfinity)
     {
         _message = Wrap(text, 56);
         _messageIsError = error;
+        _messageSeconds=seconds;
     }
+    public void UpdateMessage(double elapsed)
+    {if(double.IsFinite(elapsed) && elapsed>0 && (_messageSeconds-=elapsed)<=1e-9)_message="";}
 
     public void TextInput(char character)
     {
@@ -198,7 +203,7 @@ internal sealed class MenuController : IDisposable
 
         if (_screen == GameState.Settings)
         {
-            int oldCap = _settings.FpsCap; bool oldUncapped = _settings.UncappedFps;
+            int oldCap = _settings.FpsCap; bool oldUncapped = _settings.UncappedFps,oldBobbing=_settings.ViewBobbing;
             Rectangle slider = SettingsLayout.Slider(viewport), toggle = SettingsLayout.Toggle(viewport);
             if (click && slider.Contains(_mouse)) { _focus = 0; _draggingSlider = true; }
             if (mouse.LeftButton == ButtonState.Released) _draggingSlider = false;
@@ -212,8 +217,10 @@ internal sealed class MenuController : IDisposable
             }
             if (click && toggle.Contains(_mouse)) { _focus = 1; _settings.UncappedFps = !_settings.UncappedFps; }
             else if (_focus == 1 && (Pressed(Keys.Space) || Pressed(Keys.Enter))) _settings.UncappedFps = !_settings.UncappedFps;
-            if (oldCap != _settings.FpsCap || oldUncapped != _settings.UncappedFps) return MenuAction.SettingsChanged;
-            if (Pressed(Keys.Enter) && _focus < 2) return MenuAction.None;
+            if(click && SettingsLayout.Bobbing(viewport).Contains(_mouse)){_focus=2;_settings.ViewBobbing=!_settings.ViewBobbing;}
+            else if(_focus==2 && (Pressed(Keys.Space)||Pressed(Keys.Enter)))_settings.ViewBobbing=!_settings.ViewBobbing;
+            if (oldCap != _settings.FpsCap || oldUncapped != _settings.UncappedFps || oldBobbing!=_settings.ViewBobbing) return MenuAction.SettingsChanged;
+            if (Pressed(Keys.Enter) && _focus < 3) return MenuAction.None;
         }
 
         if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
@@ -342,7 +349,7 @@ internal sealed class MenuController : IDisposable
         };
         int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12)
             : _screen == GameState.Death && viewport.Width >= 900 ? 5 : 3;
-        int titleY = MenuInformation.IsInformation(_screen) ? 20
+        int titleY = _screen==GameState.Settings && viewport.Height<400?8:MenuInformation.IsInformation(_screen) ? 20
             : _screen == GameState.WorldSelection ? 38
             : _screen == GameState.WorldCreation && viewport.Height < 400 ? 12 : Math.Max(20, viewport.Height / 2 - 210);
         Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
@@ -363,6 +370,9 @@ internal sealed class MenuController : IDisposable
             Fill(new Rectangle(toggle.X + 10, toggle.Y + 10, 16, 16), new Color(24, 29, 35));
             if (_settings.UncappedFps) Text("X", toggle.X + 12, toggle.Y + 11, 2, Color.LightGoldenrodYellow);
             Text("UNCAPPED FPS", toggle.X + 38, toggle.Center.Y - 3 * scale, scale, Color.White);
+            Rectangle bobbing=SettingsLayout.Bobbing(viewport);
+            Fill(bobbing,_focus==2?new Color(84,91,94):new Color(38,44,52));
+            Text((_settings.ViewBobbing?"[X] ":"[ ] ")+"VIEW BOBBING",bobbing.X+8,bobbing.Center.Y-3*scale,scale,Color.White);
         }
 
         if (MenuInformation.IsInformation(_screen))

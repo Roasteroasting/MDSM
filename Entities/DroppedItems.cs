@@ -90,6 +90,14 @@ public sealed class DroppedItems
 
     public void Spawn(ItemId item, int count, Vector3 position, float pickupDelay = 0.35f)
     {
+        if(!Items.IsDefined(item) || count<1)throw new ArgumentException("Invalid dropped item quantity/type.");
+        int limit=Items.StackLimit(item);
+        if(count>limit)
+        {
+            if(!CanSpawn((count+limit-1)/limit))throw new InvalidOperationException("Dropped-item limit reached.");
+            while(count>0){int quantity=Math.Min(count,limit);Spawn(item,quantity,position,pickupDelay);count-=quantity;}
+            return;
+        }
         var stack=new ItemStack(item,count);
         var state = new DroppedItemState(item, count,
             new Vector3(Math.Clamp(position.X, DroppedItem.Radius, _world.Width - DroppedItem.Radius), position.Y,

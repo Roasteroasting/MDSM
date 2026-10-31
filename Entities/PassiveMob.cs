@@ -18,6 +18,8 @@ public sealed class PassiveMob
     public bool Walking { get; private set; }
     public float WalkPhase { get; private set; }
     public float HurtSeconds { get; private set; }
+    public bool Sheared { get; private set; }
+    public double WoolSeconds { get; private set; }
     public BoundingBox Bounds => BoundsAt(Species, Position);
     private readonly Random _random;
     private Vector3 _velocity;
@@ -34,11 +36,17 @@ public sealed class PassiveMob
         Species = state.Species;
         Definition = MobDefinitions.Get(Species);
         Position = state.Position; Yaw = state.Yaw; Health = state.Health;
+        Sheared=state.Sheared;WoolSeconds=state.WoolSeconds;
         _random = new Random(aiSeed);
         _decisionSeconds = 0.5f + _random.NextSingle() * 2;
     }
 
-    public MobState CaptureState() => new(Species, Position, Yaw, Health);
+    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds);
+    internal bool Shear()
+    {
+        if(Species!=MobSpecies.Sheep || Sheared || IsDead)return false;
+        Sheared=true;WoolSeconds=180+_random.NextDouble()*180;return true;
+    }
     public static BoundingBox BoundsAt(MobSpecies species, Vector3 feet)
     {
         MobDefinition definition = MobDefinitions.Get(species);
@@ -62,6 +70,7 @@ public sealed class PassiveMob
     {
         if (IsDead || !float.IsFinite(elapsed) || elapsed <= 0) return;
         float dt = Math.Min(elapsed, 0.1f);
+        if(Sheared){WoolSeconds=Math.Max(0,WoolSeconds-elapsed);if(WoolSeconds<=0)Sheared=false;}
         HurtSeconds = Math.Max(0, HurtSeconds - dt);
         _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
         if ((_decisionSeconds -= dt) <= 0)

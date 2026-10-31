@@ -136,6 +136,7 @@ internal static class PrototypeChecks
         };
 
         int failures = 0;
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,RefinementChecks.All));
         foreach (var check in checks)
         {
             try
@@ -337,7 +338,7 @@ internal static class PrototypeChecks
         var player = new Player(new Vector3(10.5f, 5, 10.5f));
         for (int i = 0; i < 60; i++)
             player.Update(world, new Vector3(1, 0, 1), false, 1f / 60);
-        Require(Near(player.Position.X, 12 - Player.HalfWidth) && player.Position.Z > 13.5f, "Wall collision or sliding failed.");
+        Require(Near(player.Position.X, 12 - Player.HalfWidth) && player.Position.Z > 10.5f+Player.MoveSpeed/MathF.Sqrt(2)-.3f, "Wall collision or sliding failed.");
         Require(!world.IntersectsSolid(player.Bounds), "Player penetrated wall.");
 
         var straight = new Player(new Vector3(20.5f, 5, 10.5f));

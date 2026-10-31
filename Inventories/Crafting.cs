@@ -72,6 +72,8 @@ public static class CraftingRecipes
         Add(1,1,T,2,Items.FromBlock(BlockType.WhiteWool));
         Add(3,3,Items.Bow,1,default,S,T,S,default,T,default,S,T);
         Add(3,3,Items.Bow,1,T,S,default,T,default,S,T,S,default);
+        Add(2,2,Items.Shears,1,Items.IronIngot,default,default,Items.IronIngot);
+        Add(2,2,Items.Shears,1,default,Items.IronIngot,Items.IronIngot,default);
         for(int tier=1;tier<=4;tier++)
         {
             ItemId M=tier==1?P:tier==2?C:tier==3?Items.IronIngot:Items.Diamond;

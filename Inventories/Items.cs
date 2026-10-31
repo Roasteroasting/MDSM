@@ -7,13 +7,13 @@ namespace MDSM.Inventories;
 // Inventory deals in item IDs. Only the current item registry maps them to blocks;
 // future non-block items can extend this registry without changing stack operations.
 public readonly record struct ItemId(ushort Value);
-public enum ToolKind { None, Pickaxe, Axe, Sword, Shovel, Bow }
+public enum ToolKind { None, Pickaxe, Axe, Sword, Shovel, Bow, Shears }
 public enum ToolTier { None, Wood, Stone, Iron, Diamond }
 public readonly record struct ItemDefinition(string Name, int StackLimit = 64, ToolKind Tool = ToolKind.None,
     ToolTier Tier = ToolTier.None, int Durability = 0, int Sprite = -1)
 {
     public float Efficiency => Tier switch { ToolTier.Wood => 2, ToolTier.Stone => 4, ToolTier.Iron => 6, ToolTier.Diamond => 8, _ => 1 };
-    public int AttackDamage => Tool == ToolKind.Sword ? 3 + (int)Tier : Tool is not (ToolKind.None or ToolKind.Bow) ? 1 + (int)Tier / 2 : 0;
+    public int AttackDamage => Tool == ToolKind.Sword ? 3 + (int)Tier : Tool is >= ToolKind.Pickaxe and <= ToolKind.Shovel ? 1 + (int)Tier / 2 : 0;
 }
 
 public static class Items
@@ -23,27 +23,31 @@ public static class Items
     public static readonly ItemId Feather = new(258);
     public static readonly ItemId IronIngot = new(259), Coal = new(260), Flint = new(261), Diamond = new(262),
         Stick = new(263), Arrow = new(264), String = new(265), Charcoal = new(266), Bow = new(283);
+    public static readonly ItemId Sapling = new((byte)BlockType.Sapling), Apple = new(284), Shears = new(285), CookedPorkchop = new(286);
     private static readonly ItemDefinition[] Definitions = CreateDefinitions();
     private static readonly ItemId[] SpriteItems = CreateSprites();
     private static ItemDefinition[] CreateDefinitions()
     {
-        var definitions = new ItemDefinition[28];
+        var definitions = new ItemDefinition[31];
         string[] names = { "RAW PORKCHOP", "LEATHER", "FEATHER", "IRON INGOT", "COAL", "FLINT", "DIAMOND", "STICK", "ARROW", "STRING", "CHARCOAL" };
-        for (int i=0;i<names.Length;i++) definitions[i] = new(names[i], Sprite: i-3);
+        for (int i=0;i<names.Length;i++) definitions[i] = new(names[i], i==0?1:64, Sprite: i);
         int[] uses = {59,131,250,1561};
         for(int tier=1;tier<=4;tier++)for(int kind=1;kind<=4;kind++)
-            definitions[Tool((ToolTier)tier,(ToolKind)kind).Value-256] = new($"{(tier==1?"WOODEN":((ToolTier)tier).ToString())} {(ToolKind)kind}".ToUpperInvariant(),1,(ToolKind)kind,(ToolTier)tier,uses[tier-1],8+(tier-1)*4+kind-1);
-        definitions[27]=new("BOW",1,ToolKind.Bow,ToolTier.None,384,24);
+            definitions[Tool((ToolTier)tier,(ToolKind)kind).Value-256] = new($"{(tier==1?"WOODEN":((ToolTier)tier).ToString())} {(ToolKind)kind}".ToUpperInvariant(),1,(ToolKind)kind,(ToolTier)tier,uses[tier-1],11+(tier-1)*4+kind-1);
+        definitions[27]=new("BOW",1,ToolKind.Bow,ToolTier.None,384,27);
+        definitions[28]=new("APPLE",Sprite:29);
+        definitions[29]=new("SHEARS",1,ToolKind.Shears,Durability:238,Sprite:30);
+        definitions[30]=new("COOKED PORKCHOP",1,Sprite:31);
         return definitions;
     }
-    private static ItemId[] CreateSprites() { var all=new ItemId[28];for(int i=0;i<all.Length;i++)all[i]=new((ushort)(256+i));return all; }
+    private static ItemId[] CreateSprites() { var all=new ItemId[32];for(int i=0;i<31;i++)all[i]=new((ushort)(256+i));all[31]=Sapling;return all; }
     public static ItemId Tool(ToolTier tier,ToolKind kind) => tier is >= ToolTier.Wood and <= ToolTier.Diamond && kind is >= ToolKind.Pickaxe and <= ToolKind.Shovel
         ? new ItemId((ushort)(267+((int)tier-1)*4+(int)kind-1)) : throw new ArgumentException("Invalid tiered tool.");
-    public static ItemDefinition Get(ItemId item) => item.Value >=256 && item.Value <284 ? Definitions[item.Value-256]
-        : TryGetBlock(item,out BlockType block) ? new(Blocks.Get(block).Name) : default;
+    public static ItemDefinition Get(ItemId item) => item.Value >=256 && item.Value <287 ? Definitions[item.Value-256]
+        : TryGetBlock(item,out BlockType block) ? new(Blocks.Get(block).Name,Sprite:block==BlockType.Sapling?28:-1) : default;
     public static int StackLimit(ItemId item) => Get(item).StackLimit;
     public static ReadOnlySpan<ItemId> Sprites => SpriteItems;
-    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <284;
+    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <287 || item==Sapling;
     public static bool IsDefined(ItemId item) => IsSprite(item) || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
         ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));
@@ -88,4 +92,10 @@ public readonly record struct ItemStack
     public ItemStack Wear() => Durability <= 0 ? this : Durability == 1 ? default : new(Item,1,Durability-1,InstanceId);
     public ItemStack Fresh() => Durability>0 ? new(Item,1) : this;
     public bool Compatible(ItemStack other) => !IsEmpty && !other.IsEmpty && Item==other.Item && Limit>1;
+
+    // Only binary compatibility readers may temporarily hold pre-v9 stacked food.
+    // It is split into valid stacks before the loaded world is returned to gameplay.
+    private ItemStack(ItemId item,int count,bool legacy) { Item=item;Count=count;Durability=0;InstanceId=Guid.Empty; }
+    internal static ItemStack ReadLegacyFood(ItemId item,int count) => item==Items.RawPorkchop && count is >=1 and <=64
+        ?new ItemStack(item,count,true):throw new ArgumentException("Invalid legacy food stack.");
 }
