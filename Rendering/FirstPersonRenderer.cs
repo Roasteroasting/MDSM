@@ -51,7 +51,7 @@ internal sealed class ViewModelGeometry
         if (selection.Kind == ViewModelKind.Hidden) return;
         if (_isSprite)
         {
-            ItemSpriteGeometry.Fill(_sprite, 0, Vector3.Zero, Vector3.Right, Vector3.Up);
+            ItemSpriteGeometry.Fill(_sprite, 0, Vector3.Zero, Vector3.Right, Vector3.Up,selection.Item);
         }
         else
         {

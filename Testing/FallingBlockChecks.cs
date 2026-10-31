@@ -109,13 +109,13 @@ internal static class FallingBlockChecks
         // Independent v6 fixture has queued voxel blocks and no active-object tail.
         var queued = new World(173, WorldSize.Small, false); queued.SetBlock(15, 0, 16, BlockType.Stone); queued.SetBlock(15, 12, 16, BlockType.Gravel);
         var legacySave = new WorldSave(queued, "Version six", new Vector3(60, 1, 60), 0, 0);
-        byte[] modern = MobChecks.Encode(legacySave), version6 = new byte[modern.Length - 4];
-        modern.AsSpan(0, modern.Length - 36).CopyTo(version6); BitConverter.GetBytes(6).CopyTo(version6, 4); Sign(version6);
+        byte[] modern = MobChecks.Encode(legacySave), version6 = new byte[SaveLayout.Survival(modern)-4+32];
+        modern.AsSpan(0, version6.Length-32).CopyTo(version6); BitConverter.GetBytes(6).CopyTo(version6, 4); Sign(version6);
         WorldSave old = WorldSerializer.Read(new MemoryStream(version6));
         Require(old.World.Gravity.Active.Count == 0 && old.World.Gravity.PendingCount == 1, "V6 queue migration spawned or lost a block.");
         WorldUpdateChecks.SettleGravity(old.World); Require(old.World.GetBlock(15, 1, 16) == BlockType.Gravel, "V6 pending block did not animate and settle.");
         World falling = Falling(); falling.Gravity.Update(0.2); byte[] active = MobChecks.Encode(legacySave with { World = falling });
-        int record = active.Length - 32 - 25;
+        int record = SaveLayout.Survival(active) - 25;
         foreach ((int Offset, byte[] Value) invalid in new[] { (record, new byte[] { (byte)BlockType.Stone }), (record+1, BitConverter.GetBytes(-1)),
             (record+9, BitConverter.GetBytes(double.NaN)), (record+9, BitConverter.GetBytes(128d)), (record+17, BitConverter.GetBytes(-1d)),
             (record+17, BitConverter.GetBytes(21d)), (record-4, BitConverter.GetBytes(FallingBlockSimulation.MaximumActiveBlocks+1)) })

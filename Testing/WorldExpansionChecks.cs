@@ -78,7 +78,8 @@ internal static class WorldExpansionChecks
     }
 
     private sealed record Snapshot(byte[] Hash, byte[] NaturalHash, WorldSize Size, Vector3 Position, PigState[] Pigs, MobState[] Mobs,
-        MobPopulationState Population, DroppedItemState[] Drops, FallingBlockState[] Falling, int[] Queued, ItemStack[] Slots, WaterFeatureCounts Features, int Trees, int Plants);
+        MobPopulationState Population, DroppedItemState[] Drops, FallingBlockState[] Falling, int[] Queued, ItemStack[] Slots, WaterFeatureCounts Features, int Trees, int Plants,
+        BlockEntityState[] Containers,ArrowState[] Arrows);
     public static void GenerationAndStreaming()
     {
         string path=Path.Combine(AppContext.BaseDirectory,".mdsm-generation-"+Guid.NewGuid().ToString("N")+".dat");
@@ -151,14 +152,23 @@ internal static class WorldExpansionChecks
         PassiveMob victim=population.Entities[0];while(!victim.IsDead)Require(population.Punch(victim,world.Spawn,drops),"Could not set pending respawn fixture.");
         drops.Spawn(Items.FromBlock(BlockType.Dirt),7,world.Spawn+Vector3.Up,0.5f);
         var inventory=Inventory.CreateNewWorld();inventory.SetSlot(15,new ItemStack(Items.RawPorkchop,23));inventory.SelectedSlot=8;
+        inventory.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Iron,ToolKind.Pickaxe),1,47));
+        var chestCell=new Point3(world.Width-2,126,world.Depth-2);world.SetBlock(chestCell.X,chestCell.Y,chestCell.Z,BlockType.Chest);
+        world.Containers.Get(chestCell).SetSlot(26,new ItemStack(Items.Tool(ToolTier.Diamond,ToolKind.Sword),1,931));
+        var furnaceCell=chestCell with{X=chestCell.X-1};world.SetBlock(furnaceCell.X,furnaceCell.Y,furnaceCell.Z,BlockType.Furnace);
+        world.Containers.Get(furnaceCell).SetSlot(0,new ItemStack(Items.FromBlock(BlockType.IronOre),3));
+        world.Containers.Get(furnaceCell).SetSlot(1,new ItemStack(Items.Charcoal,2));world.Containers.Update(4.25);
+        var bow=new ItemStack(Items.Bow,1,211);drops.TrySpawn(bow,world.Spawn+Vector3.Up*2,.5f);
+        ArrowState[] arrows={new(world.Spawn+Vector3.Up*2,Vector3.Forward*10,.1f,3,bow.InstanceId)};
         world.SetBlock(world.Width-1,127,world.Depth-1,BlockType.Cobblestone);
         world.SetBlock(8,125,8,BlockType.WaterSource);
         world.SetBlock(15,126,16,BlockType.Gravel);world.Gravity.Update(0.1);
         var save=new WorldSave(world,"Expanded "+size,world.Spawn,0.7f,-0.2f,inventory,drops.Capture(),13,
-            population.CapturePigs(),population.CaptureOthers(),population.CapturePopulation());
+            population.CapturePigs(),population.CaptureOthers(),population.CapturePopulation(),arrows);
         var snapshot=new Snapshot(Hash(world),naturalHash,size,save.PlayerPosition,save.Pigs,save.Mobs,save.Population,save.DroppedItems,
-            world.Gravity.CaptureActive(),world.Gravity.CaptureColumns(),Enumerable.Range(0,36).Select(i=>inventory[i]).ToArray(),features,trees,plants);
+            world.Gravity.CaptureActive(),world.Gravity.CaptureColumns(),Enumerable.Range(0,36).Select(i=>inventory[i]).ToArray(),features,trees,plants,world.Containers.Capture(),arrows);
         using(var stream=File.Create(path))WorldSerializer.Write(stream,save);
+        Console.WriteLine($"  ORES {size} seed 173: {world.GeneratedOres}; raw blocks {world.BlockCount/1048576} MiB.");
         Console.WriteLine($"  {size}: {features.Ponds} ponds, {features.Rivers} rivers, {features.Lakes} lakes; {trees} trees, {plants} plants, {generated.Length} mobs; generated/checked/saved in {watch.Elapsed.TotalSeconds:F1}s.");
         return snapshot;
     }
@@ -248,6 +258,10 @@ internal static class WorldExpansionChecks
         Require(save.Inventory.SelectedSlot==8 && save.Inventory[15]==new ItemStack(Items.RawPorkchop,23)
             && save.World.GetBlock(save.World.Width-1,127,save.World.Depth-1)==BlockType.Cobblestone,"Inventory/high-Y data changed.");
         for(int i=0;i<36;i++)Require(save.Inventory[i]==expected.Slots[i],"A saved inventory slot changed in a large world.");
+        var containers=save.World.Containers.Capture();Require(containers.Length==expected.Containers.Length && save.Arrows.AsSpan().SequenceEqual(expected.Arrows),"Container or active arrow state missing.");
+        for(int i=0;i<containers.Length;i++)Require(containers[i].Cell==expected.Containers[i].Cell && containers[i].Block==expected.Containers[i].Block
+            && containers[i].Slots.AsSpan().SequenceEqual(expected.Containers[i].Slots) && containers[i].Burn==expected.Containers[i].Burn
+            && containers[i].BurnTotal==expected.Containers[i].BurnTotal && containers[i].Progress==expected.Containers[i].Progress,"Large-world container/durability/furnace state changed.");
         Console.WriteLine($"  {expected.Size}: complete streamed restore and SHA-256 equality passed.");
     }
 
@@ -293,7 +307,7 @@ internal static class WorldExpansionChecks
         BitConverter.GetBytes(64).CopyTo(prefix,12);BitConverter.GetBytes(save.World.Width*64*save.World.Depth).CopyTo(prefix,header-4);payload.Write(prefix);
         foreach(Chunk chunk in save.World.Chunks)payload.Write(chunk.Blocks[..(64*16*16)]);
         int end=version switch {1=>blockEnd,2=>SaveLayout.Health(current),3=>SaveLayout.Health(current)+4,
-            4=>SaveLayout.Health(current)+4,5=>SaveLayout.Population(current),6=>current.Length-32-4-save.World.Gravity.Active.Count*25,_=>current.Length-32};
+            4=>SaveLayout.Health(current)+4,5=>SaveLayout.Population(current),6=>SaveLayout.Survival(current)-4-save.World.Gravity.Active.Count*25,_=>SaveLayout.Survival(current)};
         payload.Write(current.AsSpan(blockEnd,end-blockEnd));
         if(version==4)
         {

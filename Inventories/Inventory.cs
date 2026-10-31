@@ -17,14 +17,28 @@ public sealed class Inventory
         set => _selected = value >= 0 && value < HotbarSlots ? value : throw new ArgumentOutOfRangeException(nameof(value));
     }
     public ItemStack Selected => _slots[_selected];
+    public event Action<ItemId> EquipmentBroken;
     public ItemStack this[int slot] => _slots[slot];
     public void SetSlot(int slot, ItemStack stack) => _slots[slot] = stack;
     public void ConsumeSelected() => _slots[_selected] = Selected.WithCount(Selected.Count - 1);
+    public void WearSelected()
+    {ItemStack before=Selected;_slots[_selected]=before.Wear();if(before.Durability==1)EquipmentBroken?.Invoke(before.Item);}
+    public bool Consume(ItemId item)
+    {
+        for(int i=0;i<SlotCount;i++)if(!_slots[i].IsEmpty && _slots[i].Item==item){_slots[i]=_slots[i].WithCount(_slots[i].Count-1);return true;}
+        return false;
+    }
+    public bool Wear(Guid instance)
+    {
+        for(int i=0;i<SlotCount;i++)if(instance!=Guid.Empty && _slots[i].InstanceId==instance){ItemStack before=_slots[i];_slots[i]=before.Wear();if(before.Durability==1)EquipmentBroken?.Invoke(before.Item);return true;}
+        return false;
+    }
 
     // Returns the uninserted count. Compatible stacks always take priority over empties.
     public int Add(ItemId item, int count)
     {
         if (!Items.IsDefined(item) || count < 0) throw new ArgumentException("Invalid inventory insertion.");
+        if(Items.StackLimit(item)==1)return count==0?0:Add(new ItemStack(item,count)).Count;
         for (int i = 0; i < SlotCount && count > 0; i++)
             if (!_slots[i].IsEmpty && _slots[i].Item == item)
                 count = Insert(i, item, count);
@@ -32,12 +46,25 @@ public sealed class Inventory
             if (_slots[i].IsEmpty) count = Insert(i, item, count);
         return count;
     }
+    public ItemStack Add(ItemStack stack)
+    {
+        for(int i=0;i<SlotCount && !stack.IsEmpty;i++)if(_slots[i].Compatible(stack))stack=Insert(i,stack);
+        for(int i=0;i<SlotCount && !stack.IsEmpty;i++)if(_slots[i].IsEmpty)stack=Insert(i,stack);
+        return stack;
+    }
+    internal ItemStack Insert(int slot,ItemStack stack)
+    {
+        if(stack.IsEmpty || (!_slots[slot].IsEmpty && !_slots[slot].Compatible(stack)))return stack;
+        int accepted=Math.Min(stack.Limit-_slots[slot].Count,stack.Count);
+        if(accepted>0)_slots[slot]=_slots[slot].IsEmpty?stack.WithCount(accepted):_slots[slot].WithCount(_slots[slot].Count+accepted);
+        return stack.WithCount(stack.Count-accepted);
+    }
 
     internal int Insert(int slot, ItemId item, int count)
     {
         ItemStack existing = _slots[slot];
         if (!existing.IsEmpty && existing.Item != item) return count;
-        int accepted = Math.Min(ItemStack.Maximum - existing.Count, count);
+        int accepted = Math.Min(Items.StackLimit(item) - existing.Count, count);
         if (accepted > 0) _slots[slot] = new ItemStack(item, existing.Count + accepted);
         return count - accepted;
     }
@@ -84,22 +111,22 @@ public sealed class InventoryInteraction(Inventory inventory)
         {
             if (existing.IsEmpty) return existing;
             int count = right ? Math.Max(1, existing.Count / 2) : existing.Count;
-            Cursor = new ItemStack(existing.Item, count);
+            Cursor = existing.WithCount(count);
             _originalSlot = -1;
             return existing.WithCount(existing.Count - count);
         }
         else if (right)
         {
-            if ((existing.IsEmpty || existing.Item == Cursor.Item) && existing.Count < ItemStack.Maximum)
+            if ((existing.IsEmpty || existing.Compatible(Cursor)) && existing.Count < Cursor.Limit)
             {
-                existing = new ItemStack(Cursor.Item, existing.Count + 1);
+                existing = existing.IsEmpty ? Cursor.WithCount(1) : existing.WithCount(existing.Count+1);
                 Cursor = Cursor.WithCount(Cursor.Count - 1);
             }
         }
-        else if (existing.IsEmpty || existing.Item == Cursor.Item)
+        else if (existing.IsEmpty || existing.Compatible(Cursor))
         {
-            int accepted = Math.Min(ItemStack.Maximum - existing.Count, Cursor.Count);
-            existing = new ItemStack(Cursor.Item, existing.Count + accepted);
+            int accepted = Math.Min(Cursor.Limit - existing.Count, Cursor.Count);
+            existing = existing.IsEmpty ? Cursor.WithCount(accepted) : existing.WithCount(existing.Count+accepted);
             Cursor = Cursor.WithCount(Cursor.Count - accepted);
         }
         else
@@ -112,22 +139,28 @@ public sealed class InventoryInteraction(Inventory inventory)
     // Crafting is all-or-nothing: a partial output must never consume a whole recipe.
     public bool TryReceive(ItemStack output)
     {
-        if (output.IsEmpty || (!Cursor.IsEmpty && (Cursor.Item != output.Item || Cursor.Count + output.Count > ItemStack.Maximum))) return false;
+        if (output.IsEmpty || (!Cursor.IsEmpty && (!Cursor.Compatible(output) || Cursor.Count + output.Count > output.Limit))) return false;
         if (Cursor.IsEmpty) _originalSlot = -1;
-        Cursor = new ItemStack(output.Item, Cursor.Count + output.Count);
+        Cursor = Cursor.IsEmpty?output:Cursor.WithCount(Cursor.Count+output.Count);
         return true;
     }
 
     public bool TryReturnCursor()
     {
         if (Cursor.IsEmpty) return true;
-        int remaining = Cursor.Count;
-        if (_originalSlot >= 0) remaining = Inventory.Insert(_originalSlot, Cursor.Item, remaining);
-        remaining = Inventory.Add(Cursor.Item, remaining);
-        Cursor = Cursor.WithCount(remaining);
+        if (_originalSlot >= 0) Cursor = Inventory.Insert(_originalSlot, Cursor);
+        Cursor = Inventory.Add(Cursor);
         if (!Cursor.IsEmpty) return false;
         _originalSlot = -1;
         return true;
+    }
+    public bool Wear(Guid id) { if(id==Guid.Empty || Cursor.InstanceId!=id)return false;Cursor=Cursor.Wear();return true; }
+    public ItemStack TakeStack(ItemStack existing,bool right)
+    {
+        if(existing.IsEmpty || (!Cursor.IsEmpty && !Cursor.Compatible(existing)))return existing;
+        int take=Math.Min(Cursor.IsEmpty?existing.Limit:Cursor.Limit-Cursor.Count,right?Math.Max(1,existing.Count/2):existing.Count);
+        if(take<=0)return existing;
+        TryReceive(existing.WithCount(take));return existing.WithCount(existing.Count-take);
     }
 
     public bool TryDropCursor(DroppedItems items, Microsoft.Xna.Framework.Vector3 position, float delay)

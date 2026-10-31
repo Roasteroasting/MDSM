@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using System;
 
 using MDSM.Entities;
 using MDSM.Gameplay;
@@ -9,7 +10,7 @@ namespace MDSM.Persistence;
 
 public sealed record WorldSave(World World, string Name, Vector3 PlayerPosition, float Yaw, float Pitch,
     Inventory Inventory = null, DroppedItemState[] DroppedItems = null, int Health = Player.MaximumHealth, PigState[] Pigs = null,
-    MobState[] Mobs = null, MobPopulationState Population = null); // Mobs contains non-pig species.
+    MobState[] Mobs = null, MobPopulationState Population = null,ArrowState[] Arrows=null); // Mobs contains non-pig species.
 
 public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch,
     WorldSize Size = WorldSize.Normal, int Version = 1, int StoredHeight = World.Height)
@@ -30,20 +31,30 @@ public sealed class GameSession
     public InventoryInteraction InventoryInteraction { get; }
     public CraftingGrid Crafting { get; private set; } = new(2);
     public DroppedItems Items { get; }
+    public Projectiles Projectiles { get; }
+    public BowController Bow { get; }=new();
+    internal Action<Guid> ProjectileWear { get; }
+    public Point3? ContainerCell { get; private set; }
+    public BlockContainer ActiveContainer=>ContainerCell.HasValue?World.Containers.Get(ContainerCell.Value):null;
     public MiningController Mining { get; } = new();
     public CombatController Combat { get; } = new();
     public PassiveMobPopulation Mobs { get; }
     private bool _deathHandled;
     public bool UndroppedDeathItems { get; private set; }
+    private string _equipmentNotice;
+    public string TakeEquipmentNotice(){string notice=_equipmentNotice;_equipmentNotice=null;return notice;}
 
     public GameSession(string id, WorldSave save)
     {
         Id = id;
+        ProjectileWear=WearEquipment;
         Name = save.Name;
         World = save.World;
         Inventory = save.Inventory?.Clone() ?? Inventory.CreateNewWorld();
+        Inventory.EquipmentBroken+=item=>_equipmentNotice=MDSM.Inventories.Items.Name(item)+" BROKE";
         InventoryInteraction = new InventoryInteraction(Inventory);
         Items = new DroppedItems(World, save.DroppedItems);
+        Projectiles=new Projectiles(World,save.Arrows);
         Mobs = new PassiveMobPopulation(World, save.Pigs, save.Mobs, save.Population);
         Player = new Player(save.PlayerPosition, save.Health);
         if (Player.IsDead) Player.Respawn(World); // Saved drops already exist; never drop again on load.
@@ -56,18 +67,34 @@ public sealed class GameSession
         if (!TryReturnInterfaceItems())
             throw new System.InvalidOperationException("Make room for held items and crafting ingredients before saving.");
         return new(World, Name, Player.Position, Camera.Yaw, Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health,
-            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation());
+            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture());
     }
 
     public bool TryOpenCrafting(int width)
     {
         if (Player.IsDead || width is not (2 or 3) || !TryReturnInterfaceItems()) return false;
+        ContainerCell=null;
         Crafting = new CraftingGrid(width);
         return true;
     }
 
     public bool TryOpenCraftingTable(BlockHit? hit) => hit is BlockHit target && target.Distance >= 0
         && target.Distance <= BlockRaycaster.Reach && World.GetBlock(target.Cell.X, target.Cell.Y, target.Cell.Z) == BlockType.CraftingTable && TryOpenCrafting(3);
+
+    public bool TryOpenContainer(BlockHit hit)
+    {
+        if(Player.IsDead || !float.IsFinite(hit.Distance) || hit.Distance<0 || hit.Distance>BlockRaycaster.Reach
+            || !BlockEntities.HasState(World.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)) || !TryReturnInterfaceItems())return false;
+        ContainerCell=hit.Cell;World.Containers.Get(hit.Cell);return true;
+    }
+    public void CloseInterface()=>ContainerCell=null;
+    public void WearEquipment(Guid id)
+    {
+        if(id==Guid.Empty)return;
+        if(Inventory.Wear(id) || InventoryInteraction.Wear(id) || Items.Wear(id))return;
+        for(int i=0;i<Crafting.SlotCount;i++)if(Crafting[i].InstanceId==id){Crafting.SetSlot(i,Crafting[i].Wear());return;}
+        foreach(var entry in World.Containers.Entries.Values)if(entry.Wear(id))return;
+    }
 
     // Inputs and cursor remain owned until inserted or spawned successfully. On an
     // exceptional clearance/entity-limit failure, keep the interface/session open.
@@ -78,9 +105,9 @@ public sealed class GameSession
         for (int i = 0; i < Crafting.SlotCount; i++)
         {
             ItemStack stack = Crafting[i]; if (stack.IsEmpty) continue;
-            int remaining = Inventory.Add(stack.Item, stack.Count);
-            Crafting.SetSlot(i, stack.WithCount(remaining));
-            if (remaining > 0 && DropPlacement.TryFind(World, Player, Camera.HorizontalForward, !Player.IsDead, out Vector3 position)
+            ItemStack remaining = Inventory.Add(stack);
+            Crafting.SetSlot(i, remaining);
+            if (!remaining.IsEmpty && DropPlacement.TryFind(World, Player, Camera.HorizontalForward, !Player.IsDead, out Vector3 position)
                 && Items.TrySpawn(Crafting[i], position, DroppedItems.DeliberatePickupDelay)) Crafting.SetSlot(i, default);
         }
         if (!InventoryInteraction.Cursor.IsEmpty) return false;
@@ -92,6 +119,7 @@ public sealed class GameSession
     {
         if (!Player.IsDead || _deathHandled) return false;
         _deathHandled = true;
+        ContainerCell=null;Bow.Cancel();
         UndroppedDeathItems = false;
         Mining.Reset(); Player.StopMovement();
         bool hasPosition = DropPlacement.TryFind(World, Player, Camera.HorizontalForward, false, out Vector3 position);

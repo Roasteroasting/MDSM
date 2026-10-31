@@ -271,7 +271,7 @@ internal static class WaterChecks
             bytes.SetLength(0); var dry = new World(12, size);
             bytes.Write(MobChecks.Version4(new WorldSave(dry, "Existing dry world", dry.Spawn, 0, 0))); bytes.Position = 0;
             WorldSave old = WorldSerializer.Read(bytes); Equal(dry, old.World);
-            Require(old.World.Fluids.PendingCount == 0 && WorldSerializer.FormatVersion == 7, "Loading old terrain introduced water or changed the expected save version.");
+            Require(old.World.Fluids.PendingCount == 0 && WorldSerializer.FormatVersion == 8, "Loading old terrain introduced water or changed the expected save version.");
         }
     }
 }

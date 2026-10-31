@@ -21,7 +21,9 @@ public sealed class World
     public int Revision { get; private set; }
     public FluidSimulation Fluids { get; }
     public FallingBlockSimulation Gravity { get; }
+    public BlockEntities Containers { get; }
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
+    public OreGenerationStats GeneratedOres { get; private set; }
     public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
@@ -33,6 +35,7 @@ public sealed class World
     internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        Containers=new BlockEntities(this);
         Fluids = new FluidSimulation(this);
         Gravity = new FallingBlockSimulation(this);
         _ = size.Width(); // Validate before allocating storage.
@@ -61,6 +64,8 @@ public sealed class World
         world.GeneratedLakes = new System.Collections.Generic.List<NaturalLake>(water.Lakes);
         progress?.Invoke("PLACING TREES AND VEGETATION");
         new WorldDecorator(seed).Decorate(world);
+        progress?.Invoke("PLACING COAL, IRON AND DIAMONDS");
+        world.GeneratedOres=OreGenerator.Generate(world);
         progress?.Invoke("INITIALIZING WATER");
         world.Fluids.Initialize();
         return world;
@@ -92,7 +97,7 @@ public sealed class World
     public bool SetBlock(int x, int y, int z, BlockType block)
     {
         if (!Contains(x, y, z) || !Blocks.IsDefined(block)
-            || GetBlock(x, y, z) == block)
+            || GetBlock(x, y, z) == block || !Containers.CanChange(new Point3(x,y,z),block))
             return false;
 
         int chunkX = x / Chunk.Size, chunkZ = z / Chunk.Size;
@@ -100,6 +105,7 @@ public sealed class World
         Chunk chunk = GetChunk(chunkX, chunkZ);
         BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
+        Containers.Changed(new Point3(x,y,z),block);
         // Air/fluid both expose terrain faces; changing a flow level only invalidates water.
         bool terrainChanged = !(previous == BlockType.Air || Water.IsWater(previous))
             || !(block == BlockType.Air || Water.IsWater(block));

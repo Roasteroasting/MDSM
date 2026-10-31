@@ -124,7 +124,8 @@ internal static class MobChecks
             for (int i = 0; i < 1000 && !mob.IsDead; i++) combat.Update(world, population, drops, mining, eye, Vector3.Forward, target, true, Dt);
             Require(mob.IsDead && population.Entities.Count == 0 && drops.Entities.Count == 1 && drops.Entities[0].Item == mob.Definition.Drop
                 && drops.Entities[0].Count >= 1 && drops.Entities[0].Count <= mob.Definition.MaximumDrop && !population.Punch(mob, eye, drops), "Species death/drop missing, wrong, or duplicated.");
-            for (int i = 0; i < 420; i++) combat.Update(world, population, drops, mining, eye, Vector3.Forward, BlockRaycaster.Cast(world, eye, Vector3.Forward), true, Dt);
+            var harvest=new Inventory();harvest.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Wood,ToolKind.Pickaxe),1));
+            for (int i = 0; i < 420; i++) combat.Update(world, population, drops, mining, eye, Vector3.Forward, BlockRaycaster.Cast(world, eye, Vector3.Forward), true, Dt,harvest);
             Require(world.GetBlock(20, y, 18) == BlockType.Air, "Continuous mining did not resume after species death.");
             var amounts = new HashSet<int>();
             for (int i = 0; i < 40; i++)
@@ -184,7 +185,7 @@ internal static class MobChecks
     public static void StartingAndRespawn()
     {
         Inventory inventory = Inventory.CreateNewWorld();
-        Require(Blocks.Selection.Length == 15 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
+        Require(Blocks.Selection.Length == 21 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
             "Placeable palette omitted wool/table or reordered existing blocks.");
         for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New worlds must not grant starting items.");
         Require(Inventory.CreateStarter()[13].IsEmpty, "Legacy migration granted new wool.");
@@ -216,7 +217,7 @@ internal static class MobChecks
             while (!dead.IsDead) session.Mobs.Punch(dead, session.Player.Position, session.Items);
             WorldSave killed = Decode(Encode(session.Capture()));
             Require(killed.Mobs.Length == 2 && new GameSession("killed", killed).Mobs.Entities.Count == 3, "Killed species respawned on load.");
-            using var metadata = new MemoryStream(bytes); Require(WorldSerializer.ReadMetadata(metadata).Version == 7, "Version 7 metadata listing failed.");
+            using var metadata = new MemoryStream(bytes); Require(WorldSerializer.ReadMetadata(metadata).Version == 8, "Version 8 metadata listing failed.");
         }
     }
 

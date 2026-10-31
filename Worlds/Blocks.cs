@@ -24,18 +24,19 @@ public enum BlockType : byte
     WaterFlow1 = 15, WaterFlow2 = 16, WaterFlow3 = 17, WaterFlow4 = 18,
     WaterFlow5 = 19, WaterFlow6 = 20, WaterFlow7 = 21, WaterFalling = 22,
     WhiteWool = 23,
-    CraftingTable = 24
+    CraftingTable = 24,
+    Glass = 25, IronOre = 26, CoalOre = 27, DiamondOre = 28, Furnace = 29, Chest = 30
 }
 
 public enum BlockShape { None, Cube, Cross, Fluid }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
-    BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2)
+    BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
 {
     public bool Renderable => Shape != BlockShape.None;
     public bool NeedsGrass => Shape == BlockShape.Cross;
     public int Tile(Vector3 normal) => normal.Y > 0 && TopTile >= 0 ? TopTile
-        : normal.Y < 0 && BottomTile >= 0 ? BottomTile : SideTile;
+        : normal.Y < 0 && BottomTile >= 0 ? BottomTile : normal.Z<0 && FrontTile>=0 ? FrontTile : SideTile;
 }
 
 public static class Blocks
@@ -66,13 +67,20 @@ public static class Blocks
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
         new("WHITE WOOL", true, true, BlockShape.Cube, 15, MiningSeconds: 1.25f),
-        new("CRAFTING TABLE", true, true, BlockShape.Cube, 17, 16, 7, MiningSeconds: 2.5f)
+        new("CRAFTING TABLE", true, true, BlockShape.Cube, 17, 16, 7, MiningSeconds: 2.5f),
+        new("GLASS",true,false,BlockShape.Cube,18,MiningSeconds:.45f),
+        new("IRON ORE",true,true,BlockShape.Cube,19,MiningSeconds:4.5f),
+        new("COAL ORE",true,true,BlockShape.Cube,20,MiningSeconds:4.5f),
+        new("DIAMOND ORE",true,true,BlockShape.Cube,21,MiningSeconds:4.5f),
+        new("FURNACE",true,true,BlockShape.Cube,23,22,22,MiningSeconds:5.25f,FrontTile:24),
+        new("CHEST",true,true,BlockShape.Cube,26,25,25,MiningSeconds:3.75f,FrontTile:27)
     };
     private static readonly BlockType[] Palette =
     {
         BlockType.Grass, BlockType.Dirt, BlockType.Stone, BlockType.WoodLog, BlockType.Leaves,
         BlockType.WoodenPlanks, BlockType.Cobblestone, BlockType.Sand, BlockType.Gravel,
-        BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable
+        BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable,
+        BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
     public static bool IsDefined(BlockType block) => (int)block < Definitions.Length;

@@ -9,21 +9,29 @@ using MDSM.Worlds;
 
 namespace MDSM.Entities;
 
-public readonly record struct DroppedItemState(ItemId Item, int Count, Vector3 Position, float VerticalVelocity, float PickupDelay);
+public readonly record struct DroppedItemState(ItemId Item, int Count, Vector3 Position, float VerticalVelocity, float PickupDelay,
+    int Durability = 0, Guid InstanceId = default)
+{
+    public ItemStack Stack => new(Item,Count,Durability,InstanceId);
+}
 
 public sealed class DroppedItem
 {
     public const float Radius = 0.125f;
     public ItemId Item { get; }
     public int Count { get; internal set; }
+    public int Durability { get; private set; }
+    public Guid InstanceId { get; }
+    public ItemStack Stack => new(Item,Count,Durability,InstanceId);
     public Vector3 Position { get; private set; }
     public float VerticalVelocity { get; private set; }
     public float PickupDelay { get; internal set; }
-    public DroppedItemState Capture() => new(Item, Count, Position, VerticalVelocity, PickupDelay);
+    public DroppedItemState Capture() => new(Item, Count, Position, VerticalVelocity, PickupDelay,Durability,InstanceId);
+    internal void Wear() { var next=Stack.Wear();Count=next.Count;Durability=next.Durability; }
 
     internal DroppedItem(DroppedItemState state)
     {
-        Item = state.Item; Count = state.Count; Position = state.Position;
+        Item = state.Item; Count = state.Count; Position = state.Position;Durability=state.Durability;InstanceId=state.InstanceId;
         VerticalVelocity = state.VerticalVelocity; PickupDelay = state.PickupDelay;
     }
 
@@ -82,9 +90,10 @@ public sealed class DroppedItems
 
     public void Spawn(ItemId item, int count, Vector3 position, float pickupDelay = 0.35f)
     {
+        var stack=new ItemStack(item,count);
         var state = new DroppedItemState(item, count,
             new Vector3(Math.Clamp(position.X, DroppedItem.Radius, _world.Width - DroppedItem.Radius), position.Y,
-                Math.Clamp(position.Z, DroppedItem.Radius, _world.Depth - DroppedItem.Radius)), 0, pickupDelay);
+                Math.Clamp(position.Z, DroppedItem.Radius, _world.Depth - DroppedItem.Radius)), 0, pickupDelay,stack.Durability,stack.InstanceId);
         Validate(state, _world.Size);
         if (!CanSpawn()) throw new InvalidOperationException("Dropped-item limit reached.");
         _items.Add(new DroppedItem(state));
@@ -93,8 +102,14 @@ public sealed class DroppedItems
     public bool TrySpawn(ItemStack stack, Vector3 position, float pickupDelay)
     {
         if (stack.IsEmpty || !CanSpawn()) return false;
-        Spawn(stack.Item, stack.Count, position, pickupDelay);
+        var state=new DroppedItemState(stack.Item,stack.Count,position,0,pickupDelay,stack.Durability,stack.InstanceId);
+        Validate(state,_world.Size);_items.Add(new DroppedItem(state));
         return true;
+    }
+    public bool Wear(Guid id)
+    {
+        for(int i=0;i<_items.Count;i++)if(id!=Guid.Empty && _items[i].InstanceId==id){_items[i].Wear();if(_items[i].Count==0)_items.RemoveAt(i);return true;}
+        return false;
     }
 
     public void Update(Player player, Inventory inventory, float elapsed)
@@ -118,7 +133,7 @@ public sealed class DroppedItems
             DroppedItem item = _items[i];
             Vector3 nearest = Vector3.Clamp(item.Position, playerBounds.Min, playerBounds.Max);
             if (player.IsDead || item.PickupDelay > 0 || Vector3.DistanceSquared(item.Position, nearest) > PickupRadius * PickupRadius) continue;
-            item.Count = inventory.Add(item.Item, item.Count);
+            item.Count = inventory.Add(item.Stack).Count;
             if (item.Count != 0) continue;
             // Swap removal avoids shifting the list; the swapped entry was already updated.
             _items[i] = _items[^1];
@@ -133,6 +148,7 @@ public sealed class DroppedItems
         for (int i = 0; i < _items.Count; i++)
         {
             DroppedItem item = _items[i];
+            if(Items.StackLimit(item.Item)==1)continue;
             var cell = new Point3((int)MathF.Floor(item.Position.X), (int)MathF.Floor(item.Position.Y), (int)MathF.Floor(item.Position.Z));
             for (int dz = -1; dz <= 1 && item.Count > 0; dz++)
             for (int dy = -1; dy <= 1 && item.Count > 0; dy++)
@@ -183,6 +199,12 @@ public sealed class DroppedItems
     public static void Validate(DroppedItemState state, WorldSize size)
     {
         Vector3 p = state.Position;
+        int maximum=Items.Get(state.Item).Durability;
+        if(maximum>0 ? state.Durability<1 || state.Durability>maximum || state.InstanceId==Guid.Empty : state.Durability!=0 || state.InstanceId!=Guid.Empty)
+            throw new InvalidDataException("Invalid dropped-item durability/identity.");
+        try { _=state.Stack; }
+        catch(ArgumentException e){throw new InvalidDataException("Invalid dropped-item metadata.",e);}
+        if(Items.Get(state.Item).Durability>0 && state.InstanceId==Guid.Empty)throw new InvalidDataException("Missing equipment identity.");
         if (!Items.IsDefined(state.Item) || state.Count < 1 || state.Count > ItemStack.Maximum
             || !float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z)
             || p.X < DroppedItem.Radius || p.X > size.Width() - DroppedItem.Radius

@@ -1,4 +1,8 @@
-if (System.Array.Exists(args, argument => argument == "--crafting-test"))
+if (System.Array.Exists(args, argument => argument == "--survival-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.ProgressionChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--crafting-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.CraftingChecks.Run();
 }

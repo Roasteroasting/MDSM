@@ -95,6 +95,7 @@ internal static class PresentationChecks
         {
             var clock = new SimulationClock(); var player = new Player(new Vector3(20.5f, 14, 20.5f));
             var inventory = new Inventory(); var items = new DroppedItems(world);
+            inventory.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Wood,ToolKind.Pickaxe),1));
             items.Spawn(Items.FromBlock(BlockType.Dirt), 40, new Vector3(12, 3, 12), 1);
             items.Spawn(Items.FromBlock(BlockType.Dirt), 40, new Vector3(12.2f, 3, 12), 1);
             var mining = new MiningController(); world.SetBlock(40, 1, 40, BlockType.Stone);
@@ -108,7 +109,7 @@ internal static class PresentationChecks
                 {
                     player.Update(world, Vector3.Right, false, (float)SimulationClock.StepSeconds);
                     items.Update(player, inventory, (float)SimulationClock.StepSeconds);
-                    mining.Update(world, items, hit, true, (float)SimulationClock.StepSeconds);
+                    mining.Update(world, items, hit, true, (float)SimulationClock.StepSeconds,inventory);
                 }
             }
             Require(ticks == 480 && Math.Abs(seconds - 4) < 1e-6, "Render rate changed simulated/autosave time.");

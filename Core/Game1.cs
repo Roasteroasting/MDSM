@@ -41,6 +41,7 @@ public class Game1 : Game
     private InventoryScreen _inventoryScreen;
     private FirstPersonRenderer _firstPerson;
     private PassiveMobRenderer _mobRenderer;
+    private ProjectileRenderer _projectileRenderer;
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private bool _previousBack;
@@ -95,6 +96,7 @@ public class Game1 : Game
         _inventoryScreen = new InventoryScreen(GraphicsDevice, _atlas);
         _firstPerson = new FirstPersonRenderer(GraphicsDevice, _atlas);
         _mobRenderer = new PassiveMobRenderer(GraphicsDevice, Content);
+        _projectileRenderer=new ProjectileRenderer(GraphicsDevice);
         _mouseLook = new MouseLookInput();
         _previousKeyboard = Keyboard.GetState();
         _previousMouse = Mouse.GetState();
@@ -160,9 +162,11 @@ public class Game1 : Game
         }
         else if (State == GameState.Inventory)
         {
+            int processingSteps=_simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
+            for(int i=0;i<processingSteps;i++)_session.World.Containers.Update(SimulationClock.StepSeconds);
             if (Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
             {
-                if (_session.TryReturnInterfaceItems()) SetState(GameState.Playing);
+                if (_session.TryReturnInterfaceItems()) { _session.CloseInterface();SetState(GameState.Playing); }
                 else _inventoryScreen.CannotClose();
             }
             else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport);
@@ -185,10 +189,12 @@ public class Game1 : Game
         if (keyboard.IsKeyDown(Keys.S)) movement -= camera.HorizontalForward;
         if (keyboard.IsKeyDown(Keys.D)) movement += camera.Right;
         if (keyboard.IsKeyDown(Keys.A)) movement -= camera.Right;
+        int oldSlot=_session.Inventory.SelectedSlot;
         _hotbarScroll.Apply(_session.Inventory, (long)mouse.ScrollWheelValue - _previousMouse.ScrollWheelValue);
         for (int i = 0; i < Inventory.HotbarSlots; i++)
             if (keyboard.IsKeyDown((Keys)((int)Keys.D1 + i)) || keyboard.IsKeyDown((Keys)((int)Keys.NumPad1 + i)))
                 _session.Inventory.SelectedSlot = i;
+        if(oldSlot!=_session.Inventory.SelectedSlot){_session.Mining.Reset();_session.Bow.Cancel();}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         bool held = mouse.LeftButton == ButtonState.Pressed;
         if (_awaitMouseRelease)
@@ -209,24 +215,33 @@ public class Game1 : Game
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
             world.Fluids.Update(dt);
             world.Gravity.Update(dt);
+            world.Containers.Update(dt);
             _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items);
             _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
-                camera.Position, camera.Forward, _selection, held, dt);
+                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory);
+            _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear);
             _session.Items.Update(player, _session.Inventory, dt);
         }
         _fallingInterpolation = _simulationClock.Fraction;
+        string equipmentNotice=_session.TakeEquipmentNotice();
+        if(equipmentNotice!=null){_notice=equipmentNotice;_noticeSeconds=3;}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         if (!_awaitMouseRelease && mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released
-            && _selection is BlockHit tableHit && world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) == BlockType.CraftingTable)
+            && _selection is BlockHit tableHit && (world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) == BlockType.CraftingTable
+                || BlockEntities.HasState(world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z))))
         {
-            bool opened = _session.TryOpenCraftingTable(tableHit);
+            bool opened = world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z)==BlockType.CraftingTable
+                ?_session.TryOpenCraftingTable(tableHit):_session.TryOpenContainer(tableHit);
             SetState(GameState.Inventory);
             if (!opened) _inventoryScreen.CannotClose();
             return;
         }
         if (!_awaitMouseRelease)
+        {
+            _session.Bow.Update(_session.Inventory,_session.Projectiles,camera.Position,camera.Forward,mouse.RightButton==ButtonState.Pressed,(float)gameTime.ElapsedGameTime.TotalSeconds);
             ItemUse.TryConsume(player, _session.Inventory, mouse.RightButton == ButtonState.Pressed,
                 _previousMouse.RightButton == ButtonState.Pressed);
+        }
         if (_selection is BlockHit hit)
         {
             if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
@@ -481,6 +496,7 @@ public class Game1 : Game
     private void SetState(GameState state)
     {
         _session?.Mining.Reset();
+        _session?.Bow.Cancel();
         _simulationClock.Reset();
         _pendingJump = false;
         _hotbarScroll.Reset();
@@ -562,6 +578,7 @@ public class Game1 : Game
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);
             _mobRenderer.Draw(_session.Camera, _session.Mobs);
+            _projectileRenderer.Draw(_session.Camera,_session.Projectiles);
             _renderer.DrawWater(_session.Camera);
             _diagnostics.Mobs = _session.Mobs.Entities.Count; _diagnostics.Items = _session.Items.Entities.Count;
             _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
@@ -569,7 +586,7 @@ public class Game1 : Game
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
-                _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics);
+                _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics,_session.Bow.Power);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
@@ -610,6 +627,7 @@ public class Game1 : Game
         _hud?.Dispose();
         _firstPerson?.Dispose();
         _mobRenderer?.Dispose();
+        _projectileRenderer?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();
     }

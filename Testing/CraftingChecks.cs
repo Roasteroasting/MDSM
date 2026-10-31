@@ -32,7 +32,7 @@ internal static class CraftingChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length == 1, "Unrequested recipes were introduced.");
+        Require(CraftingRecipes.All.Length == 29, "Survival recipe registry is incomplete.");
         foreach (int width in new[] { 2, 3 }) for (int y = 0; y <= width - 2; y++) for (int x = 0; x <= width - 2; x++)
         {
             var grid = Fill(width, 3, x, y);
@@ -89,9 +89,10 @@ internal static class CraftingChecks
             for (int i = 0; i < 36; i++) value += Value(inventory[i]);
             for (int i = 0; i < 9; i++) value += Value(grid[i]);
             value += Value(mouse.Cursor);
-            Require(value == 76, "Mixed inventory/crafting operations lost/duplicated ingredients or output.");
+            Require(value == 152, "Mixed inventory/crafting operations lost/duplicated ingredients or output.");
         }
-        static int Value(ItemStack stack) => stack.IsEmpty ? 0 : stack.Count * (stack.Item == Table ? 4 : 1);
+        static int Value(ItemStack stack) => stack.IsEmpty ? 0 : stack.Count * (stack.Item == Table ? 8 : stack.Item==Items.FromBlock(BlockType.Chest)?16
+            : stack.Item==Planks?2:stack.Item==Items.Stick?1:Items.Get(stack.Item).Tool switch{ToolKind.Pickaxe or ToolKind.Axe=>8,ToolKind.Sword=>5,ToolKind.Shovel=>4,_=>0});
     }
     private static GameSession Session(World world = null) => new("crafting", new WorldSave(world ?? PigChecks.Flat(), "Crafting", new Vector3(40.5f, 1, 40.5f), 0, 0, new Inventory()));
     public static void ClosingAndDeath()

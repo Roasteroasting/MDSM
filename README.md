@@ -1,6 +1,6 @@
 # MDSM
 
-A small Minecraft Indev-inspired voxel sandbox in C# and MonoGame DesktopGL. The game has finite worlds in four sizes, seeded terrain with trees, vegetation, ponds, rivers and lakes, flowing translucent water and swimming, chunk-based rendering, timed mining, collectible item stacks, a persistent 36-slot survival inventory, personal/table crafting, player health with fall damage/death/respawning, passive pigs/cows/sheep/chickens, punching, White Wool and resource drops, and raw porkchops for healing.
+A small Minecraft Indev-inspired voxel sandbox in C# and MonoGame DesktopGL. The game has finite worlds in four sizes, terrain/decorations/water, bounded chunk rendering, persistent inventories, shaped crafting, tiered tools and durability, underground ores, chests, furnaces, bows/arrows, passive mobs, health/death/respawning and raw porkchops for healing. New worlds start with empty inventories. See [SURVIVAL-PROGRESSION.md](./SURVIVAL-PROGRESSION.md) for the complete Milestone 11 recipes, IDs, mechanics, measurements and verification report.
 
 Terrain and water geometry now use bounded camera-centered residency with prefetching, hysteresis and incremental rebuilds. The complete finite world stays in CPU memory. A shared 160-block view-space far plane and 80-144-block fog transition apply to terrain and dynamic entities. F3 includes buffer estimates, rendering counts and CPU timing diagnostics. See [PERFORMANCE.md](./PERFORMANCE.md) for the investigation, measured GTX 970 results, regression coverage and reproducible benchmark commands.
 
@@ -54,7 +54,7 @@ Selecting **Massive** displays a compact performance notice on the creation scre
 
 Valid Y coordinates are 0-127; X/Z are zero through width/depth minus one. All indexing, boundaries, chunk bounds, metadata and F3 values use these dimensions. Massive worlds require substantially more RAM/GPU memory than raw storage alone; use a 64-bit environment. There is no chunk streaming or new render-distance setting.
 
-Choose **Create New World**, enter a name and optionally a signed 32-bit seed. Blank seeds are randomized. The same seed/size produces the same complete world. [TerrainGenerator.cs](./Worlds/TerrainGenerator.cs) combines broad 280-block hills, 110-block variation and restrained 44-block detail in global coordinates. Natural land heights are clamped to **Y=63-114**, with most terrain near Y=88 and gentle neighboring gradients. Grass covers 3-5 dirt layers, deeper stone and one complete bedrock layer at Y=0. Water beds may extend below 63. No caves or ores are generated.
+Choose **Create New World**, enter a name and optionally a signed 32-bit seed. Blank seeds are randomized. The same seed/size produces the same complete world. [TerrainGenerator.cs](./Worlds/TerrainGenerator.cs) combines broad 280-block hills, 110-block variation and restrained 44-block detail in global coordinates. Natural land heights are clamped to **Y=63-114**, with most terrain near Y=88 and gentle neighboring gradients. Grass covers 3-5 dirt layers, deeper stone and one complete bedrock layer at Y=0. Water beds may extend below 63. No caves are generated; underground ores are described below.
 
 [World.CreateNew](./Worlds/World.cs) generates terrain, water features, then [WorldDecorator.cs](./Worlds/WorldDecorator.cs) adds trees and vegetation. Their existing per-area seeded density, varying 4-6-block trunks, 5 x 5 canopy limits, clearance checks and spawn clearing scale across all sizes. Submerged beds do not support vegetation. All generation changes apply only to new worlds. Loading restores saved bytes without running generation.
 
@@ -112,14 +112,14 @@ Production saves use the per-user `Environment.SpecialFolder.LocalApplicationDat
 
 Each world has an independent generated directory ID. Display names are metadata, never paths; blank names, control characters, path separators, and invalid path characters are rejected. Names can contain up to 48 UTF-16 characters. Two worlds may share a display name. Saves are kept outside the source repository and build output. Management validates GUIDs and direct-child paths; symbolic links/junctions in save paths are rejected, and deletion checks descendants without following links. Directories are never renamed or migrated. No duplication or import/export UI is implemented.
 
-### Binary format, version 7
+### Binary format, version 8
 
 [WorldSerializer.cs](./Persistence/WorldSerializer.cs) uses little-endian fields and no compression. Each save contains 8, 32, 128, or 512 MiB of block data, depending on size, plus its header, inventory, dropped items, and checksum:
 
 | Field | Representation |
 | --- | --- |
 | Signature | Four ASCII bytes: `MDSM` |
-| Format version | 32-bit integer, currently 7; versions 1-6 remain readable |
+| Format version | 32-bit integer, currently 8; versions 1-7 remain readable |
 | Dimensions | Three 32-bit integers: X/Z=256, 512, 1024, or 2048; Y=128. Legacy Y=64 is supported only for widths 256/512 |
 | World seed | Signed 32-bit integer |
 | World name | 32-bit UTF-8 byte length, then UTF-8 bytes |
@@ -142,6 +142,9 @@ Each world has an independent generated directory ID. Display names are metadata
 | Pending gravity columns | Unique 32-bit column indices, Z * width + X, in processing order |
 | Active falling-block count | 32-bit integer, 0-4096; added in version 7 |
 | Active falling blocks | Each entry: 8-bit block ID (Sand/Gravel only), 32-bit X and Z, 64-bit feet Y, 64-bit downward speed (25 bytes); source voxel is already empty |
+| Equipment metadata | 32-bit count, then owner byte (0 inventory / 1 dropped item), 32-bit slot/entity index, 32-bit remaining durability, 16-byte instance GUID (25 bytes per equipment record) |
+| Block containers | 32-bit count, then X/Y/Z, block ID, slot count, stacks and three 64-bit progress/burn/total-burn timers; each stack is item ID + quantity + durability + GUID (23 bytes) |
+| Active arrows | 32-bit count (0-256), then position/velocity, age, damage and originating Bow GUID (48 bytes per arrow) |
 | Checksum | SHA-256 of all preceding bytes, 32 bytes |
 
 Loading validates the signature, version, supported dimensions, name, finite player pose, health range, block/item IDs, slot and entity counts, stack quantities, finite bounded item positions/velocities/delays, exact length, and checksum. Pickup delays must be between zero and one second. Allocation follows validated dimensions and bounded entity counts rather than arbitrary file lengths. Chunk blocks are streamed through incremental SHA-256 on writing/reading; no additional full-world payload array is staged. Migration reads only each stored 64-layer chunk and zero-fills its upper half. Stored blocks are copied directly into empty chunk storage; terrain is never regenerated over saved edits. Chunk meshes are rebuilt from restored blocks. Unknown versions, missing files, and corrupt data produce a menu error. Listing obtains size from the unchanged small header without deserializing block or inventory arrays; full checksum validation happens on load.
@@ -182,7 +185,11 @@ Open [Content/Blocks/terrain.png](./Content/Blocks/terrain.png) in an ordinary i
 | 15 | White Wool | (240, 0) |
 | 16 | Crafting Table top | (0, 16) |
 | 17 | Crafting Table side | (16, 16) |
-| 18-255 | Unused, transparent | `(index % 16 * 16, index / 16 * 16)` using integer division |
+| 18 | Glass | (32, 16) |
+| 19-21 | Iron / Coal / Diamond Ore | (48 / 64 / 80, 16) |
+| 22-24 | Furnace top / side / front | (96 / 112 / 128, 16) |
+| 25-27 | Chest top / side / front | (144 / 160 / 176, 16) |
+| 28-255 | Unused, transparent | `(index % 16 * 16, index / 16 * 16)` using integer division |
 
 The first four tiles were exported once from the original seed-173 algorithm and remain pixel-for-pixel unchanged. Milestone 4 artwork occupies tiles 4-14; its generation prompt and one-time preparation are recorded in [Content/Artwork/texture-artwork.md](./Content/Artwork/texture-artwork.md). White Wool occupies tile 15, documented in [Content/Artwork/passive-mob-artwork.md](./Content/Artwork/passive-mob-artwork.md); all other existing atlas pixels are unchanged. The PNG is the source artwork; builds and game launches never regenerate or overwrite it. Edit a tile, save the PNG, then run `dotnet build` followed by `dotnet run --no-build` (or simply `dotnet run`, which builds first). Restarting an existing build without rebuilding will continue to use its previously compiled texture. Replacing existing textures requires no C# changes.
 
@@ -213,8 +220,14 @@ These numeric IDs are persistent save data and must not be reordered or reused:
 | 22 | Falling water | Separate water tile | Non-solid / translucent, not an item |
 | 23 | White Wool | 15 | Solid / opaque, mineable and placeable |
 | 24 | Crafting Table | 16 top, 17 sides, 7 bottom | Solid / opaque, mineable and placeable |
+| 25 | Glass | 18 | Solid / clear cutout, no block drop |
+| 26 | Iron Ore | 19 | Solid / opaque, requires Stone Pickaxe to harvest |
+| 27 | Coal Ore | 20 | Solid / opaque, requires Wooden Pickaxe to harvest |
+| 28 | Diamond Ore | 21 | Solid / opaque, requires Iron Pickaxe to harvest |
+| 29 | Furnace | 22 top/bottom, 23 sides, 24 front | Solid / opaque, persistent processing inventory |
+| 30 | Chest | 25 top/bottom, 26 sides, 27 front | Solid / opaque, persistent 27-slot inventory |
 
-Blocks 1-13, 23 and 24 have corresponding items and remain placeable when held in the hotbar. Water states are not inventory items. Bedrock is unbreakable through mining. Plants require grass directly below them; mining their grass support also drops the removed plant. Leaves retain solid collision. Sand and gravel generate locally in lake beds/shorelines and now fall when unsupported. Planks and cobblestone remain available as items without generating naturally. White Wool does not generate as terrain; sheep drop it. It uses 1.25-second placeholder mining and drops itself. Crafting Tables take 2.5 seconds to mine and drop themselves. Bedrock generates only at Y=0. No block textures or generation rules changed in Milestones 5 or 6.
+Blocks 1-13 and 23-30 have corresponding items and remain placeable when held in the hotbar. Water states are not inventory items. Bedrock is unbreakable through mining. Plants require grass directly below them; mining their grass support also drops the removed plant. Leaves retain solid collision. Sand and gravel generate locally in lake beds/shorelines and now fall when unsupported. Planks and cobblestone remain available as items without generating naturally. White Wool does not generate as terrain; sheep drop it. It uses 1.25-second placeholder mining and drops itself. Crafting Tables take 2.5 seconds to mine and drop themselves. Bedrock generates only at Y=0. No block textures or generation rules changed in Milestones 5 or 6.
 
 [FallingBlockSimulation.cs](./Worlds/FallingBlockSimulation.cs) queues only changed horizontal columns, deduplicates them, and checks at most 32 columns every 0.05 gameplay seconds. Each bounded bottom-up pass removes unsupported Sand/Gravel from storage and transfers it into a [FallingBlock](./Worlds/FallingBlock.cs) with continuous height and downward velocity. Blocks accelerate at 24 blocks/second squared, capped at 20 blocks/second. Swept collision finds the first solid surface even during a large elapsed-time step; falling stacks also support each other without passing through or changing order. Landing restores exactly one ordinary block of the same type, without creating item drops. Up to 4096 falling objects can be active; excess unsupported blocks stay queued in storage until capacity becomes available.
 
@@ -224,30 +237,24 @@ Water does not support falling material: intermediate water cells remain intact 
 
 ## Mining and dropped items
 
-Hold **LMB** on a block within six blocks to mine it. An orange outline and a progress bar below the crosshair indicate progress, without a numerical percentage. Releasing LMB, changing targets or block types, losing reach, or opening a menu discards progress immediately. Holding LMB continues onto the next target after a break. Mining uses elapsed time and these centralized placeholder durations in [Blocks.cs](./Worlds/Blocks.cs):
+Hold **LMB** on a block within six blocks to mine it. The outline/progress bar shows progress. Releasing LMB, changing targets, switching tools, losing reach or opening a menu discards progress. Holding LMB continues onto subsequent targets. [MiningRules.cs](./Gameplay/MiningRules.cs) centralizes categories, hardness, harvesting and drops.
 
-| Block | Seconds |
-| --- | --- |
-| Tall grass, red/yellow flowers | Instant |
-| Grass block, dirt | 1.25 |
-| Stone, cobblestone | 3 |
-| Wood log | 2.5 |
-| Leaves | 0.4 |
-| Wooden planks | 1.5 |
-| Sand, gravel | 1 |
-| Bedrock | Unbreakable |
+Hands can break wood, earth, leaves, plants and Glass; they cannot break Stone, Cobblestone, Ores or Furnaces. Bedrock remains unbreakable. Pickaxes work on mineral blocks, axes on wooden blocks, and shovels on earth. Suitable efficiencies are Wood 2x, Stone 4x, Iron 6x, Diamond 8x. Time is `hardness * 1.5 / efficiency`, with a 4x penalty for under-tier pickaxes. Mineral hardness is Stone 1.5, Cobblestone 2, Ores 3, Furnace 3.5. Existing wood/earth/fragile base timings remain; plants are instant and Grass/Dirt retain matching hand durations.
 
-Each mined block drops one item of its own type. Solid items render as small atlas-textured cubes; plants use transparent crossed quads. Items fall with gravity and settle on solid blocks, using substeps to prevent tunneling. They are drawn together through a reusable dynamic vertex buffer with point sampling, alpha testing, depth writes, and frustum checks. Item movement never invalidates chunk meshes.
+Wooden Pickaxe harvests Stone/Cobblestone/Coal Ore; Stone or better harvests Iron Ore; Iron or better harvests Diamond Ore. An under-tier Pickaxe can slowly destroy a block but grants no valuable drop. Wrong tool categories cannot bypass mineral restrictions. Stone drops Cobblestone; Coal Ore drops Coal; Iron Ore drops the Ore block; Diamond Ore drops Diamond. Gravel drops exactly one Flint 10% of the time, otherwise exactly one Gravel. Glass breaks without a block drop. Other blocks keep their own drops, and breaking filled Chests/Furnaces also releases their actual stored stacks.
 
+A tiered tool loses one use per successfully broken block or successful mob hit, including mining with an unsuitable tool where physically allowed. Interruptions, misses, invalid targets and blocked transactions do not wear it. Wood/Stone/Iron/Diamond have 59/131/250/1561 uses; Bows have 384. Last use removes the tool, with a short break notice for carried equipment. Swords deal 4/5/6/7 damage by tier; other tools deal 1-3 and fists retain random 1-2 damage. The shared 0.4-second attack cooldown, red flashes, knockback and passive behavior remain.
+
+Dropped blocks render as small atlas cubes; plants use cutout quads; materials/tools use the new point-sampled sprite sheet. Gravity, terrain collision, depth testing and chunk-independent dynamic rendering remain unchanged. Dropped equipment retains its instance identity and damage.
 After a short 0.35-second pickup delay for mined items, approaching within 1.25 blocks of an item's center from the player's collision box collects it automatically. Manual drops and death drops instead have a one-second delay. Timers use elapsed active gameplay time and stop with the rest of gameplay in menus. Compatible inventory stacks fill before empty slots. Any quantity that does not fit stays in the world and can be collected later. Dead players cannot collect items.
 
-Nearby same-type entities merge within 0.75 blocks, up to 64 items per stack; 40 + 40 becomes 64 + 16. Both resulting stacks keep the longer remaining pickup delay, preventing merges from bypassing it. A reusable spatial index checks nearby cells every quarter-second, without comparing every entity pair each frame. Entities do not expire. Items falling through a hole below the world remain at their original X/Z at the lower simulation limit (Y=-15.875), rather than teleporting to spawn or disappearing. A defensive one-million-entity save/allocation bound prevents further mining at that limit without removing blocks or items.
+Nearby compatible stackable entities merge within 0.75 blocks, up to 64 items per stack; 40 + 40 becomes 64 + 16. Both resulting stacks keep the longer remaining pickup delay, preventing merges from bypassing it. A reusable spatial index checks nearby cells every quarter-second, without comparing every entity pair each frame. Entities do not expire. Items falling through a hole below the world remain at their original X/Z at the lower simulation limit (Y=-15.875), rather than teleporting to spawn or disappearing. A defensive one-million-entity save/allocation bound prevents further mining at that limit without removing blocks or items.
 
 ## Inventory
 
-Press **E** to open the inventory: 27 main slots in three rows above the same nine hotbar slots used by the HUD. Opening it releases the mouse and freezes gameplay; **E** or **Escape** closes it and recaptures the mouse. The layout scales with the viewport. **1-9** or the **mouse wheel** selects the gameplay hotbar slot. **Scroll down moves right (1 toward 9); scroll up moves left (9 toward 1)**, wrapping at both ends and supporting multiple increments. Scrolling in menus/inventory does not change it. Tab no longer changes hotbar pages.
+Press **E** to open the inventory: 27 main slots in three rows above the same nine hotbar slots used by the HUD. Opening it releases the mouse and freezes player/world motion; Furnaces continue processing; **E** or **Escape** closes it and recaptures the mouse. The layout scales with the viewport. **1-9** or the **mouse wheel** selects the gameplay hotbar slot. **Scroll down moves right (1 toward 9); scroll up moves left (9 toward 1)**, wrapping at both ends and supporting multiple increments. Scrolling in menus/inventory does not change it. Tab no longer changes hotbar pages.
 
-Stacks hold 1-64 whole items of one type. Every occupied slot and the cursor-held stack show their quantity. Empty slots contain no item and no quantity. Mouse actions are single clicks, with no drag distribution or shift transfers:
+Materials/blocks stack to 64. Tools and Bows are individual nonstackable items, with their own persistent identity and durability. Stackable items show quantities; damaged equipment shows a green-to-red durability bar, with a concise name/remaining-uses hover label. Empty slots contain no item and no quantity. Mouse actions are single clicks, with no drag distribution or shift transfers:
 
 | Click | Empty cursor | Holding a stack |
 | --- | --- | --- |
@@ -264,13 +271,33 @@ Every newly created world now starts with **all 36 inventory/hotbar slots empty*
 
 Press **E** for the personal **2x2 crafting grid**, shown above the existing 27 main slots and nine-slot hotbar. **Right-click a placed Crafting Table** within six blocks to use a **3x3 grid**, even when holding a block or food; table interaction takes priority. Both interfaces pause gameplay and use the same cursor and existing left/right stack operations. **E or Escape** closes them and returns unused ingredients/cursor items safely.
 
-The only recipe is four Wooden Planks arranged as a filled 2x2 square, producing **one Crafting Table**. It works in the personal grid and at any of the four valid offsets in a 3x3 grid. Extra ingredients or other formations do not match. Logs-to-planks and all other recipes are intentionally not implemented yet: new survival worlds currently have no recipe for obtaining planks; existing placed/inventory planks remain usable.
+Recipes now cover planks (1 Log -> 4), sticks (2 vertical Planks -> 4), the existing four-Plank Crafting Table, an eight-Plank Chest, an eight-Cobblestone Furnace, all 16 tools, wool-to-string (1 -> 2), bows and arrows (Flint/Stick/Feather vertical -> 4). Tool and Bow recipes use their classic shaped arrangements; axes and bows explicitly support horizontal mirrors. Required empty cells and all cells outside a translated pattern must be empty. Small recipes work anywhere they fit in the 2x2 inventory grid; taller/wider recipes require a table. Full patterns and IDs are listed in [SURVIVAL-PROGRESSION.md](./SURVIVAL-PROGRESSION.md).
 
-The output is only a preview. Clicking it with either mouse button performs exactly one operation, consuming one plank from each required slot and adding one table to an empty/compatible cursor stack. An incompatible/full cursor prevents the operation; holding the button does not repeat it. Releasing and clicking again crafts another result if ingredients remain. All stacks remain limited to 64. [Crafting.cs](./Inventories/Crafting.cs) centralizes shaped recipes, per-cell quantities, output quantities and translated matching; adding recipes does not require new UI or inventory code.
+The output is only a preview. Clicking it with either mouse button performs exactly one operation, consuming the registered ingredient quantities and transferring the complete result to an empty/compatible cursor. An incompatible/full cursor prevents the operation; holding the button does not repeat it. Crafted equipment receives a fresh identity and full durability and never stacks. Releasing/clicking again crafts another result if ingredients remain. [Crafting.cs](./Inventories/Crafting.cs) centralizes shaped recipes, quantities, output and translated matching.
 
-Crafting grids are transient. Closing, saving and exiting return their real inputs, dropping only overflow; previews are never saved, returned or dropped. Death drops crafting ingredients and cursor items alongside the ordinary inventory exactly once. Save format **7** and all existing field layouts remain unchanged; Crafting Table uses new block/item ID **24**. Existing worlds are not regenerated. Only atlas tiles 16/17 were added; all prior pixels/IDs remain unchanged. The original AI-generated artwork prompt and preparation are recorded in [crafting-table-artwork.md](./Content/Artwork/crafting-table-artwork.md).
+Crafting grids are transient. Closing, saving and exiting return their real inputs, dropping only overflow; previews are never saved, returned or dropped. Death drops crafting ingredients/cursor items alongside ordinary inventory exactly once, retaining equipment metadata. Chest/Furnace contents stay in their world-coordinate registry. Version **8** preserves the older prefix and adds validated equipment, container and projectile state; old worlds are never regenerated or given new items. Original artwork prompts/preparation are in [crafting-table-artwork.md](./Content/Artwork/crafting-table-artwork.md) and [survival-artwork.md](./Content/Artwork/survival-artwork.md); existing atlas pixels 0-17 are preserved.
 
-The five crafting check groups cover strict patterns/quantities/offsets, preview safety, atomic outputs, stack limits, mixed inventory/grid accounting, closing/overflow/failure recovery, death, all-size table persistence and empty starts, and responsive layouts. The complete headless suite passes **108/108 groups**. Scripted graphics checks cover RMB table priority over food/placement, single-click output edges, 2x2/3x3 input/output rendering, a 320x240 recovery message, placed-table top/side pixels, save/return with held inputs, and the existing screenshot/state regressions. UI and table-render snapshots were inspected. Build and Release publish completed with zero warnings/errors. Physical keyboard/mouse use and extended survival sessions still require manual playtesting.
+The five crafting check groups cover strict patterns/quantities/offsets, preview safety, atomic outputs, stack limits, mixed inventory/grid accounting, closing/overflow/failure recovery, death, all-size table persistence and empty starts, and responsive layouts. These original crafting checks remain in the expanded survival suite. Scripted graphics checks cover RMB table priority over food/placement, single-click output edges, 2x2/3x3 input/output rendering, a 320x240 recovery message, placed-table top/side pixels, save/return with held inputs, and the existing screenshot/state regressions. UI and table-render snapshots were inspected. Build and Release publish completed with zero warnings/errors. Physical keyboard/mouse use and extended survival sessions still require manual playtesting.
+
+## Ores and survival progression
+
+Start empty: collect Logs, craft Planks/Sticks and a table, make a Wooden Pickaxe, obtain Cobblestone, then craft a Stone Pickaxe and Furnace. Find Coal and Iron Ore, smelt ingots and make an Iron Pickaxe, then search deep underground for Diamonds. All sixteen tools and the Bow are available through shaped crafting. The full recipe/ID tables are in [SURVIVAL-PROGRESSION.md](./SURVIVAL-PROGRESSION.md).
+
+[OreGenerator.cs](./Worlds/OreGenerator.cs) replaces only underground Stone in new worlds with compact irregular connected veins of 2-8 cells, including across chunk seams. Coal and Iron use Y=4-60; Diamond uses Y=4-20. Per horizontal chunk, generation proposes 18 Coal veins, 10 Iron and one Diamond vein, rejecting invalid/non-Stone/adjacent deposits rather than producing merged oversized veins. No Bedrock, surface profile, water, decorations or old saved terrain is overwritten. Ores are not retroactively added to existing worlds. Generation visits bounded proposals rather than rescanning all blocks; no ore-generation work occurs during normal gameplay.
+
+## Chests, Furnaces, and smelting
+
+**RMB** a Chest or Furnace within six blocks to open it. A Chest has 27 private storage slots above the same player inventory/hotbar. All transfers use the existing whole/half/single-item cursor rules and preserve damaged equipment. Closing leaves stored items in place. Chests are independent single containers; there is no double-chest joining.
+
+A Furnace has input (upper left), fuel (lower left), output (right), a progress bar and burn indicator. Only valid smelting ingredients/fuels can be inserted, and output can only be taken. One Sand produces one Glass, one Iron Ore produces one Iron Ingot, and one Log produces one Charcoal. Each operation takes **10 active seconds**. Input is consumed only at completion. Coal and Charcoal are distinct items with identical **80-second** fuel value (eight operations); Logs/Planks burn **15 seconds**, allowing Charcoal to be made before finding Coal. Remaining fuel powers subsequent operations. Full/incompatible output pauses processing; already-lit fuel continues burning, but new fuel is not consumed without a valid operation. Starved progress waits for fuel; changing/removing the input resets progress.
+
+Furnaces continue while any inventory-style interface is open, including when their chunk has no resident GPU mesh. Player movement/combat, mobs and item motion retain their menu suspension. Actual Pause/Settings/death/main-menu states stop processing. There is no offline/wall-clock smelting. Save/load retains all contents, partial progress and remaining burn without restarting fuel. Breaking a Chest/Furnace drops the block plus each stored stack; incomplete smelting creates no free product. A sparse [block-entity registry](./Worlds/BlockEntities.cs) owns this state by world coordinates; only active Furnaces tick.
+
+## Bow and arrows
+
+Hold **RMB** with a Bow selected to draw (up to one second), then release to fire. The HUD shows draw power. A valid release consumes exactly one Arrow from the inventory/hotbar; no ammunition means no shot. Arrow crafting uses Flint above Stick above Feather to make four; White Wool makes two String, enabling Bows without hostile mobs. Bows are nonstackable, with 384 uses.
+
+Arrows follow the camera aim and gravity, use swept block/mob collision, and deal 1-5 damage depending on power. They never target the player. A mob impact removes the projectile and charges exactly one use to the originating Bow's stable identity, even after storage/drop/slot changes; a missing/broken Bow is never replaced with another instance. Misses and releases do not wear the Bow. Arrows despawn on block impact, finite bounds or after 12 gameplay seconds, with at most 256 active. Active flights persist through saving/loading. Menus cancel unfinished drawing; player combat and arrow motion remain suspended there. No retrieval, critical hits or special arrows are added.
 
 ## Passive mobs, resources, and raw porkchops
 
@@ -346,7 +373,7 @@ Gameplay now uses [SDL_GetRelativeMouseState](https://wiki.libsdl.org/SDL2/SDL_G
 
 Block interaction reaches six blocks from the camera. Each RMB press attempts one placement. Placement requires an empty cell inside the world; solid blocks cannot overlap the player's body. Raycasts target a plant's voxel cell, rather than individual visible texels or crossed planes. Movement includes gravity, solid-block collision, and sliding along walls; diagonal movement has the same speed as forward movement. Collision and raycasts operate in world coordinates across chunk seams.
 
-Block edits, health, collected inventory, and uncollected items persist together. Infinite terrain, tools, armor, and advanced lighting are not implemented.
+Block edits, health, collected inventory, and uncollected items persist together. Infinite terrain, armor, and advanced lighting are not implemented.
 
 ## Code layout
 
@@ -429,7 +456,7 @@ The targeted cleanup removed the old Pig and PigPopulation inheritance wrappers:
 | [InterfaceChecks.cs](./Testing/InterfaceChecks.cs) | F1/F3/F2 input edges, screenshot storage/failures, and information text/layout checks |
 | [InterfaceGraphicsChecks.cs](./Testing/InterfaceGraphicsChecks.cs) | Optional real DesktopGL PNG pixel comparisons, HUD states, resizing, menu navigation, and failure recovery |
 
-All chunks remain loaded for the active world. There is no chunk streaming, multithreaded generation, ores, tools, armor, tree growth, or vegetation growth.
+All chunks remain loaded for the active world. There is no chunk streaming, multithreaded generation, armor, tree growth, or vegetation growth.
 
 The water update adds [Water.cs](./Worlds/Water.cs) for fluid-state/height queries, [FluidSimulation.cs](./Worlds/FluidSimulation.cs) for scheduled flow, [LakeGenerator.cs](./Worlds/LakeGenerator.cs) for new-world basins, [WaterMeshBuilder.cs](./Rendering/WaterMeshBuilder.cs) and [WaterRenderer.cs](./Rendering/WaterRenderer.cs) for translucent geometry, and [WaterChecks.cs](./Testing/WaterChecks.cs) / [WaterGraphicsChecks.cs](./Testing/WaterGraphicsChecks.cs) for regression coverage. Integration changes are limited to existing world/chunk storage, creation/load orchestration, rendering, targeting/placement, player/pig water motion, and the Controls text.
 
@@ -451,7 +478,7 @@ Milestone 8 changes 26 files (9 added, 17 modified):
 dotnet run --no-build -- --self-test
 ```
 
-The **108 check groups** include independent F1/F3 state, repeated F2 input without duplicate captures, screenshot directory creation, collision-safe filenames and write failures, accurate Controls/About acknowledgements, and responsive information layouts. Existing coverage includes FPS defaults and all integer slider values, uncapped override/value retention, settings reload/validation/write failures, identical fixed simulation outcomes at 5/30/60/144/240/360/997 rendered FPS, reduced crouch camera height, and selected cube/plant geometry, empty-slot suppression/switching, menu visibility, UVs, and layout. Mouse regressions check zero stationary rotation at 60-2000 updates/second, identical movement/sensitivity across rates, no replayed deltas, one-unit motion without a dead zone, and capture/release/resize flushing without first-sample latency. Health, fall tracking, death/respawn, dropped items, inventory accounting/placement, persistence, v1/v2 compatibility, crouch support/jumps, generation/restoration, geometry, atlas, checksums, atomic saving, management, and world-size checks remain included. A bounded non-seekable stream verifies that metadata reading stops before block data. Persistence fixtures stay under the test build and are cleaned up; they never touch real saves. A failing check returns a nonzero exit code. These checks do not open a window or exercise operating-system input.
+The **117 check groups** include independent F1/F3 state, repeated F2 input without duplicate captures, screenshot directory creation, collision-safe filenames and write failures, accurate Controls/About acknowledgements, and responsive information layouts. Existing coverage includes FPS defaults and all integer slider values, uncapped override/value retention, settings reload/validation/write failures, identical fixed simulation outcomes at 5/30/60/144/240/360/997 rendered FPS, reduced crouch camera height, and selected cube/plant geometry, empty-slot suppression/switching, menu visibility, UVs, and layout. Mouse regressions check zero stationary rotation at 60-2000 updates/second, identical movement/sensitivity across rates, no replayed deltas, one-unit motion without a dead zone, and capture/release/resize flushing without first-sample latency. Health, fall tracking, death/respawn, dropped items, inventory accounting/placement, persistence, v1/v2 compatibility, crouch support/jumps, generation/restoration, geometry, atlas, checksums, atomic saving, management, and world-size checks remain included. A bounded non-seekable stream verifies that metadata reading stops before block data. Persistence fixtures stay under the test build and are cleaned up; they never touch real saves. A failing check returns a nonzero exit code. These checks do not open a window or exercise operating-system input.
 
 Optional graphics verification opens a real DesktopGL window and requires focus and an OpenGL-capable desktop:
 

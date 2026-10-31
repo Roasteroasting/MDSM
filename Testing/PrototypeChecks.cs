@@ -16,6 +16,15 @@ internal static class PrototypeChecks
     {
         (string Name, Action Check)[] checks =
         {
+            ("Equipment identity, nonstackable transfers, durability and pickups",ProgressionChecks.Equipment),
+            ("All survival shaped recipes, mirrors, offsets and full-durability outputs",ProgressionChecks.Recipes),
+            ("Tool categories/tiers, hardness, harvesting, flint and interrupted wear",ProgressionChecks.Mining),
+            ("Tiered melee damage, last-use break, misses and render-independent wear",ProgressionChecks.Melee),
+            ("Independent chests/furnaces, fuel, smelting, overflow and destruction",ProgressionChecks.Containers),
+            ("Bow charging/ammo, swept hits, gravity, ownership and projectile persistence",ProgressionChecks.Arrows),
+            ("Version 8 equipment/container persistence and version 7 compatibility",ProgressionChecks.Persistence),
+            ("Measured ores: veins, boundaries, vertical bands, abundance and determinism",ProgressionChecks.Ores),
+            ("Empty-start survival progression from mined logs through diamond tools",ProgressionChecks.Walkthrough),
             ("Shaped crafting, quantities, offsets, strict formations and preview safety", CraftingChecks.Recipes),
             ("Atomic crafting outputs, stack limits and mixed mouse accounting", CraftingChecks.Transactions),
             ("Crafting close/overflow, blocked recovery and death item ownership", CraftingChecks.ClosingAndDeath),

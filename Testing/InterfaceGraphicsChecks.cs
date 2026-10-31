@@ -188,7 +188,10 @@ internal static class InterfaceGraphicsChecks
             for (int z = 45; z < 78; z++)
             for (int x = 45; x < 78; x++) world.SetBlock(x, 0, z, BlockType.Bedrock);
             world.SetBlock(64, 2, 61, BlockType.Stone);
-            var save = new WorldSave(world, "Interface check", new Vector3(64.5f, 1, 64.5f), 0, 0, Inventory.CreateStarter());
+            world.SetBlock(62,1,61,BlockType.Glass);world.SetBlock(66,1,61,BlockType.Furnace);world.SetBlock(65,1,60,BlockType.Chest);
+            var inventory=Inventory.CreateStarter();var bow=new ItemStack(Items.Bow,1,123);inventory.SetSlot(8,bow);
+            var save = new WorldSave(world, "Interface check", new Vector3(64.5f, 1, 64.5f), 0, 0, inventory,
+                Arrows:new[]{new MDSM.Entities.ArrowState(new Vector3(63,2,61),Vector3.Forward*5,.2f,3,bow.InstanceId)});
             var store = Field<WorldSaveManager>("_saves");
             Call("BeginWorld", store.Create(save), save); WarmRenderer();
         }
@@ -201,6 +204,7 @@ internal static class InterfaceGraphicsChecks
             switch (_frame)
             {
                 case 1:
+                    ProgressionGraphicsChecks.Verify(this);
                     VerifyCrafting();
                     VerifyMassiveNotice();
                     Click(2); Require(State == GameState.Settings, "Main menu Settings entry failed.");

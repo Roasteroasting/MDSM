@@ -144,9 +144,10 @@ public sealed class PassiveMobPopulation
         return false;
     }
     public bool Punch(PassiveMob mob, Vector3 attacker, DroppedItems items)
+        =>Hit(mob,_random.Next(1,3),attacker,items);
+    public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems items)
     {
-        if (mob == null || mob.IsDead || !_mobs.Contains(mob)) return false;
-        int damage = _random.Next(1, 3);
+        if (mob == null || mob.IsDead || !_mobs.Contains(mob) || damage<=0) return false;
         if (damage >= mob.Health && !items.TrySpawn(new ItemStack(mob.Definition.Drop, _random.Next(1, mob.Definition.MaximumDrop + 1)),
             mob.Position + Vector3.Up * 0.25f, 0.35f)) return false;
         mob.Damage(damage, mob.Position - attacker);

@@ -108,62 +108,40 @@ internal static class InventoryChecks
 
     public static void Mining()
     {
-        Require(Blocks.Get(BlockType.Grass).MiningSeconds == Blocks.Get(BlockType.Dirt).MiningSeconds
-            && Blocks.Get(BlockType.Grass).MiningSeconds > 0, "Grass must take exactly as long to mine as dirt.");
-        var world = new World(0, WorldSize.Small, false);
-        var drops = new DroppedItems(world);
-        var mining = new MiningController();
-        var hit = new BlockHit(new Point3(15, 10, 16), new Point3(0, 1, 0), 3);
-        foreach (BlockType block in Blocks.Selection)
+        Require(Blocks.Get(BlockType.Grass).MiningSeconds==Blocks.Get(BlockType.Dirt).MiningSeconds,"Grass/dirt parity changed.");
+        var world=new World(0,WorldSize.Small,false);var drops=new DroppedItems(world);var mining=new MiningController(173);var inventory=new Inventory();
+        var hit=new BlockHit(new Point3(15,10,16),new Point3(0,1,0),3);
+        bool Mine(BlockHit? target,bool held,float dt)=>mining.Update(world,drops,target,held,dt,inventory);
+        foreach(BlockType block in Blocks.Selection)
         {
-            world.SetBlock(15, 10, 16, block);
-            int before = drops.Entities.Count;
-            float duration = Blocks.Get(block).MiningSeconds;
-            if (block == BlockType.Bedrock)
-            {
-                Require(duration < 0 && !mining.Update(world, drops, hit, true, 100) && world.GetBlock(15, 10, 16) == block
-                    && drops.Entities.Count == before && mining.Progress == 0, "Bedrock could be mined or dropped an item.");
-                continue;
-            }
-            bool instant = block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower;
-            Require(instant ? duration == 0 : duration > 0, "Mining duration policy is incorrect.");
-            if (!instant) Require(!mining.Update(world, drops, hit, true, duration - 0.01f) && mining.Progress > 0, "Block broke before its duration.");
-            Require(mining.Update(world, drops, hit, true, instant ? 0 : 0.02f) && world.GetBlock(15, 10, 16) == BlockType.Air
-                && drops.Entities.Count == before + 1 && drops.Entities[^1].Item == Items.FromBlock(block)
-                && drops.Entities[^1].Count == 1 && mining.Progress == 0, "Mining did not remove and drop exactly its own block.");
+            inventory.SetSlot(0,MiningRules.Profile(block).Category==MiningCategory.Mineral?new ItemStack(Items.Tool(ToolTier.Diamond,ToolKind.Pickaxe),1):default);
+            world.SetBlock(15,10,16,block);int before=drops.Entities.Count;float duration=MiningRules.Seconds(block,inventory.Selected);
+            if(block==BlockType.Bedrock){Require(duration<0 && !Mine(hit,true,100) && world.GetBlock(15,10,16)==block && drops.Entities.Count==before,"Bedrock broke/dropped.");continue;}
+            bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower;
+            Require(instant?duration==0:duration>0,"Mining duration policy invalid.");
+            if(!instant)Require(!Mine(hit,true,duration-.01f) && mining.Progress>0,"Block broke too early.");
+            Require(Mine(hit,true,instant?0:.02f) && world.GetBlock(15,10,16)==BlockType.Air && mining.Progress==0,"Block did not break at duration.");
+            if(block==BlockType.Glass){Require(drops.Entities.Count==before,"Glass should not drop a block.");continue;}
+            ItemId expected=block==BlockType.Stone?Items.FromBlock(BlockType.Cobblestone):block==BlockType.CoalOre?Items.Coal:block==BlockType.DiamondOre?Items.Diamond:Items.FromBlock(block);
+            Require(drops.Entities.Count==before+1 && (drops.Entities[^1].Item==expected || block==BlockType.Gravel && drops.Entities[^1].Item==Items.Flint)
+                && drops.Entities[^1].Count==1,"Harvested block produced an incorrect drop.");
         }
-        world.SetBlock(15, 10, 16, BlockType.Stone);
-        mining.Update(world, drops, hit, true, 1);
-        mining.Update(world, drops, hit, false, 1);
-        Require(mining.Target == null && mining.Progress == 0, "Mouse release retained mining progress.");
-        Require(!mining.Update(world, drops, hit, true, 2), "Returning to a block resumed discarded progress.");
-        var other = new BlockHit(new Point3(16, 10, 16), default, 3);
-        world.SetBlock(16, 10, 16, BlockType.Stone);
-        mining.Update(world, drops, other, true, 0.5f);
-        Require(Math.Abs(mining.Progress - 1f / 6) < 0.001f, "Changing targets retained progress.");
-        mining.Update(world, drops, null, true, 1);
-        Require(mining.Progress == 0 && mining.Target == null, "Target loss retained progress.");
-        mining.Update(world, drops, hit with { Distance = 7 }, true, 100);
-        Require(world.GetBlock(15, 10, 16) == BlockType.Stone && mining.Progress == 0, "Out-of-range mining succeeded.");
-        world.SetBlock(15, 10, 16, BlockType.Dirt);
-        mining.Update(world, drops, hit, true, 0.5f);
-        world.SetBlock(15, 10, 16, BlockType.Stone);
-        mining.Update(world, drops, hit, true, 0.5f);
-        Require(Math.Abs(mining.Progress - 1f / 6) < 0.001f, "A replaced target inherited progress.");
-        mining.Reset();
-        Require(mining.Target == null && mining.Progress == 0, "Menu/reset retained mining progress.");
-        world.SetBlock(15, 10, 16, BlockType.Dirt);
-        world.SetBlock(16, 10, 16, BlockType.Dirt);
-        Require(mining.Update(world, drops, hit, true, 1.3f) && mining.Update(world, drops, other, true, 1.3f), "Held mining could not continue on subsequent blocks.");
-        world.SetBlock(15, 10, 16, BlockType.Grass);
-        world.SetBlock(15, 11, 16, BlockType.RedFlower);
-        int countBefore = drops.Entities.Count;
-        Require(!mining.Update(world, drops, hit, true, 0) && drops.Entities.Count == countBefore,
-            "Grass or its supported plant dropped before mining completed.");
-        mining.Update(world, drops, hit, true, Blocks.Get(BlockType.Grass).MiningSeconds);
-        Require(drops.Entities.Count == countBefore + 2 && world.GetBlock(15, 11, 16) == BlockType.Air, "Removing plant support lost its plant item.");
+        inventory.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Wood,ToolKind.Pickaxe),1));float seconds=MiningRules.Seconds(BlockType.Stone,inventory.Selected);
+        world.SetBlock(15,10,16,BlockType.Stone);Mine(hit,true,seconds*.3f);Mine(hit,false,1);
+        Require(mining.Target==null && mining.Progress==0 && !Mine(hit,true,seconds*.6f),"Release/return retained partial progress.");
+        var other=new BlockHit(new Point3(16,10,16),default,3);world.SetBlock(16,10,16,BlockType.Stone);Mine(other,true,seconds/6);
+        Require(Math.Abs(mining.Progress-1f/6)<.001f,"Changing target retained progress.");Mine(null,true,1);
+        Require(mining.Target==null && mining.Progress==0,"Target loss retained progress.");Mine(hit with {Distance=7},true,100);
+        Require(world.GetBlock(15,10,16)==BlockType.Stone && mining.Progress==0,"Out-of-range mining succeeded.");
+        world.SetBlock(15,10,16,BlockType.Dirt);Mine(hit,true,.5f);world.SetBlock(15,10,16,BlockType.Stone);Mine(hit,true,seconds/6);
+        Require(Math.Abs(mining.Progress-1f/6)<.001f,"Replacing a target retained progress.");mining.Reset();
+        Require(mining.Target==null && mining.Progress==0,"Menu reset retained mining.");
+        world.SetBlock(15,10,16,BlockType.Dirt);world.SetBlock(16,10,16,BlockType.Dirt);
+        Require(Mine(hit,true,1.3f) && Mine(other,true,1.3f),"Continuous mining did not resume on next block.");
+        world.SetBlock(15,10,16,BlockType.Grass);world.SetBlock(15,11,16,BlockType.RedFlower);int count=drops.Entities.Count;
+        Require(!Mine(hit,true,0) && drops.Entities.Count==count,"Grass/plant dropped early.");Mine(hit,true,Blocks.Get(BlockType.Grass).MiningSeconds);
+        Require(drops.Entities.Count==count+2 && world.GetBlock(15,11,16)==BlockType.Air,"Support removal lost the plant.");
     }
-
     public static void PhysicsAndPickup()
     {
         var world = new World(0, WorldSize.Small, false);

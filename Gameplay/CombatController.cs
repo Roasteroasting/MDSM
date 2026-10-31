@@ -2,6 +2,7 @@ using System;
 using Microsoft.Xna.Framework;
 using MDSM.Entities;
 using MDSM.Worlds;
+using MDSM.Inventories;
 
 namespace MDSM.Gameplay;
 
@@ -32,13 +33,18 @@ public sealed class CombatController
     public PassiveMob Target { get; private set; }
 
     public void Update(World world, PassiveMobPopulation pigs, DroppedItems items, MiningController mining,
-        Vector3 origin, Vector3 direction, BlockHit? block, bool held, float elapsed)
+        Vector3 origin, Vector3 direction, BlockHit? block, bool held, float elapsed,Inventory inventory=null)
     {
         if (!float.IsFinite(elapsed) || elapsed < 0) return;
         _cooldown = Math.Max(0, _cooldown - elapsed);
         Target = EntityRaycaster.Cast(world, pigs, origin, direction);
-        if (Target == null) { mining.Update(world, items, block, held, elapsed); return; }
+        if (Target == null) { mining.Update(world, items, block, held, elapsed,inventory); return; }
         mining.Reset();
-        if (held && _cooldown <= 0 && pigs.Punch(Target, origin, items)) _cooldown = AttackCooldown;
+        if(held && _cooldown<=0)
+        {
+            ItemStack tool=inventory?.Selected??default;int damage=Items.Get(tool.Item).AttackDamage;
+            bool hit=damage>0?pigs.Hit(Target,damage,origin,items):pigs.Punch(Target,origin,items);
+            if(hit){_cooldown=AttackCooldown;if(inventory!=null && MiningRules.Wears(tool))inventory.WearSelected();}
+        }
     }
 }

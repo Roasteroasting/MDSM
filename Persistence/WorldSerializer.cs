@@ -13,9 +13,9 @@ using MDSM.Worlds;
 
 namespace MDSM.Persistence;
 
-public static class WorldSerializer
+public static partial class WorldSerializer
 {
-    public const int FormatVersion = 7;
+    public const int FormatVersion = 8;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -31,7 +31,7 @@ public static class WorldSerializer
     internal const long MaximumFileSize = 2048L * World.Height * 2048 + 512 + TailPrefixBytes + DroppedItems.MaximumEntities * DropBytes
         + 8 + PassiveMobPopulation.MaximumMobs * MobBytes + PopulationPrefixBytes
         + PassiveMobPopulation.MaximumMobs * RespawnBytes + 4 + 2048L * 2048 * 4
-        + 4 + FallingBlockSimulation.MaximumActiveBlocks * FallingBytes;
+        + 4 + FallingBlockSimulation.MaximumActiveBlocks * FallingBytes + 128L*1024*1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     public static string ValidateName(string name)
@@ -58,6 +58,9 @@ public static class WorldSerializer
         if (pigs.Length + mobs.Length > PassiveMobPopulation.MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
         MobPopulationState population = save.Population ?? MobPopulationState.FromLiving(pigs, mobs);
         population.Validate(MobPopulationState.LivingCounts(pigs, mobs));
+        foreach(var drop in drops)DroppedItems.Validate(drop,save.World.Size);
+        BlockEntityState[] containers=save.World.Containers.Capture();
+        ValidateOwnership(inventory,drops,containers);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         using var hashed = new HashedWriteStream(destination, hash);
         using (var writer = new BinaryWriter(hashed, Utf8, true))
@@ -121,6 +124,7 @@ public static class WorldSerializer
             writer.Write(falling.Length);
             foreach (FallingBlockState block in falling)
             { writer.Write((byte)block.Block); writer.Write(block.X); writer.Write(block.Z); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
+            WriteSurvival(writer,save,inventory,drops,containers);
         }
         destination.Write(hash.GetHashAndReset());
     }
@@ -166,6 +170,40 @@ public static class WorldSerializer
                 prefixTail.CopyTo(tail, 0);
                 source.ReadExactly(tail.AsSpan(prefixTail.Length));
                 hash.AppendData(tail);
+            }
+            Inventory inventory;
+            DroppedItemState[] drops;
+            int health = Player.MaximumHealth;
+            if (metadata.Version == 1)
+            {
+                inventory = Inventory.CreateStarter();
+                drops = Array.Empty<DroppedItemState>();
+            }
+            else
+            {
+                using var extras = new BinaryReader(new MemoryStream(tail, false), Utf8);
+                int selected = extras.ReadInt32();
+                if (selected < 0 || selected >= Inventory.HotbarSlots || extras.ReadInt32() != Inventory.SlotCount)
+                    throw new InvalidDataException("Save has an invalid inventory layout or selection.");
+                inventory = new Inventory { SelectedSlot = selected };
+                for (int slot = 0; slot < Inventory.SlotCount; slot++)
+                {
+                    ItemId item = new(extras.ReadUInt16());
+                    int quantity = extras.ReadByte();
+                    if (item.Value == 0 && quantity == 0) continue;
+                    if (!Items.IsDefined(item) || quantity < 1 || quantity > Items.StackLimit(item))
+                        throw new InvalidDataException("Save has an invalid inventory stack.");
+                    inventory.SetSlot(slot, new ItemStack(item, quantity));
+                }
+                drops = new DroppedItemState[extras.ReadInt32()];
+                for (int i = 0; i < drops.Length; i++)
+                {
+                    var drop = new DroppedItemState(new ItemId(extras.ReadUInt16()), extras.ReadByte(),
+                        new Vector3(extras.ReadSingle(), extras.ReadSingle(), extras.ReadSingle()), extras.ReadSingle(), extras.ReadSingle());
+                    if(metadata.Version<8 || Items.Get(drop.Item).Durability==0)DroppedItems.Validate(drop, metadata.Size);
+                    drops[i] = drop;
+                }
+                if (metadata.Version >= 3) { health = extras.ReadInt32(); ValidateHealth(health); }
             }
             PigState[] pigs = Array.Empty<PigState>();
             MobState[] mobs = Array.Empty<MobState>();
@@ -224,6 +262,12 @@ public static class WorldSerializer
                 for (int i = 0; i < fallingCount; i++) fallingBlocks[i] = new FallingBlockState((BlockType)fallingReader.ReadByte(),
                     fallingReader.ReadInt32(), fallingReader.ReadInt32(), fallingReader.ReadDouble(), fallingReader.ReadDouble());
             }
+            ArrowState[] arrows=Array.Empty<ArrowState>();
+            if(metadata.Version>=8)
+            {
+                using var extension=new BinaryReader(new HashedReadStream(source,hash),Utf8,true);
+                arrows=ReadSurvival(extension,world,inventory,drops);
+            }
             byte[] checksum = new byte[ChecksumSize];
             source.ReadExactly(checksum);
             if (source.ReadByte() != -1)
@@ -233,41 +277,7 @@ public static class WorldSerializer
 
             world.Fluids.Initialize();
             world.Gravity.Restore(gravityColumns, fallingBlocks); // No global scan/rewrite of legacy terrain.
-            Inventory inventory;
-            DroppedItemState[] drops;
-            int health = Player.MaximumHealth;
-            if (metadata.Version == 1)
-            {
-                inventory = Inventory.CreateStarter();
-                drops = Array.Empty<DroppedItemState>();
-            }
-            else
-            {
-                using var extras = new BinaryReader(new MemoryStream(tail, false), Utf8);
-                int selected = extras.ReadInt32();
-                if (selected < 0 || selected >= Inventory.HotbarSlots || extras.ReadInt32() != Inventory.SlotCount)
-                    throw new InvalidDataException("Save has an invalid inventory layout or selection.");
-                inventory = new Inventory { SelectedSlot = selected };
-                for (int slot = 0; slot < Inventory.SlotCount; slot++)
-                {
-                    ItemId item = new(extras.ReadUInt16());
-                    int quantity = extras.ReadByte();
-                    if (item.Value == 0 && quantity == 0) continue;
-                    if (!Items.IsDefined(item) || quantity < 1 || quantity > ItemStack.Maximum)
-                        throw new InvalidDataException("Save has an invalid inventory stack.");
-                    inventory.SetSlot(slot, new ItemStack(item, quantity));
-                }
-                drops = new DroppedItemState[extras.ReadInt32()];
-                for (int i = 0; i < drops.Length; i++)
-                {
-                    var drop = new DroppedItemState(new ItemId(extras.ReadUInt16()), extras.ReadByte(),
-                        new Vector3(extras.ReadSingle(), extras.ReadSingle(), extras.ReadSingle()), extras.ReadSingle(), extras.ReadSingle());
-                    DroppedItems.Validate(drop, metadata.Size);
-                    drops[i] = drop;
-                }
-                if (metadata.Version >= 3) { health = extras.ReadInt32(); ValidateHealth(health); }
-            }
-            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population);
+            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population,arrows);
         }
         catch (EndOfStreamException exception)
         {
@@ -284,7 +294,11 @@ public static class WorldSerializer
         {
             long extra = source.Length - source.Position - metadata.StoredBlockCount - ChecksumSize;
             if (metadata.Version >= 3) extra -= 4;
-            if (metadata.Version >= 6)
+            if(metadata.Version>=8)
+            {
+                if(extra<TailPrefixBytes+12 || source.Length>MaximumFileSize)throw new InvalidDataException("Save file has an invalid data length.");
+            }
+            else if (metadata.Version >= 6)
             {
                 long extension = PopulationPrefixBytes + 4;
                 if (metadata.Version >= 7) extension += 4;

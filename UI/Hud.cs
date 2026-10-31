@@ -34,7 +34,7 @@ public sealed class Hud : IDisposable
 
     public void Draw(Viewport viewport, Inventory inventory, bool captured, bool showDebug,
         Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0,
-        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null)
+        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0)
     {
         UpdateDebug(showDebug && visible, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds, renderer, diagnostics);
         if (!visible) return;
@@ -58,6 +58,11 @@ public sealed class Hud : IDisposable
 
         if (captured)
         {
+            if(bowPower>0)
+            {
+                Fill(new Rectangle(width/2-34,height/2+17,68,8),Color.Black);
+                Fill(new Rectangle(width/2-32,height/2+19,(int)(64*bowPower),4),Color.Gold);
+            }
             Fill(new Rectangle(width / 2 - 6, height / 2 - 1, 13, 3), Color.Black * 0.7f);
             Fill(new Rectangle(width / 2 - 1, height / 2 - 6, 3, 13), Color.Black * 0.7f);
             Fill(new Rectangle(width / 2 - 5, height / 2, 11, 1), Color.White);

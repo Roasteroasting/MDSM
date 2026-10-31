@@ -46,18 +46,19 @@ internal sealed class DroppedItemRenderer : IDisposable
         _effect.View = camera.View;
         _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
         DrawBatch(_builder.Vertices, _builder.VertexCount, _atlas.Texture);
-        foreach (ItemId type in Items.Sprites)
+        for(int group=0;group<4;group++)
         {
+            ItemId type=group<3?Items.Sprites[group]:default;
             int spriteCount = 0;
             for (int i = 0; i < items.Entities.Count; i++)
             {
                 DroppedItem item = items.Entities[i];
-                if (item.Item != type || !_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
+                if ((group<3?item.Item!=type:item.Item.Value<259 || !Items.IsSprite(item.Item)) || !_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
                 if (spriteCount + ItemSpriteGeometry.VertexCount > _sprites.Length) Array.Resize(ref _sprites, _sprites.Length * 2);
-                ItemSpriteGeometry.Fill(_sprites, spriteCount, item.Position, camera.Right, Vector3.Up);
+                ItemSpriteGeometry.Fill(_sprites, spriteCount, item.Position, camera.Right, Vector3.Up,item.Item);
                 spriteCount += ItemSpriteGeometry.VertexCount;
             }
-            DrawBatch(_sprites, spriteCount, _atlas.ItemTexture(type));
+            DrawBatch(_sprites, spriteCount, group<3?_atlas.ItemTexture(type):_atlas.Survival);
         }
 
         void DrawBatch(VertexPositionColorTexture[] vertices, int count, Texture2D texture)

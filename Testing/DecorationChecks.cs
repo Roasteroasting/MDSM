@@ -203,7 +203,7 @@ internal static class DecorationChecks
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
         WorldSave restored = WorldSerializer.Read(oldFile);
-        Require(WorldSerializer.FormatVersion == 7 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
+        Require(WorldSerializer.FormatVersion == 8 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
         for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");

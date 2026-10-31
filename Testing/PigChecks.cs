@@ -121,8 +121,9 @@ internal static class PigChecks
         Require(pig.IsDead && drops.Entities.Count == 1 && drops.Entities[0].Item == Items.RawPorkchop
             && drops.Entities[0].Count is 1 or 2 && !pigs.Punch(pig, eye, drops), "Death/drop was missed or duplicated.");
         Require(pigs.CapturePigs().Length == 0, "Killed pig remained in saved population.");
+        var harvest=new Inventory();harvest.SetSlot(0,new ItemStack(Items.Tool(ToolTier.Wood,ToolKind.Pickaxe),1));
         for (int i = 0; i < 400; i++) combat.Update(world, pigs, drops, mining, eye, Vector3.Forward,
-            BlockRaycaster.Cast(world, eye, Vector3.Forward), true, Dt);
+            BlockRaycaster.Cast(world, eye, Vector3.Forward), true, Dt,harvest);
         Require(world.GetBlock(10, 1, 8) == BlockType.Air, "Continuous mining did not resume after pig died.");
         foreach (int fps in new[] { 30, 60, 144, 360 })
         {

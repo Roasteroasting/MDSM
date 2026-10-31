@@ -18,4 +18,10 @@ internal static class SaveLayout
     public static int MobCount(byte[] bytes) => Health(bytes) + 4;
     public static int MobRecords(byte[] bytes) => MobCount(bytes) + 4;
     public static int Population(byte[] bytes) => MobRecords(bytes) + BitConverter.ToInt32(bytes, MobCount(bytes)) * 21;
+    public static int Survival(byte[] bytes)
+    {
+        int pending=Population(bytes)+16;int gravity=pending+4+BitConverter.ToInt32(bytes,pending)*9;
+        int falling=gravity+4+BitConverter.ToInt32(bytes,gravity)*4;
+        return falling+4+BitConverter.ToInt32(bytes,falling)*25;
+    }
 }

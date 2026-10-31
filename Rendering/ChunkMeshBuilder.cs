@@ -82,7 +82,8 @@ internal sealed class ChunkMeshBuilder
             foreach (Face face in Faces)
             {
                 // World queries include adjacent chunks and return air beyond finite edges.
-                if (Blocks.IsOpaque(world.GetBlock(worldX + face.Offset.X, y + face.Offset.Y, worldZ + face.Offset.Z)))
+                BlockType neighbor=world.GetBlock(worldX + face.Offset.X,y + face.Offset.Y,worldZ + face.Offset.Z);
+                if (Blocks.IsOpaque(neighbor) || block==BlockType.Glass && neighbor==BlockType.Glass)
                     continue;
 
                 int tile = Blocks.Tile(block, face.Normal);
