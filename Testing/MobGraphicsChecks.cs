@@ -286,7 +286,7 @@ internal static class MobGraphicsChecks
                     && GraphicsDevice.Textures[0] == atlas.Texture && GraphicsDevice.Viewport.Width == 320, "Mixed mob pass leaked graphics state.");
                 return Read();
             }
-            foreach (MobSpecies species in Enum.GetValues<MobSpecies>())
+            foreach (MobSpecies species in Enum.GetValues<MobSpecies>().Where(s=>(int)s<4))
             {
                 var population = new PassiveMobPopulation(world, new[] { MobChecks.State(species, new Vector3(10, 1, 10)) with { Yaw = MathHelper.Pi } });
                 PassiveMob mob = population.Entities[0]; camera.Position = new Vector3(10, 1 + mob.Definition.Height * 0.55f, 13);

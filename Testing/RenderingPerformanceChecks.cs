@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Xna.Framework;
@@ -62,7 +63,7 @@ internal static class RenderingPerformanceChecks
     {
         var world = PigChecks.Flat();
         FieldInfo revision = typeof(PassiveMob).GetField("_cacheRevision", BindingFlags.Instance | BindingFlags.NonPublic);
-        foreach (MobSpecies species in Enum.GetValues<MobSpecies>())
+        foreach (MobSpecies species in Enum.GetValues<MobSpecies>().Where(s=>(int)s<4))
         {
             var state = new MobState(species, new Vector3(32.5f, 1, 32.5f), 0, MobDefinitions.Get(species).MaximumHealth);
             var cached = new PassiveMob(state, 321); var fresh = new PassiveMob(state, 321);

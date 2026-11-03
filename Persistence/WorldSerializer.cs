@@ -15,7 +15,7 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
-    public const int FormatVersion = 9;
+    public const int FormatVersion = 10;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -126,6 +126,7 @@ public static partial class WorldSerializer
             { writer.Write((byte)block.Block); writer.Write(block.X); writer.Write(block.Z); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
             WriteSurvival(writer,save,inventory,drops,containers);
             WriteRefinements(writer,save.World.Vegetation.Capture(),mobs);
+            WriteCompletion(writer,save,inventory,pigs,mobs);
         }
         destination.Write(hash.GetHashAndReset());
     }
@@ -243,7 +244,7 @@ public static partial class WorldSerializer
                 var pending = new MobRespawnState[pendingCount];
                 using var pendingReader = new BinaryReader(new MemoryStream(pendingBytes, false));
                 for (int i = 0; i < pending.Length; i++) pending[i] = new MobRespawnState((MobSpecies)pendingReader.ReadByte(), pendingReader.ReadDouble());
-                population = new MobPopulationState(targets, pending); population.Validate(MobPopulationState.LivingCounts(pigs, mobs));
+                population = new MobPopulationState(targets, pending);if(metadata.Version<10)population.Validate(MobPopulationState.LivingCounts(pigs, mobs));
                 byte[] countBytes = new byte[4]; source.ReadExactly(countBytes); hash.AppendData(countBytes);
                 int columnCount = BinaryPrimitives.ReadInt32LittleEndian(countBytes);
                 if (columnCount < 0 || columnCount > metadata.Size.Width() * metadata.Size.Width()) throw new InvalidDataException("Invalid gravity column count.");
@@ -264,11 +265,13 @@ public static partial class WorldSerializer
                     fallingReader.ReadInt32(), fallingReader.ReadInt32(), fallingReader.ReadDouble(), fallingReader.ReadDouble());
             }
             ArrowState[] arrows=Array.Empty<ArrowState>();
+            MobState[] hostiles=Array.Empty<MobState>();double exactHealth=health;
             if(metadata.Version>=8)
             {
                 using var extension=new BinaryReader(new HashedReadStream(source,hash),Utf8,true);
                 arrows=ReadSurvival(extension,world,inventory,drops,metadata.Version<9);
                 if(metadata.Version>=9)ReadRefinements(extension,world,mobs);
+                if(metadata.Version>=10)ReadCompletion(extension,world,inventory,pigs,mobs,arrows,health,out exactHealth,out hostiles);
             }
             byte[] checksum = new byte[ChecksumSize];
             source.ReadExactly(checksum);
@@ -281,8 +284,10 @@ public static partial class WorldSerializer
             foreach(var drop in drops)DroppedItems.Validate(drop,world.Size);
             ValidateOwnership(inventory,drops,world.Containers.Capture());
             world.Fluids.Initialize();
+            world.LavaFlow.Initialize();
+            population.Validate(MobPopulationState.LivingCounts(pigs,mobs));
             world.Gravity.Restore(gravityColumns, fallingBlocks); // No global scan/rewrite of legacy terrain.
-            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population,arrows);
+            return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population,arrows,hostiles,exactHealth);
         }
         catch (EndOfStreamException exception)
         {
@@ -371,9 +376,8 @@ public static partial class WorldSerializer
 
     private static void ValidateBlocks(ReadOnlySpan<byte> blocks)
     {
-        foreach (byte value in blocks)
-            if (!Blocks.IsDefined((BlockType)value))
-                throw new InvalidDataException($"Save contains unknown block ID {value}.");
+        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.LavaFalling);
+        if(invalid>=0)throw new InvalidDataException($"Save contains unknown block ID {blocks[invalid]}.");
     }
 
     private static void ValidateHealth(int health)

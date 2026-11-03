@@ -110,3 +110,77 @@ All four dimensions, generation algorithms, persistent populations, respawn time
 The original 512 MiB raw Massive block storage remains necessary. Initial terrain generation, loading and saving still have costs proportional to world area. Mob simulation remains proportional to population, although repeated collision queries are cheaper. Dense edited scenes can still cost more than the tested natural terrain. Rapid teleports can require bounded rebuilding over several frames; ordinary movement has prefetch coverage. A single complex chunk can exceed the soft build-time budget. Future profiling could consider indexed geometry, water sorting, or more local collision-cache invalidation if those become limiting.
 
 Manual checks remain: exploration for longer sessions and other seeds, assessment of the shorter fog/view distance, unusual edited shores and dense vegetation, physical mouse/keyboard behavior, screenshot appearance, driver configurations, and concurrent VRAM-heavy applications. Passing scripted tests and measured FPS here are not a guarantee of a particular FPS in every world or machine state.
+
+## Final survival content profiling — 2026-11-03
+
+This section measures the caves/Lava/farming/breeding/hostile/equipment update described in [FINAL-SURVIVAL.md](./FINAL-SURVIVAL.md). Historical measurements above remain historical; no view-distance/fog reduction or population reduction was used for this update.
+
+### Controlled gameplay frames
+
+Existing actual-Game1 benchmark, seed 173, 1920×1080, uncapped, sequential runs, 15 seconds each of stationary quarter-turns and W/turning. All finite CPU blocks and original passive populations remain loaded. The walking path can encounter terrain; travel is recorded rather than assumed. These are short scripted samples on this environment, not physical playtesting or hardware-independent FPS promises.
+
+| Size | FPS turning / walking | p95 ms turning / walking | CPU Update ms | CPU Draw ms | Resident turning / walking | Passive population |
+| --- | --- | --- | --- | --- | --- | --- |
+| Small | 1791 / 1764 | 0.85 / 0.90 | 0.013 / 0.013 | 0.445 / 0.333 | 256 / 256 | 32 |
+| Normal | 1238 / 1195 | 1.11 / 1.18 | 0.025 / 0.024 | 0.640 / 0.614 | 1011 / 1019 | 128 |
+| Large | 1254 / 1086 | 1.07 / 1.20 | 0.063 / 0.066 | 0.703 / 0.822 | 1373 / 1487 | 512 |
+| Massive | 757 / 689 | 1.73 / 1.88 | 0.256 / 0.261 | 1.026 / 1.152 | 1373 / 1482 | 2048 |
+
+Massive's terrain-buffer estimates were **279,281,664 / 302,014,464 bytes** (approximately 266/288 MiB), versus roughly 180/195 MiB before caves. Added underground faces account for additional geometry, while residency remains bounded rather than scaling with all 16,384 chunks. Process working set was approximately 957/978 MiB. These are **estimated buffer bytes and process RAM**, not driver-reported VRAM. Driver memory limits on other GPUs were not independently reproduced.
+
+Historical Milestone-12 actual-game samples were roughly 420/371 FPS and 5.39/5.48 ms p95 on Massive. Current samples are substantially faster despite cave geometry. The main CPU change is explicit 32-block behavioral-AI activation, while long-term animal clocks and natural replacement scheduling remain active. Changed terrain and ordinary timing variation prevent treating this as an exact identical-geometry experiment.
+
+The natural-cave mode uses the complete generated Massive map, its 2,048 passives, eight hostile fixtures on valid nearby cave floors, natural Lava, and periodic Water/Lava contact. Test-only Obsidian Armor/health restoration prevents measuring the death menu. It does not remove terrain, lower populations, shrink the view, or bypass residency. The selected natural pool is near a finite-world edge; residency is accordingly smaller than the central surface sample.
+
+| Cave phase | FPS | p95 frame | Update / Draw CPU | Resident | Terrain-buffer estimate | Hostiles |
+| --- | --- | --- | --- | --- | --- | --- |
+| Turning | 1041 | 1.36 ms | 0.240 / 0.684 ms | 708 | 148,242,432 bytes | 8 |
+| W / turning | 1056 | 1.34 ms | 0.237 / 0.676 ms | 708 | 148,242,432 bytes | 8 |
+
+The cave walking sample traveled 2.8 blocks through constrained terrain. Both fluid frontiers settled to zero, and the last sampled frame required no rebuild. Existing graphics lifecycle checks verify the four-build/3 ms budget, movement/hysteresis, edits/re-entry, frustum/elevation/edges, Water eviction and complete GPU cleanup on both Large and Massive. This cave scenario complements, rather than replaces, the larger-residency surface test.
+
+### Generation, CPU systems and full persistence
+
+Isolated `--completion-performance-test`, seed 173, one world at a time. Generation is measured before diagnostic edits. A small constructed underground chamber then exercises all retained passive clocks, two fed parents/one baby, eight active hostiles, 24 crops, hydration changes, Torch suppression, player/projectile physics and Water/Lava contact. The 10 simulated seconds below are **CPU work**, not rendered FPS. An isolated 2,400-second crop-clock advance measures growth processing without a 40-minute real-time wait. Health restoration is a diagnostic control. Save/load covers the complete world and verifies a full-block SHA-256 plus entity/crop counts; no reduced-world stand-in is used.
+
+| Size | Generation s | Cave pass ms | Cave systems / carved cells | Lava basins | Bonus ore cells | Managed MiB |
+| --- | --- | --- | --- | --- | --- | --- |
+| Small | 0.362 | 44 | 41 / 47,414 | 12 | 762 | 8.8 |
+| Normal | 1.389 | 247 | 193 / 280,109 | 73 | 3,981 | 34.2 |
+| Large | 5.703 | 1,023 | 744 / 1,162,052 | 256 | 16,219 | 136.0 |
+| Massive | 22.783 | 4,206 | 2930 / 4,848,431 | 1111 | 66,743 | 544.4 |
+
+Surface opening-cell counts were 0/145/840/3,581; these count removed surface cells, not distinct entrances. Small seed 173 has no entrance after shoreline protection; additional-seed checks verify occasional openings. Cavities occupy under one percent of total block volume on this Massive seed. All four worlds initialize with **zero Lava frontier work**, and generated Sand/Gravel support and existing water features remain protected.
+
+| Size | CPU ms for 10 simulated seconds | Growth batch ms | Save s | Load s | File MiB | Passives / hostiles / crops |
+| --- | --- | --- | --- | --- | --- | --- |
+| Small | 100.97 | 1.445 | 0.032 | 0.083 | 8.05 | 33 / 8 / 24 |
+| Normal | 75.21 | 0.332 | 0.045 | 0.305 | 32.18 | 129 / 8 / 24 |
+| Large | 95.20 | 0.299 | 0.187 | 1.233 | 128.67 | 513 / 8 / 24 |
+| Massive | 150.10 | 0.302 | 6.412 | 5.331 | 514.72 | 2049 / 8 / 24 |
+
+The extra passive in this table is the intentionally bred child, not a changed initial target. The stress case recorded 456 localized block edits and approximately 11/13/19/43 KiB of total allocations over the ten-second simulation, including initial queues, offspring and projectiles. Fluid budgets stayed within 2,048 Water / 512 Lava updates per tick; farming stayed within bounded hydration/growth batches. The deliberately edited Water frontier remained at 30, while Lava was idle. Spawn sampling is bounded to 24 attempts, and the hostile count never exceeded eight.
+
+### Investigation-driven fixes
+
+- Initial additional per-cell restore classification made Massive loading roughly **14.9 seconds** (Large 3.7). One histogram pass per chunk plus top-down solid-column searches reduced that to **5.3 seconds** (Large 1.2), without relaxing validation or changing the binary block stream. Block-ID validation now uses a vectorized range check.
+- Early pool carving could leave unsupported floors or later tunnels beneath existing pools. Strict floor/wall checks and fluid-protected carving now leave natural Lava idle at initialization on all sizes. Stable pools create no perpetual frontier work.
+- New partial shapes retain efficient shared block-box queries. Animal body footprints fit open Gates; larger render envelopes prevent decorative heads/noses from being incorrectly culled. Existing collision-cache comparisons continue to check edits, fluids and fresh-query equivalence.
+- All timers are gameplay based. Crops, structures and Torches use sparse registries; no extra per-voxel state array is retained. The two fluid frontiers use sparse queued sets. No full-world CPU mesh cache or eager GPU allocation was introduced.
+
+Massive saves remain roughly 515 MiB and uncompressed. Storage throughput still matters; synchronous saving can briefly pause gameplay. No particular speed is promised on other disks. Long interactive survival sessions, intricate navigation/builds, and physical-input checks remain manual.
+
+Reproduce:
+
+```powershell
+dotnet build
+dotnet run --no-build -- --completion-test
+dotnet run --no-build -- --completion-performance-test
+dotnet run --no-build -- --gameplay-performance-test Small
+dotnet run --no-build -- --gameplay-performance-test Normal
+dotnet run --no-build -- --gameplay-performance-test Large
+dotnet run --no-build -- --gameplay-performance-test Massive
+dotnet run --no-build -- --gameplay-performance-test Massive --cave
+dotnet run --no-build -- --self-test
+dotnet run --no-build -- --graphics-test
+```

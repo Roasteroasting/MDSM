@@ -35,6 +35,7 @@ public static partial class WorldSerializer
             if(stack.Durability>0 && (stack.InstanceId==Guid.Empty || !identities.Add(stack.InstanceId)))throw new InvalidDataException("Duplicate/missing equipment instance identity.");
         }
         for(int i=0;i<36;i++)Check(inventory[i]);foreach(var drop in drops)Check(drop.Stack);
+        for(int i=0;i<4;i++)Check(inventory.Equipped(i));
         foreach(var container in containers)foreach(var stack in container.Slots)Check(stack);
     }
     private static void WriteSurvival(BinaryWriter writer,WorldSave save,Inventory inventory,DroppedItemState[] drops,BlockEntityState[] states)

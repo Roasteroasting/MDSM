@@ -16,8 +16,10 @@ public static class MiningRules
         BlockType.IronOre => new(MiningCategory.Mineral,3,ToolTier.Stone),
         BlockType.DiamondOre => new(MiningCategory.Mineral,3,ToolTier.Iron),
         BlockType.Furnace => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
-        BlockType.WoodLog or BlockType.WoodenPlanks or BlockType.CraftingTable or BlockType.Chest => new(MiningCategory.Wood,Blocks.Get(block).MiningSeconds/1.5f),
-        BlockType.Grass or BlockType.Dirt or BlockType.Sand or BlockType.Gravel => new(MiningCategory.Earth,Blocks.Get(block).MiningSeconds/1.5f),
+        BlockType.Smoker or BlockType.BlastFurnace => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
+        BlockType.Obsidian => new(MiningCategory.Mineral,50,ToolTier.Diamond),
+        BlockType.WoodLog or BlockType.WoodenPlanks or BlockType.CraftingTable or BlockType.Chest or BlockType.Fence or BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper => new(MiningCategory.Wood,Blocks.Get(block).MiningSeconds/1.5f),
+        BlockType.Grass or BlockType.Dirt or BlockType.Sand or BlockType.Gravel or BlockType.FarmlandDry or BlockType.FarmlandWet => new(MiningCategory.Earth,Blocks.Get(block).MiningSeconds/1.5f),
         _ => new(MiningCategory.Fragile,Blocks.Get(block).MiningSeconds/1.5f)
     };
     public static bool Suitable(MiningProfile profile,ItemDefinition tool) => tool.Tool == (profile.Category switch
@@ -37,16 +39,23 @@ public static class MiningRules
         || Items.Get(tool.Item).Tool==ToolKind.Pickaxe && Items.Get(tool.Item).Tier>=Profile(block).Required;
     public static ItemId? Drop(BlockType block,ItemStack held,Random random)
     {
-        if(!Harvests(block,held) || block is BlockType.Glass or BlockType.TallGrass or BlockType.Leaves)return null;
+        if(!Harvests(block,held) || block is BlockType.Glass or BlockType.TallGrass or BlockType.Leaves || Blocks.Crop(block))return null;
         return block switch
         {
             BlockType.Stone=>Items.FromBlock(BlockType.Cobblestone),BlockType.CoalOre=>Items.Coal,BlockType.DiamondOre=>Items.Diamond,
+            BlockType.FarmlandDry or BlockType.FarmlandWet=>Items.FromBlock(BlockType.Dirt),BlockType.DoorUpper=>Items.FromBlock(BlockType.Door),
             BlockType.Gravel when random.Next(10)==0=>Items.Flint,_=>Items.FromBlock(block)
         };
     }
     public static bool Wears(ItemStack stack) => Items.Get(stack.Item).Tool is >=ToolKind.Pickaxe and <=ToolKind.Shovel;
     public static int Drops(BlockType block,ItemStack held,Random random,Span<ItemId> output)
     {
+        if(block==BlockType.TallGrass){if(random.NextDouble()>=.1)return 0;output[0]=Items.WheatSeeds;return 1;}
+        if(Blocks.Crop(block))
+        {
+            int count=0;if(block==BlockType.Wheat7)output[count++]=Items.Wheat;
+            int seeds=block==BlockType.Wheat7?random.Next(1,5):1;for(int i=0;i<seeds;i++)output[count++]=Items.WheatSeeds;return count;
+        }
         if(block==BlockType.Leaves)
         {
             if(held.Item==Items.Shears){output[0]=Items.FromBlock(block);return 1;}

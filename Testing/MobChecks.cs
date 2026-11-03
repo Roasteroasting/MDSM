@@ -26,7 +26,7 @@ internal static class MobChecks
 
     public static void DefinitionsAndMotion()
     {
-        foreach (MobSpecies species in Enum.GetValues<MobSpecies>())
+        foreach (MobSpecies species in Enum.GetValues<MobSpecies>().Where(s=>(int)s<4))
         {
             MobDefinition definition = MobDefinitions.Get(species);
             Require(definition.MaximumHealth == (species == MobSpecies.Chicken ? 6 : 10), "Incorrect species health.");
@@ -103,7 +103,7 @@ internal static class MobChecks
 
     public static void CombatAndDrops()
     {
-        foreach (MobSpecies species in Enum.GetValues<MobSpecies>())
+        foreach (MobSpecies species in Enum.GetValues<MobSpecies>().Where(s=>(int)s<4))
         {
             World world = PigChecks.Flat(); var population = new PassiveMobPopulation(world, new[] { State(species) });
             PassiveMob mob = population.Entities[0]; var drops = new DroppedItems(world);
@@ -185,7 +185,7 @@ internal static class MobChecks
     public static void StartingAndRespawn()
     {
         Inventory inventory = Inventory.CreateNewWorld();
-        Require(Blocks.Selection.Length == 22 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
+        Require(Blocks.Selection.Length == 29 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
             "Placeable palette omitted wool/table or reordered existing blocks.");
         for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New worlds must not grant starting items.");
         Require(Inventory.CreateStarter()[13].IsEmpty, "Legacy migration granted new wool.");
@@ -217,7 +217,7 @@ internal static class MobChecks
             while (!dead.IsDead) session.Mobs.Punch(dead, session.Player.Position, session.Items);
             WorldSave killed = Decode(Encode(session.Capture()));
             Require(killed.Mobs.Length == 2 && new GameSession("killed", killed).Mobs.Entities.Count == 3, "Killed species respawned on load.");
-            using var metadata = new MemoryStream(bytes); Require(WorldSerializer.ReadMetadata(metadata).Version == 9, "Version 8 metadata listing failed.");
+            using var metadata = new MemoryStream(bytes); Require(WorldSerializer.ReadMetadata(metadata).Version == 10, "Version 8 metadata listing failed.");
         }
     }
 
@@ -269,15 +269,15 @@ internal static class MobChecks
     public static void Geometry()
     {
         World world = PigChecks.Flat();
-        foreach (MobSpecies species in Enum.GetValues<MobSpecies>())
+        foreach (MobSpecies species in Enum.GetValues<MobSpecies>().Where(s=>(int)s<4))
         {
             var mob = new PassiveMob(State(species), 17); var builder = new CuboidModelBuilder(64, 16); PassiveMobModels.Append(builder, mob);
             int cuboids = species == MobSpecies.Cow ? 9 : species == MobSpecies.Chicken ? 8 : 7;
             Require(builder.Count == cuboids * 36, "Species silhouette lost cuboids.");
             foreach (var v in builder.Vertices.AsSpan(0, builder.Count))
                 Require(v.Color.A == 255 && v.TextureCoordinate.X > 0 && v.TextureCoordinate.X < 1 && v.TextureCoordinate.Y > 0 && v.TextureCoordinate.Y < 1
-                    && v.Position.X >= mob.Bounds.Min.X - 0.001f && v.Position.X <= mob.Bounds.Max.X + 0.001f && v.Position.Z >= mob.Bounds.Min.Z - 0.001f
-                    && v.Position.Z <= mob.Bounds.Max.Z + 0.001f && v.Position.Y >= mob.Position.Y - 0.001f && v.Position.Y <= mob.Bounds.Max.Y + 0.001f,
+                    && v.Position.X >= mob.RenderBounds.Min.X - 0.001f && v.Position.X <= mob.RenderBounds.Max.X + 0.001f && v.Position.Z >= mob.RenderBounds.Min.Z - 0.001f
+                    && v.Position.Z <= mob.RenderBounds.Max.Z + 0.001f && v.Position.Y >= mob.Position.Y - 0.001f && v.Position.Y <= mob.RenderBounds.Max.Y + 0.001f,
                     "Species UVs, opacity, or model/collision proportions invalid.");
             for (int i = 0; i < 1000 && (!mob.Walking || Math.Abs(MathF.Sin(mob.WalkPhase)) < 0.5f); i++) mob.Update(world, Dt);
             Require(mob.Walking, "No walking animation reached."); builder.Clear(); PassiveMobModels.Append(builder, mob); var walking = builder.Vertices.AsSpan(0, builder.Count).ToArray();

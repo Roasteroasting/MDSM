@@ -10,6 +10,14 @@ public sealed class Inventory
     public const int HotbarSlots = 9;
     public const int SlotCount = 36;
     private readonly ItemStack[] _slots = new ItemStack[SlotCount];
+    private readonly ItemStack[] _equipment=new ItemStack[4];
+    public ItemStack Equipped(int slot)=>_equipment[slot];
+    public int ArmorPoints { get {int points=0;foreach(var item in _equipment)points+=item.IsEmpty?0:Items.Get(item.Item).ArmorPoints;return points;} }
+    public void SetEquipment(int slot,ItemStack stack)
+    {if(slot<0||slot>=4 || !stack.IsEmpty && Items.Get(stack.Item).Armor!=(ArmorSlot)slot)throw new ArgumentException("Armor does not fit this slot.");_equipment[slot]=stack;}
+    public void ClickEquipment(int slot,InventoryInteraction interaction,bool right)
+    {if(!interaction.Cursor.IsEmpty && Items.Get(interaction.Cursor.Item).Armor!=(ArmorSlot)slot)return;SetEquipment(slot,interaction.ClickStack(_equipment[slot],right));}
+    public void WearArmor(){for(int i=0;i<4;i++)if(!_equipment[i].IsEmpty){ItemStack old=_equipment[i];_equipment[i]=old.Wear();if(old.Durability==1)EquipmentBroken?.Invoke(old.Item);}}
     private int _selected;
     public int SelectedSlot
     {
@@ -30,6 +38,7 @@ public sealed class Inventory
     }
     public bool Wear(Guid instance)
     {
+        for(int i=0;i<4;i++)if(instance!=Guid.Empty && _equipment[i].InstanceId==instance){_equipment[i]=_equipment[i].Wear();return true;}
         for(int i=0;i<SlotCount;i++)if(instance!=Guid.Empty && _slots[i].InstanceId==instance){ItemStack before=_slots[i];_slots[i]=before.Wear();if(before.Durability==1)EquipmentBroken?.Invoke(before.Item);return true;}
         return false;
     }
@@ -78,6 +87,7 @@ public sealed class Inventory
     {
         var copy = new Inventory { SelectedSlot = SelectedSlot };
         _slots.CopyTo(copy._slots, 0);
+        _equipment.CopyTo(copy._equipment,0);
         return copy;
     }
 

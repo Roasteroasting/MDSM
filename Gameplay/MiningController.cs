@@ -36,19 +36,21 @@ public sealed class MiningController
         BlockType above = world.GetBlock(hit.Cell.X, hit.Cell.Y + 1, hit.Cell.Z);
         bool removesPlant = Blocks.Get(above).NeedsGrass;
         if(block==BlockType.Leaves && !items.CanSpawn(3))return false;
-        Span<ItemId> loot=stackalloc ItemId[3];
+        Span<ItemId> loot=stackalloc ItemId[5];
         int lootCount=MiningRules.Drops(block,tool,_random,loot);
         BlockContainer container=world.Containers.Get(hit.Cell);
-        bool plantDrop=removesPlant && above!=BlockType.TallGrass;
-        int drops=lootCount+(plantDrop?1:0);
+        Span<ItemId> plantLoot=stackalloc ItemId[5];int plantCount=removesPlant?MiningRules.Drops(above,default,_random,plantLoot):0;
+        int drops=lootCount+plantCount;
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)drops++;
         if (!items.CanSpawn(drops)) return false;
         world.Containers.Detach(hit.Cell);
-        if (!world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air)) { world.Containers.Reattach(container);Reset(); return false; }
+        world.SuppressHarvest=true;bool removed;
+        try{removed=world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air);}finally{world.SuppressHarvest=false;}
+        if (!removed) { world.Containers.Reattach(container);Reset(); return false; }
         Vector3 center = new(hit.Cell.X + 0.5f, hit.Cell.Y + 0.5f, hit.Cell.Z + 0.5f);
         for(int i=0;i<lootCount;i++)items.Spawn(loot[i],1,center);
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)items.TrySpawn(container[i],center,.35f);
-        if (plantDrop) items.Spawn(Items.FromBlock(above), 1, center + Vector3.Up);
+        for(int i=0;i<plantCount;i++)items.Spawn(plantLoot[i],1,center+Vector3.Up);
         if(inventory!=null && (MiningRules.Wears(tool) || block==BlockType.Leaves && tool.Item==Items.Shears))inventory.WearSelected();
         Reset();
         return true;
@@ -61,7 +63,7 @@ public static class BlockPlacement
     {
         ItemStack stack = inventory.Selected;
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)
-            || !world.TryPlace(cell, block, playerBounds)) return false;
+            || !(block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds))) return false;
         inventory.ConsumeSelected();
         return true;
     }

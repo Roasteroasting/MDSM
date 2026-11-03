@@ -53,8 +53,9 @@ public sealed class Hud : IDisposable
             Text(SlotNumbers[i], bounds.X + 4, bounds.Y + 4, 1, Color.LightGray);
         }
         string name = Items.Name(inventory.Selected.Item);
-        Text(name, (width - name.Length * 12) / 2, top - 46, 2, Color.White);
+        Text(name, (width - name.Length * 12) / 2, top - (inventory.ArmorPoints>20?90:inventory.ArmorPoints>0?70:46), 2, Color.White);
         HealthHud.Draw(_sprites, _pixel, viewport, health);
+        ArmorHud.Draw(_sprites,_pixel,viewport,inventory.ArmorPoints);
 
         if (captured)
         {

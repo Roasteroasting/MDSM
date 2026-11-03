@@ -10,7 +10,7 @@ namespace MDSM.Persistence;
 
 public sealed record WorldSave(World World, string Name, Vector3 PlayerPosition, float Yaw, float Pitch,
     Inventory Inventory = null, DroppedItemState[] DroppedItems = null, int Health = Player.MaximumHealth, PigState[] Pigs = null,
-    MobState[] Mobs = null, MobPopulationState Population = null,ArrowState[] Arrows=null); // Mobs contains non-pig species.
+    MobState[] Mobs = null, MobPopulationState Population = null,ArrowState[] Arrows=null,MobState[] Hostiles=null,double ExactHealth=-1); // Mobs contains non-pig species.
 
 public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch,
     WorldSize Size = WorldSize.Normal, int Version = 1, int StoredHeight = World.Height)
@@ -40,6 +40,7 @@ public sealed class GameSession
     public MiningController Mining { get; } = new();
     public CombatController Combat { get; } = new();
     public PassiveMobPopulation Mobs { get; }
+    public HostilePopulation Hostiles { get; }
     private bool _deathHandled;
     public bool UndroppedDeathItems { get; private set; }
     private string _equipmentNotice;
@@ -55,9 +56,12 @@ public sealed class GameSession
         Inventory.EquipmentBroken+=item=>_equipmentNotice=MDSM.Inventories.Items.Name(item)+" BROKE";
         InventoryInteraction = new InventoryInteraction(Inventory);
         Items = new DroppedItems(World, save.DroppedItems);
+        World.LiveDrops=Items;
         Projectiles=new Projectiles(World,save.Arrows);
         Mobs = new PassiveMobPopulation(World, save.Pigs, save.Mobs, save.Population);
-        Player = new Player(save.PlayerPosition, save.Health);
+        Hostiles=new HostilePopulation(World,save.Hostiles);
+        Player = new Player(save.PlayerPosition, save.Health,Inventory);
+        if(save.ExactHealth>=0)Player.RestoreFraction(save.ExactHealth);
         if (Player.IsDead) Player.Respawn(World); // Saved drops already exist; never drop again on load.
         Camera = new Camera { Position = Player.EyePosition };
         Camera.RestoreOrientation(save.Yaw, save.Pitch);
@@ -68,7 +72,7 @@ public sealed class GameSession
         if (!TryReturnInterfaceItems())
             throw new System.InvalidOperationException("Make room for held items and crafting ingredients before saving.");
         return new(World, Name, Player.Position, Camera.Yaw, Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health,
-            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture());
+            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture(),Hostiles.Capture(),Player.HealthValue);
     }
 
     public bool TryOpenCrafting(int width)
@@ -138,6 +142,11 @@ public sealed class GameSession
             if (stack.IsEmpty) continue;
             if (hasPosition && Items.TrySpawn(stack, position, DroppedItems.DeliberatePickupDelay)) Inventory.SetSlot(slot, default);
             else UndroppedDeathItems = true; // Explicit capacity/clearance failure retains ownership.
+        }
+        for(int slot=0;slot<4;slot++)
+        {
+            ItemStack stack=Inventory.Equipped(slot);if(stack.IsEmpty)continue;
+            if(hasPosition && Items.TrySpawn(stack,position,DroppedItems.DeliberatePickupDelay))Inventory.SetEquipment(slot,default);else UndroppedDeathItems=true;
         }
         Camera.Position = Player.EyePosition;
         return true;

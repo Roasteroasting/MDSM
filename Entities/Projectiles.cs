@@ -8,7 +8,7 @@ using MDSM.Worlds;
 
 namespace MDSM.Entities;
 
-public readonly record struct ArrowState(Vector3 Position,Vector3 Velocity,float Age,int Damage,Guid Bow);
+public readonly record struct ArrowState(Vector3 Position,Vector3 Velocity,float Age,int Damage,Guid Bow,bool Hostile=false);
 public sealed class Projectiles
 {
     public const int Maximum=256;
@@ -32,7 +32,10 @@ public sealed class Projectiles
         direction.Normalize();power=Math.Clamp(power,0,1);
         _arrows.Add(new(origin,direction*(12+18*power),0,1+(int)MathF.Round(power*4),bow));return true;
     }
-    public void Update(float elapsed,PassiveMobPopulation mobs,DroppedItems drops,Action<Guid> wear)
+    public bool ShootHostile(Vector3 origin,Vector3 velocity)
+    {if(_arrows.Count>=Maximum)return false;var arrow=new ArrowState(origin,velocity,0,2,Guid.NewGuid(),true);Validate(arrow,_world);_arrows.Add(arrow);return true;}
+    internal void RestoreHostileFlag(int index){if(index<0||index>=_arrows.Count)throw new InvalidDataException("Invalid arrow flag.");_arrows[index]=_arrows[index] with {Hostile=true};}
+    public void Update(float elapsed,PassiveMobPopulation mobs,DroppedItems drops,Action<Guid> wear,HostilePopulation hostiles=null,Player player=null)
     {
         if(!float.IsFinite(elapsed) || elapsed<=0)return;
         for(int i=_arrows.Count-1;i>=0;i--)
@@ -44,13 +47,17 @@ public sealed class Projectiles
                 Vector3 delta=arrow.Velocity*dt-Vector3.Up*(.5f*Gravity*dt*dt),next=arrow.Position+delta;
                 float length=delta.Length();float limit=BlockRaycaster.Cast(_world,arrow.Position,delta,length,solidOnly:true)?.Distance??length+.001f;
                 PassiveMob target=null;var ray=new Ray(arrow.Position,delta/Math.Max(length,.000001f));
-                for(int mobIndex=0;mobIndex<mobs.Entities.Count;mobIndex++)
+                for(int mobIndex=0;!arrow.Hostile && mobIndex<mobs.Entities.Count;mobIndex++)
                 {
                     var mob=mobs.Entities[mobIndex];if(Vector3.DistanceSquared(mob.Position,arrow.Position)>(length+2)*(length+2))continue;
                     float? hit=ray.Intersects(mob.Bounds);if(hit.HasValue && hit.Value<limit && hit.Value<=length && !mob.IsDead){limit=hit.Value;target=mob;}
                 }
+                if(!arrow.Hostile && hostiles!=null)for(int j=0;j<hostiles.Entities.Count;j++)
+                {PassiveMob mob=hostiles.Entities[j];float? hit=ray.Intersects(mob.Bounds);if(hit.HasValue && hit.Value<limit && hit.Value<=length){limit=hit.Value;target=mob;}}
+                float? playerHit=arrow.Hostile && player!=null?ray.Intersects(player.Bounds):null;
+                if(playerHit.HasValue && playerHit.Value<limit && playerHit.Value<=length){player.TakeDamage(arrow.Damage);removed=true;}
                 if(target!=null)
-                {if(mobs.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops))wear(arrow.Bow);removed=true;}
+                {if((int)target.Species>=4?hostiles.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops):mobs.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops))wear(arrow.Bow);removed=true;}
                 else if(limit<=length || arrow.Age+dt>=Lifetime || next.X<0 || next.X>=_world.Width || next.Z<0 || next.Z>=_world.Depth || next.Y<0 || next.Y>MaximumAltitude)removed=true;
                 arrow=arrow with {Position=next,Velocity=arrow.Velocity-Vector3.Up*Gravity*dt,Age=arrow.Age+dt};
             }

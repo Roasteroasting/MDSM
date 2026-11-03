@@ -1,10 +1,20 @@
 # MDSM
 
-A small Minecraft Indev-inspired voxel sandbox in C# and MonoGame DesktopGL. The game has finite worlds in four sizes, terrain/decorations/water, bounded chunk rendering, persistent inventories, shaped crafting, tiered tools and durability, underground ores, chests, furnaces, bows/arrows, passive mobs, health/death/respawning and food for healing, leaf decay, sapling growth, and sheep shearing. New worlds start with empty inventories. See [SURVIVAL-PROGRESSION.md](./SURVIVAL-PROGRESSION.md) for the complete Milestone 11 recipes, IDs, mechanics, measurements and verification report.
+A finite-world, early-Minecraft-inspired survival sandbox in C# and MonoGame DesktopGL. The game has finite worlds in four sizes, terrain/decorations/water, bounded chunk rendering, persistent inventories, shaped crafting, tiered tools and durability, underground ores, chests, furnaces, bows/arrows, passive mobs, health/death/respawning and food for healing, leaf decay, sapling growth, and sheep shearing. New worlds start with empty inventories. Caves, Lava/Obsidian, farming, breeding and babies, underground hostile mobs, Armor, building structures, Buckets and specialized Furnaces are implemented. See [FINAL-SURVIVAL.md](./FINAL-SURVIVAL.md) for current recipes, balance, IDs, persistence and verification. See [SURVIVAL-PROGRESSION.md](./SURVIVAL-PROGRESSION.md) for the complete Milestone 11 recipes, IDs, mechanics, measurements and verification report.
 
 Terrain and water geometry now use bounded camera-centered residency with prefetching, hysteresis and incremental rebuilds. The complete finite world stays in CPU memory. A shared 160-block view-space far plane and 80-144-block fog transition apply to terrain and dynamic entities. F3 includes buffer estimates, rendering counts and CPU timing diagnostics. See [PERFORMANCE.md](./PERFORMANCE.md) for the investigation, measured GTX 970 results, regression coverage and reproducible benchmark commands.
 
 ## Build and run
+
+Current survival controls: **E** opens inventory/crafting and four matching Armor slots. **RMB** with a Hoe tills clear Dirt/Grass, Seeds plant tilled soil, Wheat feeds adult animals for breeding, an Empty Bucket collects a fluid source, and a filled Bucket places a source. RMB opens/closes Doors and Gates. Torches prevent nearby hostile spawning; they do **not** emit light. The existing movement, combat, mouse, hotbar, HUD, screenshots and Settings controls remain.
+
+Farmland hydrates within horizontal radius two and vertical distance one of source/flowing Water. Wheat has seven stages and takes 10–40 wet gameplay minutes to mature; dry soil pauses growth. Tall Grass drops a Seed 10% of the time. Immature crops return one Seed; mature crops guarantee one Wheat plus 1–4 Seeds. Bread heals five health; Rotten Flesh instead causes one Armor-bypassing damage.
+
+Animals fed Wheat seek a same-species mate within eight blocks, produce one baby, then wait five minutes before breeding again. Unpaired breeding mode expires after one minute. Babies have small bodies/adult-sized heads, no drops or breeding/shearing, and mature after 15–45 active minutes. Breeding has a bounded extra population allowance and reserves pending natural replacements.
+
+Zombies (20 HP), Skeletons (20 HP) and Spiders (16 HP) spawn in clear spaces below Y=50, 24–128 blocks from the player, with a global cap of eight. Torches exclude spawning within 15 blocks in 3D. Distant behavioral AI stops beyond 32 blocks; hostile despawning beyond 128 remains immediate. Lava causes two damage per second and destroys ordinary dropped items. Water/Lava contact makes Obsidian; dropped Obsidian blocks/tools/Armor survive Lava. Armor reduces damage by 3% per point, up to 78%, and wears on accepted damage events.
+
+See [FINAL-SURVIVAL.md](./FINAL-SURVIVAL.md) for all recipes, Armor values, machine rules and limitations. New checks run with `dotnet run --no-build -- --completion-test`; controlled CPU/state profiling uses `--completion-performance-test`. The existing `--self-test`, `--graphics-test` and gameplay benchmarks include the new systems.
 
 Install a .NET SDK that supports the project's existing `net9.0` target and a graphics driver with OpenGL support. The project retains its original MonoGame DesktopGL packages and allows major runtime roll-forward.
 
@@ -56,7 +66,7 @@ Selecting **Massive** displays a compact performance notice on the creation scre
 
 Valid Y coordinates are 0-127; X/Z are zero through width/depth minus one. All indexing, boundaries, chunk bounds, metadata and F3 values use these dimensions. Massive worlds require substantially more RAM/GPU memory than raw storage alone; use a 64-bit environment. There is no chunk streaming or new render-distance setting.
 
-Choose **Create New World**, enter a name and optionally a signed 32-bit seed. Blank seeds are randomized. The same seed/size produces the same complete world. [TerrainGenerator.cs](./Worlds/TerrainGenerator.cs) combines broad 280-block hills, 110-block variation and restrained 44-block detail in global coordinates. Natural land heights are clamped to **Y=63-114**, with most terrain near Y=88 and gentle neighboring gradients. Grass covers 3-5 dirt layers, deeper stone and one complete bedrock layer at Y=0. Water beds may extend below 63. No caves are generated; underground ores are described below.
+Choose **Create New World**, enter a name and optionally a signed 32-bit seed. Blank seeds are randomized. The same seed/size produces the same complete world. [TerrainGenerator.cs](./Worlds/TerrainGenerator.cs) combines broad 280-block hills, 110-block variation and restrained 44-block detail in global coordinates. Natural land heights are clamped to **Y=63-114**, with most terrain near Y=88 and gentle neighboring gradients. Grass covers 3-5 dirt layers, deeper stone and one complete bedrock layer at Y=0. Water beds may extend below 63. New worlds include branching narrow caves, occasional entrances, protected low Lava pools and a modest exposed-ore bonus; existing saved terrain is never regenerated.
 
 [World.CreateNew](./Worlds/World.cs) generates terrain, water features, then [WorldDecorator.cs](./Worlds/WorldDecorator.cs) adds trees and vegetation. Their existing per-area seeded density, varying 4-6-block trunks, 5 x 5 canopy limits, clearance checks and spawn clearing scale across all sizes. Submerged beds do not support vegetation. All generation changes apply only to new worlds. Loading restores saved bytes without running generation.
 
@@ -114,14 +124,14 @@ Production saves use the per-user `Environment.SpecialFolder.LocalApplicationDat
 
 Each world has an independent generated directory ID. Display names are metadata, never paths; blank names, control characters, path separators, and invalid path characters are rejected. Names can contain up to 48 UTF-16 characters. Two worlds may share a display name. Saves are kept outside the source repository and build output. Management validates GUIDs and direct-child paths; symbolic links/junctions in save paths are rejected, and deletion checks descendants without following links. Directories are never renamed or migrated. No duplication or import/export UI is implemented.
 
-### Binary format, version 9
+### Binary format, version 10
 
 [WorldSerializer.cs](./Persistence/WorldSerializer.cs) uses little-endian fields and no compression. Each save contains 8, 32, 128, or 512 MiB of block data, depending on size, plus its header, inventory, dropped items, and checksum:
 
 | Field | Representation |
 | --- | --- |
 | Signature | Four ASCII bytes: `MDSM` |
-| Format version | 32-bit integer, currently 9; versions 1-8 remain readable |
+| Format version | 32-bit integer, currently 10; versions 1-9 remain readable |
 | Dimensions | Three 32-bit integers: X/Z=256, 512, 1024, or 2048; Y=128. Legacy Y=64 is supported only for widths 256/512 |
 | World seed | Signed 32-bit integer |
 | World name | 32-bit UTF-8 byte length, then UTF-8 bytes |
@@ -150,6 +160,7 @@ Each world has an independent generated directory ID. Display names are metadata
 | Natural leaves | 32-bit count and sparse 32-bit cell keys; player-placed Leaves are absent |
 | Vegetation timers | Two counted lists (leaf decay, saplings), each entry a 32-bit cell key and 64-bit remaining gameplay seconds |
 | Sheared sheep | Count, then non-pig mob-array index and 64-bit remaining wool-regrowth seconds |
+| Version-10 survival state | Precise health; four Armor stacks; sparse structure orientation/open/support data; crop timers and pending hydration; animal age/love/cooldowns/bred flags; hostile poses/health; hostile-projectile ownership indices |
 | Checksum | SHA-256 of all preceding bytes, 32 bytes |
 
 Version 9 adds sparse natural-Leaf ownership, pending decay/growth deadlines, and sheared-Sheep regrowth state after the unchanged version-8 extension. All block/item IDs remain stable: new Sapling block/item=31, Apple=284, Shears=285, Cooked Porkchop=286. Older formats 1–8 and supported legacy height migration remain readable. Leaves in older saves are conservatively treated as player-placed/non-decaying because provenance was not stored; no terrain is changed or regenerated. Their inventories retain all item quantities, including stacked-food migration. Save paths, streamed block IO, checksums, atomic replacement, and GPU mesh residency are unchanged. Save/exit's **World Saved** menu message now expires after **8 seconds** of menu update time.
@@ -323,7 +334,7 @@ Furnaces continue while any inventory-style interface is open, including when th
 
 ## Bow and arrows
 
-Hold **RMB** with a Bow selected to draw (up to one second), then release to fire. The HUD shows draw power. A valid release consumes exactly one Arrow from the inventory/hotbar; no ammunition means no drawing and no shot. Arrow crafting uses Flint above Stick above Feather to make four; White Wool makes two String, enabling Bows without hostile mobs. Bows are nonstackable, with 384 uses.
+Hold **RMB** with a Bow selected to draw (up to one second), then release to fire. The HUD shows draw power. A valid release consumes exactly one Arrow from the inventory/hotbar; no ammunition means no drawing and no shot. Arrow crafting uses Flint above Stick above Feather to make four; Spiders provide String; four String in a 2×2 square craft White Wool. The former Wool-to-String recipe is removed. Bows are nonstackable, with 384 uses.
 
 Arrows follow the camera aim and gravity, use swept block/mob collision, and deal 1-5 damage depending on power. They never target the player. A mob impact removes the projectile and charges exactly one use to the originating Bow's stable identity, even after storage/drop/slot changes; a missing/broken Bow is never replaced with another instance. Misses and releases do not wear the Bow. Arrows despawn on block impact, finite bounds or after 12 gameplay seconds, with at most 256 active. Active flights persist through saving/loading. Menus cancel unfinished drawing; player combat and arrow motion remain suspended there. No retrieval, critical hits or special arrows are added.
 
@@ -403,7 +414,7 @@ Gameplay now uses [SDL_GetRelativeMouseState](https://wiki.libsdl.org/SDL2/SDL_G
 
 Block interaction reaches six blocks from the camera. Each RMB press attempts one placement. Placement requires an empty cell inside the world; solid blocks cannot overlap the player's body. Raycasts target a plant's voxel cell, rather than individual visible texels or crossed planes. Movement includes gravity, solid-block collision, and sliding along walls; diagonal movement has the same speed as forward movement. Collision and raycasts operate in world coordinates across chunk seams.
 
-Block edits, health, collected inventory, and uncollected items persist together. Infinite terrain, armor, and advanced lighting are not implemented.
+Block edits, health, collected inventory, and uncollected items persist together. Infinite terrain and a lighting engine are not implemented.
 
 ## Code layout
 

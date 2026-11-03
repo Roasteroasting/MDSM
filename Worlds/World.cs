@@ -3,7 +3,7 @@ using Microsoft.Xna.Framework;
 
 namespace MDSM.Worlds;
 
-public sealed class World
+public sealed partial class World
 {
     public const int Height = 128;
     public WorldSize Size { get; }
@@ -20,6 +20,7 @@ public sealed class World
     public int Seed { get; }
     public int Revision { get; private set; }
     public FluidSimulation Fluids { get; }
+    public FluidSimulation LavaFlow { get; }
     public FallingBlockSimulation Gravity { get; }
     public BlockEntities Containers { get; }
     public VegetationSimulation Vegetation { get; }
@@ -36,9 +37,11 @@ public sealed class World
     internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        Farming=new FarmingSimulation(this);
         Vegetation=new VegetationSimulation(this);
         Containers=new BlockEntities(this);
         Fluids = new FluidSimulation(this);
+        LavaFlow=new FluidSimulation(this,true);
         Gravity = new FallingBlockSimulation(this);
         _ = size.Width(); // Validate before allocating storage.
         Size = size;
@@ -64,13 +67,17 @@ public sealed class World
         progress?.Invoke("CARVING PONDS, RIVERS AND LAKES");
         var water = new LakeGenerator(seed); water.Generate(world); world.GeneratedWaterFeatures = water.Counts;
         world.GeneratedLakes = new System.Collections.Generic.List<NaturalLake>(water.Lakes);
+        progress?.Invoke("CARVING CAVES AND LAVA POOLS");
+        world.GeneratedCaves=CaveGenerator.Generate(world,water.Footprints);
         progress?.Invoke("PLACING TREES AND VEGETATION");
         new WorldDecorator(seed).Decorate(world);
         progress?.Invoke("PLACING COAL, IRON AND DIAMONDS");
         UndergroundDeposits.Generate(world);
         world.GeneratedOres=OreGenerator.Generate(world);
+        world.GeneratedCaves=world.GeneratedCaves with {ExposedOres=CaveGenerator.ExposedOres(world)};
         progress?.Invoke("INITIALIZING WATER");
         world.Fluids.Initialize();
+        world.LavaFlow.Initialize();
         return world;
     }
 
@@ -101,6 +108,7 @@ public sealed class World
     {
         if (!Contains(x, y, z) || !Blocks.IsDefined(block)
             || block==BlockType.Sapling && !Vegetation.CanPlant
+            || !CanDetailChange(new(x,y,z),GetBlock(x,y,z),block)
             || GetBlock(x, y, z) == block || !Containers.CanChange(new Point3(x,y,z),block))
             return false;
 
@@ -111,6 +119,7 @@ public sealed class World
         chunk.SetBlock(localX, y, localZ, block);
         Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
+        DetailChanged(new Point3(x,y,z),previous,block);
         // Air/fluid both expose terrain faces; changing a flow level only invalidates water.
         bool terrainChanged = !(previous == BlockType.Air || Water.IsWater(previous))
             || !(block == BlockType.Air || Water.IsWater(block));
@@ -126,9 +135,12 @@ public sealed class World
         // Shared water corners also depend on diagonally adjacent chunks.
         for (int cz = chunkZ - (localZ == 0 ? 1 : 0); cz <= chunkZ + (localZ == Chunk.Size - 1 ? 1 : 0); cz++)
         for (int cx = chunkX - (localX == 0 ? 1 : 0); cx <= chunkX + (localX == Chunk.Size - 1 ? 1 : 0); cx++)
-            if ((uint)cx < ChunksX && (uint)cz < ChunksZ) GetChunk(cx, cz).MarkWaterDirty();
+            if ((uint)cx < ChunksX && (uint)cz < ChunksZ)
+            {GetChunk(cx, cz).MarkWaterDirty();if(Lava.IsLava(previous)||Lava.IsLava(block))GetChunk(cx,cz).MarkDirty();}
         Revision++;
         Fluids.Changed(new Point3(x, y, z), previous, block);
+        LavaFlow.Changed(new Point3(x,y,z),previous,block);
+        if(Lava.Fluid(block))ResolveFluidContact(new Point3(x,y,z));
         Gravity.Changed(x, z, previous, block);
         if (!Blocks.SupportsPlant(block,GetBlock(x,y+1,z)) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
             SetBlock(x, y + 1, z, BlockType.Air);
@@ -176,11 +188,11 @@ public sealed class World
 
     public bool IntersectsSolid(BoundingBox bounds)
     {
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
-        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
+        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)-1); y <= Math.Min(Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
         for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
-            if (IsSolid(x, y, z) && Overlaps(bounds, Bounds(new Point3(x, y, z))))
-                return true;
+        {int count=BlockBoxes(new(x,y,z),boxes,true);for(int i=0;i<count;i++)if(Overlaps(bounds,boxes[i]))return true;}
 
         return false;
     }

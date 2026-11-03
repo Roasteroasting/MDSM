@@ -50,7 +50,7 @@ internal static class ProgressionChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length==31,"Recipe registration count wrong.");
+        Require(CraftingRecipes.All.Length==79,"Recipe registration count wrong.");
         ItemId P=Block(BlockType.WoodenPlanks),C=Block(BlockType.Cobblestone),S=Items.Stick,T=Items.String;
         void Check(int w,int h,ItemId result,int quantity,params ItemId[] cells)
         {
@@ -77,7 +77,7 @@ internal static class ProgressionChecks
         Check(1,1,P,4,Block(BlockType.WoodLog));Check(1,2,S,4,P,P);
         Check(2,2,Block(BlockType.CraftingTable),1,P,P,P,P);
         Check(3,3,Block(BlockType.Chest),1,P,P,P,P,default,P,P,P,P);Check(3,3,Block(BlockType.Furnace),1,C,C,C,C,default,C,C,C,C);
-        Check(1,3,Items.Arrow,4,Items.Flint,S,Items.Feather);Check(1,1,T,2,Block(BlockType.WhiteWool));
+        Check(1,3,Items.Arrow,4,Items.Flint,S,Items.Feather);Check(2,2,Block(BlockType.WhiteWool),1,T,T,T,T);
         Check(3,3,Items.Bow,1,default,S,T,S,default,T,default,S,T);Check(3,3,Items.Bow,1,T,S,default,T,default,S,T,S,default);
         for(int tier=1;tier<=4;tier++)
         {
@@ -259,7 +259,7 @@ internal static class ProgressionChecks
             }
             Require(counts[0]>counts[1] && counts[1]>counts[2]*3 && counts[2]>100 && crossings>10,"Ore distribution or seams failed.");
             Require(veins==world.GeneratedOres.Veins && counts[0]==world.GeneratedOres.Coal && counts[1]==world.GeneratedOres.Iron && counts[2]==world.GeneratedOres.Diamond,"Reported ore counts differ from blocks.");
-            var second=new World(seed,WorldSize.Small,false);new TerrainGenerator(seed).Generate(second);OreGenerator.Generate(second);
+            var second=World.CreateNew(seed,WorldSize.Small);
             foreach(var chunk in world.Chunks)for(int y=4;y<=60;y++)for(int z=0;z<16;z++)for(int x=0;x<16;x++)
             {var block=chunk.GetBlock(x,y,z);if(block is BlockType.CoalOre or BlockType.IronOre or BlockType.DiamondOre)
                 Require(second.GetBlock(chunk.OriginX+x,y,chunk.OriginZ+z)==block,"Ore generation is not deterministic in unaffected underground Stone.");}

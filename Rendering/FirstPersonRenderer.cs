@@ -18,7 +18,7 @@ internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId It
         ItemStack stack = inventory.Selected;
         if (!stack.IsEmpty && Items.IsSprite(stack.Item) && !Items.TryGetBlock(stack.Item,out _)) return new(ViewModelKind.Sprite, stack.Item);
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)) return new(ViewModelKind.Hidden, default);
-        return new(Blocks.Get(block).Shape == BlockShape.Cross ? ViewModelKind.Plant : ViewModelKind.Cube, stack.Item);
+        return new(Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch ? ViewModelKind.Plant : ViewModelKind.Cube, stack.Item);
     }
 }
 

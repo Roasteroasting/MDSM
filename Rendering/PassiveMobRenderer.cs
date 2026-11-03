@@ -10,7 +10,7 @@ namespace MDSM.Rendering;
 internal sealed class PassiveMobRenderer : IDisposable
 {
     private readonly GraphicsDevice _device;
-    private readonly Texture2D[] _textures = new Texture2D[MobDefinitions.SpeciesCount];
+    private readonly Texture2D[] _textures = new Texture2D[7];
     private readonly AlphaTestEffect _effect;
     private readonly CuboidModelBuilder _builder = new(64, 16);
     private readonly BoundingFrustum _frustum = new(Matrix.Identity);
@@ -29,7 +29,7 @@ internal sealed class PassiveMobRenderer : IDisposable
             AlphaFunction = CompareFunction.GreaterEqual, ReferenceAlpha = 128,
             FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
     }
-    public void Draw(Camera camera, PassiveMobPopulation population)
+    public void Draw(Camera camera, PassiveMobPopulation population,HostilePopulation hostiles=null)
     {
         _frustum.Matrix = camera.View * camera.Projection(_device.Viewport.AspectRatio);
         BlendState blend = _device.BlendState; DepthStencilState depth = _device.DepthStencilState;
@@ -45,8 +45,10 @@ internal sealed class PassiveMobRenderer : IDisposable
                 for (int i = 0; i < population.Entities.Count; i++)
                 {
                     PassiveMob mob = population.Entities[i];
-                    if ((int)mob.Species == species && !mob.IsDead && _frustum.Intersects(mob.Bounds)) PassiveMobModels.Append(_builder, mob);
+                    if ((int)mob.Species == species && !mob.IsDead && _frustum.Intersects(mob.RenderBounds)) PassiveMobModels.Append(_builder, mob);
                 }
+                if(hostiles!=null)for(int i=0;i<hostiles.Entities.Count;i++)
+                {var mob=hostiles.Entities[i];if((int)mob.Species==species && !mob.IsDead && _frustum.Intersects(mob.RenderBounds))PassiveMobModels.Append(_builder,mob);}
                 if (_builder.Count == 0) continue;
                 if (_buffer == null || _buffer.VertexCount < _builder.Count)
                 {

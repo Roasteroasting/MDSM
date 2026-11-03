@@ -52,6 +52,11 @@ internal static class InventoryLayout
         int size = Math.Clamp((viewport.Width - 24) / 9, 16, 58);
         return new Rectangle((viewport.Width - size * 9) / 2 + slot * size, viewport.Height - size - 18, size - 2, size);
     }
+    public static Rectangle Equipment(Viewport viewport,int slot)
+    {
+        Rectangle panel=Panel(viewport);int size=SlotSize(viewport);
+        int small=size*3/4;return new(panel.Right-size-12,panel.Y+24+slot*small,small-2,small-2);
+    }
 }
 
 internal static class ItemIcons
@@ -118,6 +123,8 @@ internal sealed class InventoryScreen : IDisposable
                 return;
             }
         CraftingGrid crafting = session.Crafting;BlockContainer container=session.ActiveContainer;
+        if(container==null && crafting.Width==2)for(int slot=0;slot<4;slot++)if(InventoryLayout.Equipment(viewport,slot).Contains(mouse.Position))
+        {interaction.Inventory.ClickEquipment(slot,interaction,right && !left);Message="";return;}
         if(container!=null)
         {
             for(int slot=0;slot<container.SlotCount;slot++)if(InventoryLayout.ContainerSlot(viewport,container.Block,slot).Contains(mouse.Position))
@@ -154,11 +161,12 @@ internal sealed class InventoryScreen : IDisposable
         Fill(new Rectangle(arrow.X, arrow.Center.Y - 1, arrow.Width - 3, 3), Color.LightGray);
         for (int i = 0; i < 5; i++) Fill(new Rectangle(arrow.Right - 5 + i, arrow.Center.Y - 4 + i, 1, 9 - i * 2), Color.LightGray);
         DrawSlot(crafting.Preview, InventoryLayout.Output(viewport, crafting.Width), mouse, false);
+        if(crafting.Width==2)for(int slot=0;slot<4;slot++)DrawSlot(interaction.Inventory.Equipped(slot),InventoryLayout.Equipment(viewport,slot),mouse,false);
         }
         else
         {
             for(int slot=0;slot<container.SlotCount;slot++)DrawSlot(container[slot],InventoryLayout.ContainerSlot(viewport,container.Block,slot),mouse,false);
-            if(container.Block==BlockType.Furnace)
+            if(Smelting.Machine(container.Block))
             {
                 int size=InventoryLayout.SlotSize(viewport);Rectangle input=InventoryLayout.ContainerSlot(viewport,container.Block,0),output=InventoryLayout.ContainerSlot(viewport,container.Block,2);
                 var progress=new Rectangle(input.Right+size/2,output.Center.Y-4,Math.Max(4,output.Left-input.Right-size),8);

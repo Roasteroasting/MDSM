@@ -19,6 +19,8 @@ public sealed class PassiveMobPopulation
     private readonly int[] _living = new int[MobDefinitions.SpeciesCount];
     private readonly int[] _targets = new int[MobDefinitions.SpeciesCount];
     private readonly List<MobRespawnState> _pending = new();
+    private readonly Dictionary<Point3,List<PassiveMob>> _breedingCells=new();
+    private bool _breedingActive;
     public IReadOnlyList<PassiveMob> Entities => _mobs;
     public IReadOnlyList<MobRespawnState> PendingRespawns => _pending;
     public int LastSpawnAttempts { get; private set; }
@@ -31,6 +33,7 @@ public sealed class PassiveMobPopulation
         _respawnRandom = new Random(unchecked(world.Seed ^ 0x5253504E));
         foreach (MobState state in saved) AddSaved(state);
         RestorePopulation(population);
+        foreach(var mob in _mobs)if(mob.LoveSeconds>0)_breedingActive=true;
     }
     public PassiveMobPopulation(World world, ReadOnlySpan<PigState> pigs, ReadOnlySpan<MobState> others, MobPopulationState population = null) : this(world)
     {
@@ -42,6 +45,7 @@ public sealed class PassiveMobPopulation
             AddSaved(state);
         }
         RestorePopulation(population);
+        foreach(var mob in _mobs)if(mob.LoveSeconds>0)_breedingActive=true;
     }
     private void RestorePopulation(MobPopulationState state)
     {
@@ -57,7 +61,7 @@ public sealed class PassiveMobPopulation
         if (_mobs.Count >= MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
         Validate(state, _world.Size);
         _mobs.Add(new PassiveMob(state, _random.Next()));
-        _living[(int)state.Species]++;
+        if(!state.Bred)_living[(int)state.Species]++;
     }
 
     public static MobState[] Generate(World world) => Generate(world, null);
@@ -95,7 +99,7 @@ public sealed class PassiveMobPopulation
         MobDefinition definition = MobDefinitions.Get(species);
         BoundingBox bounds = PassiveMob.BoundsAt(species, feet);
         if (world.GetBlock(x, y, z) != BlockType.Grass || feet.Y + definition.Height > World.Height
-            || world.IntersectsSolid(bounds) || Water.Intersects(world, bounds)) return false;
+            || world.IntersectsSolid(bounds) || Water.Intersects(world, bounds) || Lava.Intersects(world,bounds)) return false;
         for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
             if (world.GetBlock(x + dx, y, z + dz) != BlockType.Grass) return false;
         return true;
@@ -103,7 +107,23 @@ public sealed class PassiveMobPopulation
     public void Update(float elapsed, Vector3? playerPosition = null, BoundingBox? playerBounds = null, DroppedItems items = null)
     {
         if (!float.IsFinite(elapsed) || elapsed <= 0) return;
-        foreach (PassiveMob mob in _mobs) mob.Update(_world, elapsed);
+        foreach (PassiveMob mob in _mobs)
+        {
+            Vector3? direction=null;
+            if(mob.LoveSeconds>0)
+            {
+                PassiveMob partner=Partner(mob);if(partner!=null)direction=partner.Position-mob.Position;
+            }
+            if(!playerPosition.HasValue || Vector3.DistanceSquared(mob.Position,playerPosition.Value)<=32*32)mob.Update(_world,elapsed,direction);
+            else mob.TickLife(elapsed);
+        }
+        if(_breedingActive && (_breedTick+=elapsed)>=.5)
+        {
+            _breedTick%=.5;foreach(var list in _breedingCells.Values)list.Clear();_breedingActive=false;
+            foreach(var mob in _mobs)if(mob.LoveSeconds>0)
+            {_breedingActive=true;Point3 key=BreedingCell(mob.Position);if(!_breedingCells.TryGetValue(key,out var list))_breedingCells[key]=list=new();list.Add(mob);}
+            Breed();
+        }
         LastSpawnAttempts = 0;
         for (int i = _pending.Count - 1; i >= 0; i--)
         {
@@ -117,7 +137,7 @@ public sealed class PassiveMobPopulation
     }
     private bool TryReplace(MobSpecies species, Vector3 player, BoundingBox? playerBounds, DroppedItems items)
     {
-        if (_living[(int)species] >= _targets[(int)species]) return false;
+        if (_living[(int)species] >= _targets[(int)species] || _mobs.Count>=MaximumMobs) return false;
         int attempts = 0;
         while (LastSpawnAttempts < MaximumSpawnAttemptsPerUpdate)
         {
@@ -150,7 +170,7 @@ public sealed class PassiveMobPopulation
         if (mob == null || mob.IsDead || !_mobs.Contains(mob) || damage<=0) return false;
         if(damage>=mob.Health)
         {
-            int count=mob.Species==MobSpecies.Sheep && mob.Sheared?0:_random.Next(1,mob.Definition.MaximumDrop+1);
+            int count=mob.Baby || mob.Species==MobSpecies.Sheep && mob.Sheared?0:_random.Next(1,mob.Definition.MaximumDrop+1);
             int limit=Items.StackLimit(mob.Definition.Drop),entities=(count+limit-1)/limit;
             if(!items.CanSpawn(entities))return false;
             while(count>0){int take=Math.Min(count,limit);items.TrySpawn(new ItemStack(mob.Definition.Drop,take),mob.Position+Vector3.Up*.25f,.35f);count-=take;}
@@ -158,14 +178,14 @@ public sealed class PassiveMobPopulation
         mob.Damage(damage, mob.Position - attacker);
         if (mob.IsDead && _mobs.Remove(mob))
         {
-            _living[(int)mob.Species]--;
-            _pending.Add(new MobRespawnState(mob.Species, MinimumRespawnSeconds + _respawnRandom.NextDouble() * (MaximumRespawnSeconds - MinimumRespawnSeconds)));
+            if(!mob.Bred){_living[(int)mob.Species]--;
+            _pending.Add(new MobRespawnState(mob.Species, MinimumRespawnSeconds + _respawnRandom.NextDouble() * (MaximumRespawnSeconds - MinimumRespawnSeconds)));}
         }
         return true;
     }
     public bool TryShear(PassiveMob mob,Inventory inventory,DroppedItems drops)
     {
-        if(mob==null || !_mobs.Contains(mob) || mob.IsDead || mob.Species!=MobSpecies.Sheep || mob.Sheared
+        if(mob==null || !_mobs.Contains(mob) || mob.IsDead || mob.Baby || mob.Species!=MobSpecies.Sheep || mob.Sheared
             || inventory.Selected.Item!=Items.Shears || !drops.CanSpawn(1))return false;
         int count=_random.Next(1,5);
         if(!drops.TrySpawn(new ItemStack(Items.FromBlock(BlockType.WhiteWool),count),mob.Position+Vector3.Up*.4f,.7f))return false;
@@ -179,7 +199,7 @@ public sealed class PassiveMobPopulation
     {
         int count = 0; foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) count++;
         var result = new PigState[count]; int i = 0;
-        foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) result[i++] = new PigState(mob.Position, mob.Yaw, mob.Health);
+        foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) result[i++] = new PigState(mob.Position, mob.Yaw, mob.Health,mob.BabySeconds,mob.LoveSeconds,mob.BreedCooldown,mob.Bred);
         return result;
     }
     public MobState[] CaptureOthers()
@@ -191,7 +211,7 @@ public sealed class PassiveMobPopulation
     }
     public static void Validate(MobState state, WorldSize size)
     {
-        if (!MobDefinitions.IsDefined(state.Species)) throw new InvalidDataException("Invalid mob species.");
+        if (!MobDefinitions.IsDefined(state.Species) || (int)state.Species>=4) throw new InvalidDataException("Invalid passive mob species.");
         MobDefinition d = MobDefinitions.Get(state.Species); Vector3 p = state.Position;
         if (!float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z)
             || p.X < d.HalfWidth || p.X > size.Width() - d.HalfWidth || p.Z < d.HalfWidth || p.Z > size.Width() - d.HalfWidth
@@ -199,5 +219,35 @@ public sealed class PassiveMobPopulation
             || state.Health < 1 || state.Health > d.MaximumHealth
             || !double.IsFinite(state.WoolSeconds) || state.WoolSeconds<0 || state.WoolSeconds>360
             || (state.Sheared ? state.Species!=MobSpecies.Sheep || state.WoolSeconds<=0 : state.WoolSeconds!=0)) throw new InvalidDataException("Save contains an invalid passive mob.");
+        if(!double.IsFinite(state.BabySeconds)||state.BabySeconds<0||state.BabySeconds>2700||!double.IsFinite(state.LoveSeconds)||state.LoveSeconds<0||state.LoveSeconds>60
+            ||!double.IsFinite(state.BreedCooldown)||state.BreedCooldown<0||state.BreedCooldown>300 || state.BabySeconds>0 && (state.LoveSeconds>0||state.Sheared))throw new InvalidDataException("Invalid animal life state.");
+    }
+    private PassiveMob Partner(PassiveMob mob)
+    {
+        Point3 key=BreedingCell(mob.Position);
+        for(int y=key.Y-1;y<=key.Y+1;y++)for(int z=key.Z-1;z<=key.Z+1;z++)for(int x=key.X-1;x<=key.X+1;x++)
+        if(_breedingCells.TryGetValue(new(x,y,z),out var list))foreach(PassiveMob candidate in list)if(candidate!=mob && !candidate.IsDead && candidate.Species==mob.Species && !candidate.Baby && candidate.LoveSeconds>0 && Vector3.DistanceSquared(candidate.Position,mob.Position)<=64)return candidate;
+        return null;
+    }
+    private static Point3 BreedingCell(Vector3 p)=>new((int)p.X/8,(int)p.Y/8,(int)p.Z/8);
+    private double _breedTick;
+    private void Breed()
+    {
+        int cap=0;foreach(int target in _targets)cap+=target;cap=Math.Min(MaximumMobs,Math.Max(32,cap*2));
+        if(_mobs.Count+_pending.Count>=cap)return;
+        for(int i=0;i<_mobs.Count;i++)
+        {
+            PassiveMob a=_mobs[i];if(a.Baby||a.LoveSeconds<=0)continue;PassiveMob b=Partner(a);
+            if(b==null || Vector3.DistanceSquared(a.Position,b.Position)>2.25f)continue;
+            Vector3 p=(a.Position+b.Position)*.5f;BoundingBox box=PassiveMob.BoundsAt(a.Species,p);
+            if(_world.IntersectsSolid(box)||Water.Intersects(_world,box)||Lava.Intersects(_world,box))continue;
+            a.Parent();b.Parent();_mobs.Add(new PassiveMob(new(a.Species,p,0,a.Definition.MaximumHealth,BabySeconds:900+_random.NextDouble()*1800,Bred:true),_random.Next()));
+            if(_mobs.Count+_pending.Count>=cap)break;
+        }
+    }
+    public bool Feed(PassiveMob mob,Inventory inventory)
+    {
+        if(mob==null||!_mobs.Contains(mob)||mob.Baby||mob.IsDead||mob.LoveSeconds>0||mob.BreedCooldown>0||inventory.Selected.Item!=Items.Wheat)return false;
+        mob.Feed();_breedingActive=true;inventory.ConsumeSelected();return true;
     }
 }

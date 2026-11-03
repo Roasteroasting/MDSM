@@ -2,6 +2,7 @@ using System;
 using Microsoft.Xna.Framework;
 
 using MDSM.Worlds;
+using MDSM.Inventories;
 
 namespace MDSM.Gameplay;
 
@@ -19,7 +20,11 @@ public sealed class Player
     private float _verticalSpeed;
     private Vector3 _horizontalSpeed;
     private readonly FallTracker _fall = new();
-    public int Health { get; private set; }
+    private double _health;
+    private readonly Inventory _equipment;
+    private double _invulnerable,_lavaSeconds;
+    public double HealthValue=>_health;
+    public int Health => (int)Math.Ceiling(_health);
     public bool IsDead => Health == 0;
     public bool Crouching { get; private set; }
 
@@ -29,22 +34,31 @@ public sealed class Player
     public bool Grounded { get; private set; }
     public BoundingBox Bounds => BoundsAt(Position);
 
-    public Player(Vector3 spawn, int health = MaximumHealth)
+    public Player(Vector3 spawn, int health = MaximumHealth,Inventory equipment=null)
     {
         if (health < 0 || health > MaximumHealth) throw new ArgumentOutOfRangeException(nameof(health));
-        Position = spawn; Health = health; _fall.Reset(spawn.Y);
+        Position = spawn; _health = health;_equipment=equipment; _fall.Reset(spawn.Y);
     }
 
     public void ApplyDamage(int amount)
     {
         if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
-        Health -= Math.Min(Health, amount);
-        if (IsDead) StopMovement();
+        TakeDamage(amount,false);
     }
+    public bool TakeDamage(double amount,bool invulnerability=true,bool bypassArmor=false)
+    {
+        if(!double.IsFinite(amount)||amount<0)throw new ArgumentOutOfRangeException(nameof(amount));
+        if(amount==0 || IsDead || invulnerability && _invulnerable>0)return false;
+        double reduction=bypassArmor?0:Math.Min(26,_equipment?.ArmorPoints??0)*.03;
+        _health=Math.Max(0,_health-amount*(1-reduction));if(!bypassArmor)_equipment?.WearArmor();
+        if(invulnerability)_invulnerable=.5;if(IsDead)StopMovement();return true;
+    }
+    internal void RestoreFraction(double health)
+    {if(!double.IsFinite(health)||health<0||health>20)throw new ArgumentException("Invalid fractional health.");_health=health;}
     public void RestoreHealth(int amount)
     {
         if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
-        Health += Math.Min(MaximumHealth - Health, amount);
+        _health += Math.Min(MaximumHealth - _health, amount);
     }
     public void StopMovement()
     {
@@ -59,6 +73,10 @@ public sealed class Player
 
         Crouching = crouch;
         float dt = MathF.Min(elapsedSeconds, 0.1f);
+        _invulnerable=Math.Max(0,_invulnerable-elapsedSeconds);
+        if(Lava.Intersects(world,Bounds))
+        { _lavaSeconds+=elapsedSeconds;if(_lavaSeconds>=1){_lavaSeconds%=1;TakeDamage(2);} }
+        else _lavaSeconds=0;
         movement.Y = 0;
         if (movement.LengthSquared() > 1)
             movement.Normalize();
@@ -102,7 +120,7 @@ public sealed class Player
         }
 
         if (swimming || Water.Intersects(world, Bounds)) _fall.Reset(Position.Y);
-        else if (Grounded) ApplyDamage(_fall.Land(Position.Y));
+        else if (Grounded) TakeDamage(_fall.Land(Position.Y));
 
         if (!IsDead && Position.Y < -16)
             MoveToSpawn(world); // Existing void recovery grants no healing or new damage type.
@@ -138,19 +156,21 @@ public sealed class Player
         else next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
 
         BoundingBox bounds = BoundsAt(next);
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         bool collided = false;
         for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
-        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
+        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)-1); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
         for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
-            if (!world.IsSolid(x, y, z) || !World.Overlaps(bounds, World.Bounds(new Point3(x, y, z))))
-                continue;
-
+            int count=world.BlockBoxes(new(x,y,z),boxes,true);for(int box=0;box<count;box++)
+            {
+            BoundingBox obstacle=boxes[box];if(!World.Overlaps(bounds,obstacle))continue;
             collided = true;
             // Clamp the moving axis to the nearest blocking face; retain motion on other axes.
-            if (axis == 0) next.X = amount > 0 ? MathF.Min(next.X, x - HalfWidth) : MathF.Max(next.X, x + 1 + HalfWidth);
-            else if (axis == 1) next.Y = amount > 0 ? MathF.Min(next.Y, y - BodyHeight) : MathF.Max(next.Y, y + 1);
-            else next.Z = amount > 0 ? MathF.Min(next.Z, z - HalfWidth) : MathF.Max(next.Z, z + 1 + HalfWidth);
+            if (axis == 0) next.X = amount > 0 ? MathF.Min(next.X, obstacle.Min.X - HalfWidth) : MathF.Max(next.X, obstacle.Max.X + HalfWidth);
+            else if (axis == 1) next.Y = amount > 0 ? MathF.Min(next.Y, obstacle.Min.Y - BodyHeight) : MathF.Max(next.Y, obstacle.Max.Y);
+            else next.Z = amount > 0 ? MathF.Min(next.Z, obstacle.Min.Z - HalfWidth) : MathF.Max(next.Z, obstacle.Max.Z + HalfWidth);
+            }
         }
 
         Position = next;
@@ -159,7 +179,7 @@ public sealed class Player
 
     public void Respawn(World world)
     {
-        Health = MaximumHealth;
+        _health = MaximumHealth;_invulnerable=_lavaSeconds=0;
         MoveToSpawn(world);
     }
 

@@ -206,6 +206,7 @@ internal static class InterfaceGraphicsChecks
                 case 1:
                     ProgressionGraphicsChecks.Verify(this);
                     RefinementGraphicsChecks.Verify(this);
+                    CompletionGraphicsChecks.Verify(this);
                     VerifyCrafting();
                     VerifyMassiveNotice();
                     Click(2); Require(State == GameState.Settings, "Main menu Settings entry failed.");

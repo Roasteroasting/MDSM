@@ -100,7 +100,7 @@ internal static class PigGraphicsChecks
                     for (int i = 0; i < 1200 && Session.Mobs.Entities.Count > 0; i++)
                     {
                         Vector3 delta = Session.Mobs.Entities[0].Position + Vector3.Up * 0.5f - Session.Camera.Position;
-                        Session.Camera.RestoreOrientation(MathF.Atan2(-delta.X, -delta.Z), MathF.Atan2(delta.Y, new Vector2(delta.X, delta.Z).Length()));
+                        Session.Camera.RestoreOrientation(MathF.Atan2(delta.X, -delta.Z), MathF.Atan2(delta.Y, new Vector2(delta.X, delta.Z).Length()));
                         Input(left: true, seconds: (float)SimulationClock.StepSeconds);
                     }
                     Require(Session.Mobs.Entities.Count == 0 && Session.Items.Entities.Count is 1 or 2

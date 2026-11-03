@@ -69,7 +69,7 @@ public static class CraftingRecipes
         Add(3,3,Items.FromBlock(BlockType.Chest),1,P,P,P,P,default,P,P,P,P);
         Add(3,3,Items.FromBlock(BlockType.Furnace),1,C,C,C,C,default,C,C,C,C);
         Add(1,3,Items.Arrow,4,Items.Flint,S,Items.Feather);
-        Add(1,1,T,2,Items.FromBlock(BlockType.WhiteWool));
+        Add(2,2,Items.FromBlock(BlockType.WhiteWool),1,T,T,T,T);
         Add(3,3,Items.Bow,1,default,S,T,S,default,T,default,S,T);
         Add(3,3,Items.Bow,1,T,S,default,T,default,S,T,S,default);
         Add(2,2,Items.Shears,1,Items.IronIngot,default,default,Items.IronIngot);
@@ -82,6 +82,40 @@ public static class CraftingRecipes
             Add(2,3,Items.Tool((ToolTier)tier,ToolKind.Axe),1,M,M,S,M,S,default);
             Add(1,3,Items.Tool((ToolTier)tier,ToolKind.Sword),1,M,M,S);
             Add(1,3,Items.Tool((ToolTier)tier,ToolKind.Shovel),1,M,S,S);
+        }
+        ItemId O=Items.FromBlock(BlockType.Obsidian),L=Items.FromBlock(BlockType.WoodLog),F=Items.FromBlock(BlockType.Furnace),I=Items.IronIngot;
+        Add(3,1,Items.Bread,1,Items.Wheat,Items.Wheat,Items.Wheat);
+        Add(3,2,Items.FromBlock(BlockType.Fence),3,P,S,P,P,S,P);
+        Add(3,2,Items.FromBlock(BlockType.FenceGate),1,S,P,S,S,P,S);
+        Add(2,3,Items.FromBlock(BlockType.Door),3,P,P,P,P,P,P);
+        Add(1,2,Items.FromBlock(BlockType.Torch),4,Items.Coal,S);Add(1,2,Items.FromBlock(BlockType.Torch),4,Items.Charcoal,S);
+        Add(3,2,Items.Bucket,1,I,default,I,default,I,default);
+        Add(3,3,Items.FromBlock(BlockType.Smoker),1,default,L,default,L,F,L,default,L,default);
+        Add(3,3,Items.FromBlock(BlockType.BlastFurnace),1,I,I,I,I,F,I,C,C,C);
+        void MaterialRecipe(int w,int h,ItemId output,ItemId material,params char[] cells)
+        {
+            var pattern=new CraftingIngredient[cells.Length];
+            for(int j=0;j<cells.Length;j++)if(cells[j]!='.')pattern[j]=new(cells[j]=='S'?S:material,cells[j]=='S'?1:material==O?6:1);
+            recipes.Add(new(w,h,pattern,new ItemStack(output,1)));
+        }
+        for(int tier=1;tier<=5;tier++)
+        {
+            ItemId M=tier==1?P:tier==2?C:tier==3?I:tier==4?Items.Diamond:O;
+            MaterialRecipe(2,3,Items.Tool((ToolTier)tier,ToolKind.Hoe),M,"MM.S.S".ToCharArray());
+            MaterialRecipe(2,3,Items.Tool((ToolTier)tier,ToolKind.Hoe),M,"MMS.S.".ToCharArray());
+        }
+        MaterialRecipe(3,3,Items.Tool(ToolTier.Obsidian,ToolKind.Pickaxe),O,"MMM.S..S.".ToCharArray());
+        MaterialRecipe(2,3,Items.Tool(ToolTier.Obsidian,ToolKind.Axe),O,"MMMS.S".ToCharArray());
+        MaterialRecipe(2,3,Items.Tool(ToolTier.Obsidian,ToolKind.Axe),O,"MMSMS.".ToCharArray());
+        MaterialRecipe(1,3,Items.Tool(ToolTier.Obsidian,ToolKind.Sword),O,"MMS".ToCharArray());
+        MaterialRecipe(1,3,Items.Tool(ToolTier.Obsidian,ToolKind.Shovel),O,"MSS".ToCharArray());
+        for(int material=0;material<6;material++)
+        {
+            ItemId M=material==0?Items.Leather:material==1?P:material==2?C:material==3?I:material==4?Items.Diamond:O;
+            MaterialRecipe(3,2,Items.Armor((ArmorMaterial)material,ArmorSlot.Helmet),M,"MMMM.M".ToCharArray());
+            MaterialRecipe(3,3,Items.Armor((ArmorMaterial)material,ArmorSlot.Chestplate),M,"M.MMMMMMM".ToCharArray());
+            MaterialRecipe(3,3,Items.Armor((ArmorMaterial)material,ArmorSlot.Leggings),M,"MMMM.MM.M".ToCharArray());
+            MaterialRecipe(3,2,Items.Armor((ArmorMaterial)material,ArmorSlot.Boots),M,"M.MM.M".ToCharArray());
         }
         return recipes.ToArray();
     }

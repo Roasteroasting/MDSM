@@ -25,10 +25,13 @@ public enum BlockType : byte
     WaterFlow5 = 19, WaterFlow6 = 20, WaterFlow7 = 21, WaterFalling = 22,
     WhiteWool = 23,
     CraftingTable = 24,
-    Glass = 25, IronOre = 26, CoalOre = 27, DiamondOre = 28, Furnace = 29, Chest = 30, Sapling = 31
+    Glass = 25, IronOre = 26, CoalOre = 27, DiamondOre = 28, Furnace = 29, Chest = 30, Sapling = 31,
+    Obsidian=32,FarmlandDry=33,FarmlandWet=34,Wheat1=35,Wheat2=36,Wheat3=37,Wheat4=38,Wheat5=39,Wheat6=40,Wheat7=41,
+    Fence=42,FenceGate=43,Door=44,DoorUpper=45,Torch=46,Smoker=47,BlastFurnace=48,
+    LavaSource=49,LavaFlow1=50,LavaFlow2=51,LavaFlow3=52,LavaFlow4=53,LavaFlow5=54,LavaFlow6=55,LavaFlow7=56,LavaFalling=57
 }
 
-public enum BlockShape { None, Cube, Cross, Fluid }
+public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
@@ -74,14 +77,41 @@ public static class Blocks
         new("DIAMOND ORE",true,true,BlockShape.Cube,21,MiningSeconds:4.5f),
         new("FURNACE",true,true,BlockShape.Cube,23,22,22,MiningSeconds:5.25f,FrontTile:24),
         new("CHEST",true,true,BlockShape.Cube,26,25,25,MiningSeconds:3.75f,FrontTile:27),
-        new("SAPLING",false,false,BlockShape.Cross,28,MiningSeconds:0)
+        new("SAPLING",false,false,BlockShape.Cross,28,MiningSeconds:0),
+        new("OBSIDIAN",true,true,BlockShape.Cube,29,MiningSeconds:30),
+        new("DRY FARMLAND",true,false,BlockShape.Farmland,2,30,2,Placeable:false,MiningSeconds:1.25f),
+        new("WET FARMLAND",true,false,BlockShape.Farmland,2,31,2,Placeable:false,MiningSeconds:1.25f),
+        new("WHEAT",false,false,BlockShape.Cross,32,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Cross,33,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Cross,34,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Cross,35,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Cross,36,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Cross,37,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Cross,38,Placeable:false,MiningSeconds:0),
+        new("FENCE",true,false,BlockShape.Fence,39,MiningSeconds:2),
+        new("FENCE GATE",true,false,BlockShape.Gate,40,MiningSeconds:2),
+        new("WOODEN DOOR",true,false,BlockShape.Door,41,MiningSeconds:3),
+        new("WOODEN DOOR",true,false,BlockShape.Door,42,Placeable:false,MiningSeconds:3),
+        new("TORCH",false,false,BlockShape.Torch,43,MiningSeconds:0),
+        new("SMOKER",true,true,BlockShape.Cube,45,44,44,MiningSeconds:5.25f,FrontTile:46),
+        new("BLAST FURNACE",true,true,BlockShape.Cube,48,47,47,MiningSeconds:5.25f,FrontTile:49),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1)
     };
     private static readonly BlockType[] Palette =
     {
         BlockType.Grass, BlockType.Dirt, BlockType.Stone, BlockType.WoodLog, BlockType.Leaves,
         BlockType.WoodenPlanks, BlockType.Cobblestone, BlockType.Sand, BlockType.Gravel,
         BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable,
-        BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest,BlockType.Sapling
+        BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest,BlockType.Sapling,
+        BlockType.Obsidian,BlockType.Fence,BlockType.FenceGate,BlockType.Door,BlockType.Torch,BlockType.Smoker,BlockType.BlastFurnace
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
     public static bool IsDefined(BlockType block) => (int)block < Definitions.Length;
@@ -92,6 +122,8 @@ public static class Blocks
     public static bool IsPlaceable(BlockType block) => Get(block).Placeable;
     public static int Tile(BlockType block, Vector3 normal) => Get(block).Tile(normal);
     public static bool SupportsPlant(BlockType block) => block == BlockType.Grass;
-    public static bool SupportsPlant(BlockType ground,BlockType plant) => SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
+    public static bool SupportsPlant(BlockType ground,BlockType plant) => Crop(plant)?Soil(ground):SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
+    public static bool Soil(BlockType block)=>block is BlockType.FarmlandDry or BlockType.FarmlandWet;
+    public static bool Crop(BlockType block)=>block is >=BlockType.Wheat1 and <=BlockType.Wheat7;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
 }

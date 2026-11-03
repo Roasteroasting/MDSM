@@ -147,9 +147,10 @@ internal static class PresentationChecks
         {
             inventory.SetSlot(0, new ItemStack(Items.FromBlock(block), 1));
             selection = ViewModelSelection.Select(GameState.Playing, inventory);
-            bool plant = Blocks.Get(block).Shape == BlockShape.Cross;
+            bool plant = Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch;
             Require(selection.Item == inventory.Selected.Item && selection.Kind == (plant ? ViewModelKind.Plant : ViewModelKind.Cube), "Held item ignores inventory/shape.");
-            geometry.Build(selection); Require(geometry.VertexCount == (plant ? 24 : 36), "Held geometry changed representation.");
+            geometry.Build(selection);int expected=plant?24:block==BlockType.Door?72:block is BlockType.Fence or BlockType.FenceGate?108:36;
+            Require(geometry.VertexCount == expected, "Held geometry changed representation.");
             float minZ = float.MaxValue, maxZ = float.MinValue;
             for (int i = 0; i < geometry.VertexCount; i++)
             {
@@ -157,7 +158,8 @@ internal static class PresentationChecks
                 Require(vertex.TextureCoordinate.X > 0 && vertex.TextureCoordinate.X < 1 && vertex.TextureCoordinate.Y > 0 && vertex.TextureCoordinate.Y < 1,
                     "Model UVs escaped atlas texel centers.");
             }
-            Require(maxZ - minZ > 0.5f, "Held cube/plant became a flat HUD icon.");
+            float minimumDepth=Blocks.Get(block).Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door?.1f:.5f;
+            Require(maxZ - minZ > minimumDepth, "Held cube/plant became a flat HUD icon.");
         }
         inventory.SelectedSlot = 1; Require(ViewModelSelection.Select(GameState.Playing, inventory).Kind == ViewModelKind.Hidden, "Empty slot did not hide the held item.");
         geometry.Build(ViewModelSelection.Select(GameState.Playing, inventory)); Require(geometry.VertexCount == 0, "Empty slot retained item geometry.");

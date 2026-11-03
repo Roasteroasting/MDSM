@@ -161,6 +161,8 @@ public sealed class WorldRenderer : IDisposable
     private void DrawSelection(BlockHit hit, Camera camera, float miningProgress)
     {
         BoundingBox box = World.Bounds(hit.Cell);
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];int count=_world.BlockBoxes(hit.Cell,boxes);
+        if(count>0){box=boxes[0];for(int i=1;i<count;i++)box=BoundingBox.CreateMerged(box,boxes[i]);}
         box.Min -= new Vector3(0.003f);
         box.Max += new Vector3(0.003f);
         box.GetCorners(_corners);

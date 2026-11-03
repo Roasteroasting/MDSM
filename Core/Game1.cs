@@ -216,20 +216,24 @@ public class Game1 : Game
             if (player.IsDead) { EnterDeath(); return; }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
             world.Fluids.Update(dt);
+            world.LavaFlow.Update(dt);world.Farming.Update(dt);
             world.Gravity.Update(dt);
             world.Containers.Update(dt);
             world.Vegetation.Update(dt,_session.Items);
             _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items);
             _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
-                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory);
-            _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear);
+                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory,_session.Hostiles);
+            _session.Hostiles.Update(dt,player,_session.Projectiles,_session.Mobs);
+            _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear,_session.Hostiles,player);
             _session.Items.Update(player, _session.Inventory, dt);
+            if(player.IsDead){EnterDeath();return;}
         }
         _fallingInterpolation = _simulationClock.Fraction;
         string equipmentNotice=_session.TakeEquipmentNotice();
         if(equipmentNotice!=null){_notice=equipmentNotice;_noticeSeconds=3;}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         // Entity interaction takes priority; holding shears never falls through to placement/food.
+        if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released && SurvivalInteractions.BeforeBlocks(_session))return;
         if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released
             && _session.Inventory.Selected.Item==Items.Shears)
         {
@@ -248,9 +252,11 @@ public class Game1 : Game
         }
         if (!_awaitMouseRelease)
         {
+            if(mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released && SurvivalInteractions.Use(_session,_selection))return;
             _session.Bow.Update(_session.Inventory,_session.Projectiles,camera.Position,camera.Forward,mouse.RightButton==ButtonState.Pressed,(float)gameTime.ElapsedGameTime.TotalSeconds);
             ItemUse.TryConsume(player, _session.Inventory, mouse.RightButton == ButtonState.Pressed,
                 _previousMouse.RightButton == ButtonState.Pressed);
+            if(player.IsDead){EnterDeath();return;}
         }
         if (_selection is BlockHit hit)
         {
@@ -259,7 +265,7 @@ public class Game1 : Game
                 BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
-        if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward) != null) _selection = null;
+        if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward,hostiles:_session.Hostiles) != null) _selection = null;
     }
 
     private void HandleMenuAction(MenuAction action)
@@ -590,10 +596,10 @@ public class Game1 : Game
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);
-            _mobRenderer.Draw(_session.Camera, _session.Mobs);
+            _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles);
             _projectileRenderer.Draw(_session.Camera,_session.Projectiles);
             _renderer.DrawWater(_session.Camera);
-            _diagnostics.Mobs = _session.Mobs.Entities.Count; _diagnostics.Items = _session.Items.Entities.Count;
+            _diagnostics.Mobs = _session.Mobs.Entities.Count+_session.Hostiles.Entities.Count; _diagnostics.Items = _session.Items.Entities.Count;
             _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
             _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);

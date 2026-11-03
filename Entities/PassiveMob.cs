@@ -8,8 +8,8 @@ public sealed class PassiveMob
 {
     public MobSpecies Species { get; }
     public MobDefinition Definition { get; }
-    private float HalfWidth => Definition.HalfWidth;
-    private float Height => Definition.Height;
+    private float HalfWidth => !Baby?Definition.HalfWidth:Species switch{MobSpecies.Cow=>.32f,MobSpecies.Chicken=>.2f,_=>.3f};
+    private float Height => !Baby?Definition.Height:Species switch{MobSpecies.Pig=>.8f,MobSpecies.Cow=>1.2f,MobSpecies.Sheep=>.95f,_=>.65f};
     public Vector3 Position { get; private set; }
     public float Yaw { get; private set; }
     public int Health { get; private set; }
@@ -20,7 +20,20 @@ public sealed class PassiveMob
     public float HurtSeconds { get; private set; }
     public bool Sheared { get; private set; }
     public double WoolSeconds { get; private set; }
-    public BoundingBox Bounds => BoundsAt(Species, Position);
+    public double BabySeconds { get; private set; }
+    public double LoveSeconds { get; private set; }
+    public double BreedCooldown { get; private set; }
+    public bool Bred { get; }
+    public bool Baby=>BabySeconds>0;
+    public BoundingBox Bounds => new(Position+new Vector3(-HalfWidth,0,-HalfWidth),Position+new Vector3(HalfWidth,Height,HalfWidth));
+    public BoundingBox RenderBounds
+    {
+        get
+        {
+            float radius=Baby?Species==MobSpecies.Cow?.65f:Species==MobSpecies.Chicken?.4f:.6f:Species switch{MobSpecies.Cow=>1f,MobSpecies.Pig=>.85f,MobSpecies.Sheep=>.8f,MobSpecies.Chicken=>.6f,_=>1f};
+            return new(Position+new Vector3(-radius,0,-radius),Position+new Vector3(radius,Height,radius));
+        }
+    }
     private readonly Random _random;
     private Vector3 _velocity;
     private float _decisionSeconds;
@@ -37,14 +50,27 @@ public sealed class PassiveMob
         Definition = MobDefinitions.Get(Species);
         Position = state.Position; Yaw = state.Yaw; Health = state.Health;
         Sheared=state.Sheared;WoolSeconds=state.WoolSeconds;
+        BabySeconds=state.BabySeconds;LoveSeconds=state.LoveSeconds;BreedCooldown=state.BreedCooldown;Bred=state.Bred;
         _random = new Random(aiSeed);
         _decisionSeconds = 0.5f + _random.NextSingle() * 2;
     }
 
-    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds);
+    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds,BabySeconds,LoveSeconds,BreedCooldown,Bred);
+    internal void Feed(){LoveSeconds=60;}
+    internal void Parent(){LoveSeconds=0;BreedCooldown=300;}
+    internal void Lunge(Vector3 direction)
+    {if(!Grounded)return;direction.Y=0;if(direction.LengthSquared()>.001f)direction.Normalize();_velocity=direction*2+Vector3.Up*5;}
+    internal void Face(Vector3 direction){if(direction.X*direction.X+direction.Z*direction.Z>.001f)Yaw=MathF.Atan2(-direction.X,-direction.Z);}
+    internal void TickLife(float elapsed)
+    {
+        if(!float.IsFinite(elapsed)||elapsed<=0)return;
+        BabySeconds=Math.Max(0,BabySeconds-elapsed);LoveSeconds=Math.Max(0,LoveSeconds-elapsed);BreedCooldown=Math.Max(0,BreedCooldown-elapsed);
+        if(Sheared){WoolSeconds=Math.Max(0,WoolSeconds-elapsed);if(WoolSeconds<=0)Sheared=false;}
+        HurtSeconds=Math.Max(0,HurtSeconds-elapsed);
+    }
     internal bool Shear()
     {
-        if(Species!=MobSpecies.Sheep || Sheared || IsDead)return false;
+        if(Species!=MobSpecies.Sheep || Sheared || IsDead || Baby)return false;
         Sheared=true;WoolSeconds=180+_random.NextDouble()*180;return true;
     }
     public static BoundingBox BoundsAt(MobSpecies species, Vector3 feet)
@@ -66,12 +92,11 @@ public sealed class PassiveMob
         // Neither the idle/wander decision nor facing changes in response to damage.
     }
 
-    internal void Update(World world, float elapsed)
+    internal void Update(World world, float elapsed,Vector3? steering=null,bool life=true)
     {
         if (IsDead || !float.IsFinite(elapsed) || elapsed <= 0) return;
         float dt = Math.Min(elapsed, 0.1f);
-        if(Sheared){WoolSeconds=Math.Max(0,WoolSeconds-elapsed);if(WoolSeconds<=0)Sheared=false;}
-        HurtSeconds = Math.Max(0, HurtSeconds - dt);
+        if(life)TickLife(elapsed);
         _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
         if ((_decisionSeconds -= dt) <= 0)
         {
@@ -81,6 +106,11 @@ public sealed class PassiveMob
         }
         Vector3 before = Position;
         Vector3 walking = _wandering ? new Vector3(-MathF.Sin(Yaw), 0, -MathF.Cos(Yaw)) * Definition.WalkSpeed : Vector3.Zero;
+        if(steering.HasValue)
+        {
+            Vector3 desired=steering.Value;desired.Y=0;if(desired.LengthSquared()>1)desired.Normalize();walking=desired*Definition.WalkSpeed;
+            if(desired.LengthSquared()>.001f)Yaw=MathF.Atan2(-desired.X,-desired.Z);
+        }
         bool swimming = Water.Intersects(world, Bounds);
         if (swimming)
         {
@@ -105,7 +135,9 @@ public sealed class PassiveMob
                 step.Y = 0; _velocity.Y = 0;
             }
         }
-        if (blocked && _wandering)
+        if(blocked && steering.HasValue && Grounded)_velocity.Y=Species==MobSpecies.Spider?5:6.5f;
+        if(blocked && Species==MobSpecies.Spider && steering.HasValue)_velocity.Y=3;
+        if (blocked && _wandering && !steering.HasValue)
         {
             // A small swimming hop lets wandering pigs leave a one-block shore instead of getting trapped.
             if (swimming) { _velocity.Y = Math.Max(_velocity.Y, 4.5f); _shoreHopSeconds = 0.7f; }
@@ -126,19 +158,23 @@ public sealed class PassiveMob
         if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, world.Width - HalfWidth);
         else if (axis == 2) next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
         else next.Y += amount;
-        BoundingBox bounds = BoundsAt(Species, next);
+        BoundingBox bounds = new(next+new Vector3(-HalfWidth,0,-HalfWidth),next+new Vector3(HalfWidth,Height,HalfWidth));
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         CacheCollisionCells(world, bounds);
         bool blocked = axis == 0 ? next.X != Position.X + amount : axis == 2 && next.Z != Position.Z + amount;
         for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
-        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
+        for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)-1); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
         for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
-            if (!_solidCells[((y - _minY) * _cacheDepth + z - _minZ) * _cacheWidth + x - _minX]
-                || !World.Overlaps(bounds, World.Bounds(new Point3(x, y, z)))) continue;
+            if (!_solidCells[((y - _minY) * _cacheDepth + z - _minZ) * _cacheWidth + x - _minX]) continue;
+            int count=world.BlockBoxes(new(x,y,z),boxes,true);for(int box=0;box<count;box++)
+            {
+            BoundingBox obstacle=boxes[box];if(!World.Overlaps(bounds,obstacle))continue;
             blocked = true;
-            if (axis == 0) next.X = amount > 0 ? Math.Min(next.X, x - HalfWidth) : Math.Max(next.X, x + 1 + HalfWidth);
-            else if (axis == 2) next.Z = amount > 0 ? Math.Min(next.Z, z - HalfWidth) : Math.Max(next.Z, z + 1 + HalfWidth);
-            else next.Y = amount > 0 ? Math.Min(next.Y, y - Height) : Math.Max(next.Y, y + 1);
+            if (axis == 0) next.X = amount > 0 ? Math.Min(next.X, obstacle.Min.X - HalfWidth) : Math.Max(next.X, obstacle.Max.X + HalfWidth);
+            else if (axis == 2) next.Z = amount > 0 ? Math.Min(next.Z, obstacle.Min.Z - HalfWidth) : Math.Max(next.Z, obstacle.Max.Z + HalfWidth);
+            else next.Y = amount > 0 ? Math.Min(next.Y, obstacle.Min.Y - Height) : Math.Max(next.Y, obstacle.Max.Y);
+            }
         }
         Position = next;
         return blocked;
@@ -146,12 +182,12 @@ public sealed class PassiveMob
 
     private void CacheCollisionCells(World world, BoundingBox bounds)
     {
-        int minX = (int)MathF.Floor(bounds.Min.X), minY = (int)MathF.Floor(bounds.Min.Y), minZ = (int)MathF.Floor(bounds.Min.Z);
+        int minX = (int)MathF.Floor(bounds.Min.X), minY = (int)MathF.Floor(bounds.Min.Y)-1, minZ = (int)MathF.Floor(bounds.Min.Z);
         int maxX = (int)MathF.Floor(bounds.Max.X), maxY = (int)MathF.Floor(bounds.Max.Y), maxZ = (int)MathF.Floor(bounds.Max.Z);
         if (_cacheRevision == world.Revision && minX >= _minX && minY >= _minY && minZ >= _minZ
             && maxX <= _maxX && maxY <= _maxY && maxZ <= _maxZ) return;
         _minX = (int)MathF.Floor(bounds.Min.X - .25f); _maxX = (int)MathF.Floor(bounds.Max.X + .25f);
-        _minY = (int)MathF.Floor(bounds.Min.Y - .25f); _maxY = (int)MathF.Floor(bounds.Max.Y + .25f);
+        _minY = (int)MathF.Floor(bounds.Min.Y)-1; _maxY = (int)MathF.Floor(bounds.Max.Y + .25f);
         _minZ = (int)MathF.Floor(bounds.Min.Z - .25f); _maxZ = (int)MathF.Floor(bounds.Max.Z + .25f);
         _cacheWidth = _maxX - _minX + 1; _cacheDepth = _maxZ - _minZ + 1;
         int i = 0;

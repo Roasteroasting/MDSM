@@ -104,6 +104,7 @@ public sealed class DroppedItems
                 Math.Clamp(position.Z, DroppedItem.Radius, _world.Depth - DroppedItem.Radius)), 0, pickupDelay,stack.Durability,stack.InstanceId);
         Validate(state, _world.Size);
         if (!CanSpawn()) throw new InvalidOperationException("Dropped-item limit reached.");
+        if(!Items.LavaResistant(item) && Lava.Intersects(_world,new BoundingBox(state.Position-new Vector3(DroppedItem.Radius),state.Position+new Vector3(DroppedItem.Radius))))return;
         _items.Add(new DroppedItem(state));
     }
 
@@ -111,7 +112,9 @@ public sealed class DroppedItems
     {
         if (stack.IsEmpty || !CanSpawn()) return false;
         var state=new DroppedItemState(stack.Item,stack.Count,position,0,pickupDelay,stack.Durability,stack.InstanceId);
-        Validate(state,_world.Size);_items.Add(new DroppedItem(state));
+        Validate(state,_world.Size);
+        if(!Items.LavaResistant(stack.Item) && Lava.Intersects(_world,new BoundingBox(position-new Vector3(DroppedItem.Radius),position+new Vector3(DroppedItem.Radius))))return true;
+        _items.Add(new DroppedItem(state));
         return true;
     }
     public bool Wear(Guid id)
@@ -126,8 +129,14 @@ public sealed class DroppedItems
         float dt = Math.Min(elapsed, 0.1f);
         for (int i = 0; i < _items.Count; i++)
         {
+            DroppedItem current=_items[i];
+            if(!Items.LavaResistant(current.Item) && Lava.Intersects(_world,new BoundingBox(current.Position-new Vector3(DroppedItem.Radius),current.Position+new Vector3(DroppedItem.Radius))))
+            {_items[i]=_items[^1];_items.RemoveAt(_items.Count-1);i--;continue;}
             _items[i].PickupDelay = Math.Max(0, _items[i].PickupDelay - elapsed);
             _items[i].Update(_world, dt);
+            current=_items[i];
+            if(!Items.LavaResistant(current.Item) && Lava.Intersects(_world,new BoundingBox(current.Position-new Vector3(DroppedItem.Radius),current.Position+new Vector3(DroppedItem.Radius))))
+            {_items[i]=_items[^1];_items.RemoveAt(_items.Count-1);i--;}
         }
         _mergeElapsed += elapsed;
         if (_mergeElapsed >= 0.25f)

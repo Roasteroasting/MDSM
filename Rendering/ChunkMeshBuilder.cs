@@ -27,17 +27,29 @@ internal sealed class ChunkMeshBuilder
         float size = DroppedItem.Radius * 2;
         Vector3 origin = center - new Vector3(DroppedItem.Radius);
         BlockDefinition definition = Blocks.Get(block);
-        if (definition.Shape == BlockShape.Cross)
+        if (definition.Shape is BlockShape.Cross or BlockShape.Torch)
         {
             AddQuad(origin, origin + new Vector3(size, 0, size), origin + new Vector3(size, size, size),
                 origin + new Vector3(0, size, 0), definition.SideTile, Color.White, true);
             AddQuad(origin + new Vector3(size, 0, 0), origin + new Vector3(0, 0, size),
                 origin + new Vector3(0, size, size), origin + new Vector3(size, size, 0), definition.SideTile, Color.White, true);
         }
+        else if(definition.Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door)
+        {
+            if(definition.Shape==BlockShape.Door)
+            {Box(Vector3.Zero,new(1,1,.1875f),definition.SideTile);Box(new(0,1,0),new(1,2,.1875f),42);}
+            else
+            {
+                Box(new(.375f,0,.375f),new(.625f,1,.625f),7);
+                Box(new(0,.3f,.4375f),new(1,.45f,.5625f),7);Box(new(0,.7f,.4375f),new(1,.85f,.5625f),7);
+            }
+        }
         else
             foreach (Face face in Faces)
                 AddQuad(origin + face.A * size, origin + face.B * size, origin + face.C * size, origin + face.D * size,
                     definition.Tile(face.Normal), new Color(new Vector3(face.Shade)), false);
+        void Box(Vector3 min,Vector3 max,int tile)
+        {foreach(Face face in Faces)AddQuad(origin+(min+face.A*(max-min))*size,origin+(min+face.B*(max-min))*size,origin+(min+face.C*(max-min))*size,origin+(min+face.D*(max-min))*size,tile,new Color(new Vector3(face.Shade)),false);}
     }
 
     // Corners follow the geometric normal; emitted triangles use XNA's clockwise front faces.
@@ -60,17 +72,39 @@ internal sealed class ChunkMeshBuilder
     public void Build(World world, Chunk chunk)
     {
         VertexCount = 0;
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         for (int y = 0; y < World.Height; y++)
         for (int z = 0; z < Chunk.Size; z++)
         for (int x = 0; x < Chunk.Size; x++)
         {
             BlockType block = chunk.GetBlock(x, y, z);
             BlockDefinition definition = Blocks.Get(block);
+            if(Lava.IsLava(block))
+            {
+                Vector3 at=new(chunk.OriginX+x,y,chunk.OriginZ+z);
+                foreach(Face face in Faces)
+                {
+                    BlockType adjacent=world.GetBlock((int)at.X+face.Offset.X,y+face.Offset.Y,(int)at.Z+face.Offset.Z);
+                    if(Lava.IsLava(adjacent)||Blocks.IsOpaque(adjacent))continue;
+                    AddQuad(LavaVertex(world,at,face.A),LavaVertex(world,at,face.B),LavaVertex(world,at,face.C),LavaVertex(world,at,face.D),50,Color.White,false);
+                }
+                continue;
+            }
             if (!definition.Renderable || definition.Shape == BlockShape.Fluid)
                 continue;
 
             int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = new(worldX, y, worldZ);
+            if(definition.Shape is BlockShape.Farmland or BlockShape.Fence or BlockShape.Gate or BlockShape.Door or BlockShape.Torch)
+            {
+                int count=world.BlockBoxes(new(worldX,y,worldZ),boxes);
+                for(int i=0;i<count;i++)foreach(Face face in Faces)
+                {
+                    Vector3 size=boxes[i].Max-boxes[i].Min;
+                    AddQuad(boxes[i].Min+face.A*size,boxes[i].Min+face.B*size,boxes[i].Min+face.C*size,boxes[i].Min+face.D*size,definition.Tile(face.Normal),new Color(new Vector3(face.Shade)),false);
+                }
+                continue;
+            }
             if (definition.Shape == BlockShape.Cross)
             {
                 AddQuad(position + new Vector3(0.1f, 0, 0.1f), position + new Vector3(0.9f, 0, 0.9f),
@@ -111,6 +145,8 @@ internal sealed class ChunkMeshBuilder
             _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = d;
         }
     }
+    private static Vector3 LavaVertex(World world,Vector3 at,Vector3 point)
+        =>at+new Vector3(point.X,point.Y==0?0:Lava.CornerHeight(world,(int)(at.X+point.X),(int)at.Y,(int)(at.Z+point.Z)),point.Z);
 
     private readonly record struct Face(Point3 Offset, Vector3 Normal, float Shade, Vector3 A, Vector3 B, Vector3 C, Vector3 D);
 }

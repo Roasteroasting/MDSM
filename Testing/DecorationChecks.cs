@@ -203,7 +203,7 @@ internal static class DecorationChecks
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
         WorldSave restored = WorldSerializer.Read(oldFile);
-        Require(WorldSerializer.FormatVersion == 9 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
+        Require(WorldSerializer.FormatVersion == 10 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
         for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");
@@ -213,7 +213,8 @@ internal static class DecorationChecks
         {
             int x = (int)block * 3;
             restored.World.SetBlock(x, 59, 16, BlockType.Grass);
-            restored.World.SetBlock(x, 60, 16, block);
+            if(block==BlockType.Door)Require(restored.World.PlaceStructure(new(x,60,16),block,0,new(0,-1,0),new MDSM.Gameplay.Player(new Vector3(200,60,200)).Bounds),"Door fixture placement failed.");
+            else restored.World.SetBlock(x, 60, 16, block);
         }
         // Loading must retain even canopies wider than the new generation rule.
         restored.World.SetBlock(48, 55, 48, BlockType.WoodLog);

@@ -17,7 +17,7 @@ internal static class RefinementChecks
 {
     internal static readonly (string Name,Action Check)[] All={
         ("Underground Stone-only deposits, supports, determinism and exact ore priority",Deposits),
-        ("Bounded leaf support, localized gradual decay, placed leaves and no tall-grass loot",Leaves),
+        ("Bounded leaf support, localized gradual decay, placed leaves and valid vegetation loot",Leaves),
         ("Independent leaf loot probabilities and multiple simultaneous drops",Loot),
         ("Sapling placement, timed growth, blocked retries and natural tree leaves",Saplings),
         ("Shears recipes, efficient leaf harvesting and successful-use durability",Shears),
@@ -83,7 +83,7 @@ internal static class RefinementChecks
         Require(allocated==0,"Idle vegetation allocates per simulation tick.");
         Console.WriteLine($"  Idle vegetation: {allocated} bytes / 10000 ticks.");
         world.SetBlock(25,1,25,BlockType.TallGrass);var mining=new MiningController();int before=items.Entities.Count;
-        Require(mining.Update(world,items,new BlockHit(new(25,1,25),default,1),true,0) && items.Entities.Count==before,"Tall grass dropped items.");
+        Require(mining.Update(world,items,new BlockHit(new(25,1,25),default,1),true,0) && items.Entities.Count<=before+1 && items.Entities.Skip(before).All(d=>d.Item==Items.WheatSeeds),"Tall grass produced invalid vegetation loot.");
         // Cutting one branch schedules other natural leaves, without a global scan.
         world.SetBlock(30,10,30,BlockType.WoodLog);for(int x=31;x<=34;x++)world.SetGeneratedBlock(x,10,30,BlockType.Leaves);
         world.SetBlock(31,10,30,BlockType.Air);world.Vegetation.Update(45,items);

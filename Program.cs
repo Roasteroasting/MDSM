@@ -1,4 +1,12 @@
-if (System.Array.Exists(args, argument => argument == "--interface-graphics-test"))
+if (System.Array.Exists(args, argument => argument == "--completion-performance-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.CompletionPerformanceChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--completion-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.CompletionChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--interface-graphics-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.InterfaceGraphicsChecks.Run();
 }
@@ -20,7 +28,7 @@ else if (System.Array.Exists(args, argument => argument == "--lake-test"))
 }
 else if (args.Length >= 2 && args[0] == "--gameplay-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1], out var gameplaySize))
 {
-    System.Environment.ExitCode = MDSM.Testing.GameplayPerformanceChecks.Run(gameplaySize);
+    System.Environment.ExitCode = MDSM.Testing.GameplayPerformanceChecks.Run(gameplaySize,System.Array.Exists(args,a=>a=="--cave"));
 }
 else if (args.Length >= 2 && args[0] == "--performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1], out var benchmarkSize))
 {

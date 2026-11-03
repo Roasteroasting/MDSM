@@ -17,6 +17,10 @@ public sealed class Chunk
     public int Revision { get; private set; }
     public int WaterRevision { get; private set; }
     public int WaterCount { get; private set; }
+    public int LavaCount { get; private set; }
+    public int StructureCount { get; private set; }
+    public int CropCount { get; private set; }
+    private static bool Special(BlockType block)=>block is BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.Torch;
     public BoundingBox Bounds { get; }
     internal System.ReadOnlySpan<byte> Blocks => _blocks;
 
@@ -35,8 +39,14 @@ public sealed class Chunk
     {
         int index = (y * Size + z) * Size + x;
         if (Water.IsWater((BlockType)_blocks[index])) WaterCount--;
+        if (Lava.IsLava((BlockType)_blocks[index])) LavaCount--;
+        if(Special((BlockType)_blocks[index]))StructureCount--;
+        if(MDSM.Worlds.Blocks.Crop((BlockType)_blocks[index]))CropCount--;
         _blocks[index] = (byte)block;
         if (Water.IsWater(block)) WaterCount++;
+        if (Lava.IsLava(block)) LavaCount++;
+        if(Special(block))StructureCount++;
+        if(MDSM.Worlds.Blocks.Crop(block))CropCount++;
         int column = z * Size + x;
         if (MDSM.Worlds.Blocks.IsSolid(block)) _solidTops[column] = (byte)Math.Max(_solidTops[column], y + 1);
         else if (_solidTops[column] == y + 1)
@@ -56,12 +66,20 @@ public sealed class Chunk
         blocks.CopyTo(_blocks);
         _blocks.AsSpan(blocks.Length).Clear();
         WaterCount = 0;
+        LavaCount=0;
+        StructureCount=0;
+        CropCount=0;
         Array.Clear(_solidTops);
-        for (int y = 0; y < storedHeight; y++) for (int z = 0; z < Size; z++) for (int x = 0; x < Size; x++)
+        Span<int> counts=stackalloc int[256];counts.Clear();
+        foreach(byte block in blocks)counts[block]++;
+        for(int i=(int)BlockType.WaterSource;i<=(int)BlockType.WaterFalling;i++)WaterCount+=counts[i];
+        for(int i=(int)BlockType.LavaSource;i<=(int)BlockType.LavaFalling;i++)LavaCount+=counts[i];
+        for(int i=(int)BlockType.Wheat1;i<=(int)BlockType.Wheat7;i++)CropCount+=counts[i];
+        StructureCount=counts[(int)BlockType.FenceGate]+counts[(int)BlockType.Door]+counts[(int)BlockType.DoorUpper]+counts[(int)BlockType.Torch];
+        for (int z = 0; z < Size; z++) for (int x = 0; x < Size; x++)
         {
-            BlockType block = GetBlock(x,y,z);
-            if (Water.IsWater(block)) WaterCount++;
-            if (MDSM.Worlds.Blocks.IsSolid(block)) _solidTops[z*Size+x] = (byte)(y+1);
+            int y=storedHeight-1;while(y>=0 && !MDSM.Worlds.Blocks.IsSolid(GetBlock(x,y,z)))y--;
+            _solidTops[z*Size+x]=(byte)(y+1);
         }
         MarkWaterDirty();
         MarkDirty();

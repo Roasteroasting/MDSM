@@ -10,11 +10,11 @@ public sealed record MobPopulationState(int[] Targets, MobRespawnState[] Pending
 {
     public static int[] LivingCounts(ReadOnlySpan<PigState> pigs, ReadOnlySpan<MobState> others)
     {
-        var counts = new int[MobDefinitions.SpeciesCount]; counts[(int)MobSpecies.Pig] = pigs.Length;
+        var counts = new int[MobDefinitions.SpeciesCount];foreach(var pig in pigs)if(!pig.Bred)counts[0]++;
         foreach (MobState mob in others)
         {
-            if (!MobDefinitions.IsDefined(mob.Species) || mob.Species == MobSpecies.Pig) throw new InvalidDataException("Invalid non-pig species.");
-            counts[(int)mob.Species]++;
+            if (!MobDefinitions.IsDefined(mob.Species) || mob.Species == MobSpecies.Pig || (int)mob.Species>=4) throw new InvalidDataException("Invalid non-pig species.");
+            if(!mob.Bred)counts[(int)mob.Species]++;
         }
         return counts;
     }
