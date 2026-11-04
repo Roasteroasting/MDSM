@@ -5,6 +5,7 @@ using MDSM.Entities;
 using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Worlds;
+using MDSM.Core;
 
 namespace MDSM.Persistence;
 
@@ -45,6 +46,15 @@ public sealed class GameSession
     public bool UndroppedDeathItems { get; private set; }
     private string _equipmentNotice;
     public string TakeEquipmentNotice(){string notice=_equipmentNotice;_equipmentNotice=null;return notice;}
+    public void ApplySettings(GameSettings settings)
+    {
+        bool modeChanged = Player.Settings.GameMode != settings.GameMode || _appliedMode != settings.GameMode;
+        Player.Settings = settings;
+        if (modeChanged) { Player.StopMovement(); Player.Breath.Reset(); Mining.Reset(); Bow.Cancel(); Bobbing.Reset(); }
+        _appliedMode = settings.GameMode;
+        Hostiles.ApplySettings(settings);
+    }
+    private GameMode _appliedMode;
 
     public GameSession(string id, WorldSave save)
     {

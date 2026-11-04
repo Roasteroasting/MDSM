@@ -23,6 +23,8 @@ internal static class MenuInformation
         "Bow: hold Right mouse to draw; release to fire (needs arrows)",
         "Space - Jump / hold to swim upward in water",
         "Left Shift (hold) - Crouch",
+        "Creative flight: Space - Ascend / Left Shift - Descend",
+        "Left / Right Ctrl (hold) - Fly faster in Creative only",
         "E - Open / close inventory",
         "1-9 or numpad 1-9 - Select hotbar slot",
         "Mouse wheel - Down: next slot / Up: previous slot",
@@ -38,6 +40,8 @@ internal static class MenuInformation
         "Click crafting result - Craft once (cursor must have room)",
         "Armor slots: place matching Helmet / Chestplate / Leggings / Boots",
         "Left click outside panel - Drop cursor stack",
+        "Creative browser: Left click - Grant one / Shift+Left click - Full stack",
+        "Creative browser: mouse wheel - Scroll items",
         "",
         "MENUS",
         "Mouse click - Select / activate",
@@ -50,6 +54,7 @@ internal static class MenuInformation
         "FPS slider: Home / End - Minimum / maximum",
         "Uncapped FPS: Click / Space / Enter - Toggle",
         "View Bobbing: Click / Space / Enter - Toggle",
+        "Difficulty / Game Mode: Click, Left/Right, Space or Enter - Cycle",
         "Controls / About: Wheel / Up / Down / Page Up / Page Down / Home / End - Scroll"
     };
 

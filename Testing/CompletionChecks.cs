@@ -27,6 +27,8 @@ internal static class CompletionChecks
         ("Fence barriers, gate/door integrity, accurate targeting and Torch radius",Structures),
         ("Breeding pairs, cooldowns, child models, maturation and population targets",Animals),
         ("Underground hostile sampling, caps, distance/LOS, combat and loot",Hostiles),
+        ("Forward zombie shoulders and downward spider legs through turns and gait",()=>{HostileModelChecks.ZombieArms();HostileModelChecks.SpiderLegs();}),
+        ("Nearby cave-floor spawning, 16-mob cap, 2-4s cycles, bounded diagnostics and saves",HostileSpawnChecks.Verify),
         ("Furnace variants, valid recipes, double speed, bucket return and fuel parity",Machines),
         ("Version 10 complete state roundtrip and genuine version 9 compatibility",Persistence),
         ("Seeded narrow caves, protected terrain, bedrock, exposure and lava pools",Caves)};
@@ -177,17 +179,18 @@ internal static class CompletionChecks
         Check(population.Suitable(MobSpecies.Zombie,new(70,20,40),player.Position) && !population.Suitable(MobSpecies.Zombie,new(42,20,40),player.Position),"Hostile spawn distance constraints failed.");
         world.SetBlock(70,20,40,BlockType.Torch);Check(!population.Suitable(MobSpecies.Zombie,new(70,20,40),player.Position),"Torch did not prevent hostile spawning.");world.SetBlock(70,20,40,BlockType.Air);
         population.Update(1f/120,player,arrows);int health=player.Health;Check(health==17,"Zombie did not contact attack.");for(int i=0;i<20;i++)population.Update(1f/120,player,arrows);Check(player.Health==health,"Contact damage occurred every tick.");
-        var distant=new HostilePopulation(world,new[]{new MobState(MobSpecies.Zombie,new(80,20,40),0,20)});distant.Update(1,player,arrows);Check(distant.Entities[0].Position==new Vector3(80,20,40),"AI active beyond 32.");
+        var active=new HostilePopulation(world,new[]{new MobState(MobSpecies.Zombie,new(80,20,40),0,20)});active.Update(1,player,arrows);Check(active.Entities[0].Position.X<80 && active.ActiveCount==1,"AI did not activate between 32 and 64 blocks.");
+        var distant=new HostilePopulation(world,new[]{new MobState(MobSpecies.Zombie,new(110,20,40),0,20)});distant.Update(1,player,arrows);Check(distant.Entities[0].Position==new Vector3(110,20,40),"AI active beyond 64.");
         var farPlayer=new Player(new(250,20,250));distant.Update(.01f,farPlayer,arrows);Check(distant.Entities.Count==0,"Hostile did not immediately despawn beyond 128.");
         var skeleton=new HostilePopulation(world,new[]{new MobState(MobSpecies.Skeleton,new(40,20,30),0,20)});skeleton.Update(.01f,player,arrows);Check(arrows.Arrows.Count==1 && arrows.Arrows[0].Hostile,"Skeleton did not fire owned projectile.");
         var wall=new HostilePopulation(world,new[]{new MobState(MobSpecies.Skeleton,new(40,20,30),0,20)});for(int y=20;y<24;y++)world.SetBlock(40,y,35,BlockType.Stone);var blocked=new Projectiles(world);wall.Update(.01f,player,blocked);Check(blocked.Arrows.Count==0,"Skeleton shot through terrain.");
         var drops=new DroppedItems(world);foreach(MobSpecies species in new[]{MobSpecies.Zombie,MobSpecies.Skeleton,MobSpecies.Spider})
         {var group=new HostilePopulation(world,new[]{new MobState(species,new(60,20,60),0,MobDefinitions.Get(species).MaximumHealth)});var mob=group.Entities[0];int before=drops.Entities.Count;Check(group.Hit(mob,100,Vector3.Zero,drops) && !group.Hit(mob,100,Vector3.Zero,drops),"Hostile died twice.");Check(drops.Entities.Skip(before).Any(d=>d.Item==mob.Definition.Drop && d.Count is >=1 and <=4),"Guaranteed hostile loot missing.");}
-        for(int i=0;i<100;i++){population.Update(10,player,arrows);Check(population.Entities.Count<=8 && population.LastSpawnAttempts<=24,"Hostile cap/work budget exceeded.");}
+        for(int i=0;i<100;i++){population.Update(10,player,arrows);Check(population.Entities.Count<=HostilePopulation.Maximum && population.LastSpawnAttempts<=HostilePopulation.MaximumSpawnAttempts,"Hostile cap/work budget exceeded.");}
         var projectiles=new Projectiles(world);projectiles.ShootHostile(new(40,21,43),new(0,0,-18));var healthy=new Player(new(40,20,40));projectiles.Update(.2f,new PassiveMobPopulation(world),drops,_=>{},player:healthy);Check(healthy.Health==18,"Hostile projectile failed to damage player.");
         for(int y=20;y<=28;y++)for(int z=55;z<=59;z++)world.SetBlock(61,y,z,BlockType.Stone);
         var spider=new PassiveMob(new(MobSpecies.Spider,new(60,20,57),0,16),1);for(int i=0;i<300;i++)spider.Update(world,1f/120,Vector3.Right);Check(spider.Position.Y>22,"Spider did not climb a vertical wall.");
-        var capStates=Enumerable.Range(0,8).Select(i=>new MobState(MobSpecies.Zombie,new Vector3(60+i,20,70),0,20)).ToArray();var cap=new HostilePopulation(world,capStates);cap.Update(20,player,new Projectiles(world));Check(cap.Entities.Count==8 && cap.LastSpawnAttempts==0,"Full hostile population attempted more spawning.");
+        var capStates=Enumerable.Range(0,HostilePopulation.Maximum).Select(i=>new MobState(MobSpecies.Zombie,new Vector3(60+i,20,70),0,20)).ToArray();var cap=new HostilePopulation(world,capStates);cap.Update(20,player,new Projectiles(world));Check(cap.Entities.Count==HostilePopulation.Maximum && cap.LastSpawnAttempts==0,"Full hostile population attempted more spawning.");
     }
     public static void Machines()
     {

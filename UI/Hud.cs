@@ -34,7 +34,7 @@ public sealed class Hud : IDisposable
 
     public void Draw(Viewport viewport, Inventory inventory, bool captured, bool showDebug,
         Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0,
-        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0)
+        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0,bool creative=false,BreathMeter breath=null)
     {
         UpdateDebug(showDebug && visible, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds, renderer, diagnostics);
         if (!visible) return;
@@ -53,9 +53,12 @@ public sealed class Hud : IDisposable
             Text(SlotNumbers[i], bounds.X + 4, bounds.Y + 4, 1, Color.LightGray);
         }
         string name = Items.Name(inventory.Selected.Item);
-        Text(name, (width - name.Length * 12) / 2, top - (inventory.ArmorPoints>20?90:inventory.ArmorPoints>0?70:46), 2, Color.White);
-        HealthHud.Draw(_sprites, _pixel, viewport, health);
+        int nameY = top - (inventory.ArmorPoints>20?90:inventory.ArmorPoints>0?70:46);
+        if (breath?.Submerged == true && !creative) nameY = Math.Min(nameY, BreathHud.Bounds(viewport, inventory.ArmorPoints).Y - 22);
+        Text(name, (width - name.Length * 12) / 2, nameY, 2, Color.White);
+        if (!creative) HealthHud.Draw(_sprites, _pixel, viewport, health);
         ArmorHud.Draw(_sprites,_pixel,viewport,inventory.ArmorPoints);
+        if (!creative && breath?.Submerged == true) BreathHud.Draw(_sprites, _pixel, viewport, inventory.ArmorPoints, breath.Bubbles);
 
         if (captured)
         {

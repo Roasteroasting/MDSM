@@ -5,16 +5,33 @@ using Microsoft.Xna.Framework;
 using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Worlds;
+using MDSM.Core;
 
 namespace MDSM.Entities;
 
+public readonly record struct HostileSpawnSearch(int CandidateColumns, int FloorChecks, int Spawned,
+    int OutsideWorld, int Distance, int NoFloor, int Blocked, int Fluid, int Torch, int Occupied);
+
 public sealed class HostilePopulation
 {
-    public const int Maximum=8;
+    public const int Maximum = 36, MaximumSpawnAttempts = 128;
+    public const float MinimumSpawnDistance = 24, SpawnRadius = 64, ActiveRadius = 64, DespawnRadius = 128;
+    public const double MinimumSpawnSeconds = 2, MaximumSpawnSeconds = 4;
+    private enum SpawnRejection { None, OutsideWorld, Distance, NoFloor, Blocked, Fluid, Torch, Occupied }
+    private readonly int[] _rejections = new int[8];
     private sealed class Brain { public double Attack,Look,Memory,AimClock,Jump;public bool Visible;public Vector3 LastSeen,OldAim,CurrentAim; }
     private readonly World _world;private readonly List<PassiveMob> _mobs=new();private readonly Dictionary<PassiveMob,Brain> _brains=new();
     private readonly Random _random;private double _spawn=5;
     public IReadOnlyList<PassiveMob> Entities=>_mobs;
+    public int ActiveCount { get; private set; }
+    public HostileSpawnSearch LastSpawnSearch { get; private set; }
+    public double SpawnSecondsRemaining => Math.Max(0, _spawn);
+    public void ApplySettings(GameSettings settings)
+    {
+        if (settings.Difficulty == Difficulty.Peaceful) { _mobs.Clear(); _brains.Clear(); ActiveCount=0; _spawn = 5; }
+        else if (settings.GameMode == GameMode.Creative)
+            foreach (Brain brain in _brains.Values) { brain.Memory = 0; brain.Visible = false; brain.Attack = 0; }
+    }
     public int LastSpawnAttempts { get; private set; }
     public HostilePopulation(World world,MobState[] saved=null)
     {
@@ -22,20 +39,34 @@ public sealed class HostilePopulation
     }
     private void Add(MobState state){var mob=new PassiveMob(state,_random.Next());_mobs.Add(mob);_brains[mob]=new(){LastSeen=mob.Position,OldAim=mob.Position,CurrentAim=mob.Position};}
     public bool Suitable(MobSpecies species,Vector3 feet,Vector3 player)
+        => Reject(species, feet, player) == SpawnRejection.None;
+    private SpawnRejection Reject(MobSpecies species, Vector3 feet, Vector3 player)
     {
-        float distance=Vector3.DistanceSquared(feet,player);var bounds=PassiveMob.BoundsAt(species,feet);
-        return feet.Y>=2 && feet.Y<50 && distance>=24*24 && distance<=128*128 && feet.X>=2 && feet.Z>=2 && feet.X<_world.Width-2 && feet.Z<_world.Depth-2
-            && _world.IsSolid((int)feet.X,(int)feet.Y-1,(int)feet.Z) && !_world.IntersectsSolid(bounds) && !Water.Intersects(_world,bounds) && !Lava.Intersects(_world,bounds) && !_world.Torches.Protected(feet);
+        if (feet.Y<2 || feet.Y>=50 || feet.X<2 || feet.Z<2 || feet.X>=_world.Width-2 || feet.Z>=_world.Depth-2) return SpawnRejection.OutsideWorld;
+        float distance=Vector3.DistanceSquared(feet,player);
+        if (distance<MinimumSpawnDistance*MinimumSpawnDistance || distance>SpawnRadius*SpawnRadius) return SpawnRejection.Distance;
+        if (!_world.IsSolid((int)feet.X,(int)feet.Y-1,(int)feet.Z)) return SpawnRejection.NoFloor;
+        var bounds=PassiveMob.BoundsAt(species,feet);
+        if (_world.IntersectsSolid(bounds)) return SpawnRejection.Blocked;
+        if (Water.Intersects(_world,bounds) || Lava.Intersects(_world,bounds)) return SpawnRejection.Fluid;
+        if (_world.Torches.Protected(feet)) return SpawnRejection.Torch;
+        return SpawnRejection.None;
     }
     public void Update(float elapsed,Player player,Projectiles arrows,PassiveMobPopulation passive=null)
     {
-        if(!float.IsFinite(elapsed)||elapsed<=0)return;LastSpawnAttempts=0;
+        LastSpawnAttempts=0;
+        if (player.Settings.Difficulty == Difficulty.Peaceful) { ApplySettings(player.Settings); return; }
+        if(!float.IsFinite(elapsed)||elapsed<=0)return;
+        ActiveCount=0;
         for(int i=_mobs.Count-1;i>=0;i--)
         {
             PassiveMob mob=_mobs[i];float distance=Vector3.DistanceSquared(mob.Position,player.Position);
-            if(distance>128*128){_brains.Remove(mob);_mobs.RemoveAt(i);continue;}
-            if(distance>32*32){mob.TickLife(elapsed);continue;}
+            if(distance>DespawnRadius*DespawnRadius){_brains.Remove(mob);_mobs.RemoveAt(i);continue;}
+            if(distance>ActiveRadius*ActiveRadius){mob.TickLife(elapsed);continue;}
+            ActiveCount++;
             Brain brain=_brains[mob];brain.Attack=Math.Max(0,brain.Attack-elapsed);brain.Memory=Math.Max(0,brain.Memory-elapsed);brain.AimClock+=elapsed;brain.Jump=Math.Max(0,brain.Jump-elapsed);
+            if (player.Creative)
+            { brain.Memory = 0; brain.Visible = false; mob.Update(_world, elapsed, Vector3.Zero); continue; }
             if(brain.AimClock>=.5){brain.AimClock%=.5;brain.OldAim=brain.CurrentAim;brain.CurrentAim=player.Position+Vector3.Up;}
             if((brain.Look-=elapsed)<=0)
             {
@@ -63,15 +94,46 @@ public sealed class HostilePopulation
             else if(distance<(mob.Species==MobSpecies.Spider?3:2.5f))
             {if(player.TakeDamage(mob.Species==MobSpecies.Zombie?3:mob.Species==MobSpecies.Spider?2:1))brain.Attack=1.2;}
         }
-        _spawn-=elapsed;if(_spawn>0 || _mobs.Count>=Maximum)return;_spawn=4+_random.NextDouble()*5;
-        for(int attempt=0;attempt<24 && _mobs.Count<Maximum;attempt++)
+        _spawn-=elapsed;if(_spawn>1e-9 || _mobs.Count>=Maximum)return;
+        _spawn=MinimumSpawnSeconds+_random.NextDouble()*(MaximumSpawnSeconds-MinimumSpawnSeconds);
+        Array.Clear(_rejections); int floorChecks=0, spawned=0;
+        for(int attempt=0;attempt<MaximumSpawnAttempts;attempt++)
         {
             LastSpawnAttempts++;MobSpecies species=(MobSpecies)_random.Next(4,7);
-            int x=(int)player.Position.X+_random.Next(-128,129),z=(int)player.Position.Z+_random.Next(-128,129),y=_random.Next(3,50);Vector3 p=new(x+.5f,y,z+.5f);
-            if(!Suitable(species,p,player.Position))continue;bool occupied=false;foreach(var mob in _mobs)if(World.Overlaps(PassiveMob.BoundsAt(species,p),mob.Bounds))occupied=true;
-            if(passive!=null)for(int i=0;i<passive.Entities.Count;i++)if(World.Overlaps(PassiveMob.BoundsAt(species,p),passive.Entities[i].Bounds)){occupied=true;break;}
-            if(occupied)continue;Add(new(species,p,0,MobDefinitions.Get(species).MaximumHealth));break;
+            // Uniform annulus sampling avoids wasting most attempts outside the useful AI range.
+            float angle=_random.NextSingle()*MathHelper.TwoPi;
+            float radius=MathF.Sqrt(MinimumSpawnDistance*MinimumSpawnDistance+_random.NextSingle()*(SpawnRadius*SpawnRadius-MinimumSpawnDistance*MinimumSpawnDistance));
+            int x=(int)MathF.Floor(player.Position.X+MathF.Cos(angle)*radius),z=(int)MathF.Floor(player.Position.Z+MathF.Sin(angle)*radius);
+            SpawnRejection rejection=FindFloor(species,x,z,player.Position,passive,ref floorChecks,out Vector3 p);
+            if(rejection!=SpawnRejection.None){_rejections[(int)rejection]++;continue;}
+            Add(new(species,p,_random.NextSingle()*MathHelper.TwoPi-MathHelper.Pi,MobDefinitions.Get(species).MaximumHealth));
+            ActiveCount++;spawned=1;break;
         }
+        // Retain the last search, rather than clearing diagnostics on every intervening frame.
+        LastSpawnSearch=new(LastSpawnAttempts,floorChecks,spawned,_rejections[1],_rejections[2],_rejections[3],_rejections[4],_rejections[5],_rejections[6],_rejections[7]);
+    }
+    private SpawnRejection FindFloor(MobSpecies species,int x,int z,Vector3 player,PassiveMobPopulation passive,ref int checks,out Vector3 feet)
+    {
+        feet=default;
+        if(x<2 || z<2 || x>=_world.Width-2 || z>=_world.Depth-2)return SpawnRejection.OutsideWorld;
+        int preferred=Math.Clamp((int)MathF.Floor(player.Y)+_random.Next(-8,9),3,49);
+        SpawnRejection last=SpawnRejection.NoFloor;
+        // At most 47 floor samples per column, nearest the player's elevation first.
+        // No surface-height query: cave floors are below the world's surface cache.
+        for(int delta=0;delta<=46;delta++)for(int side=0;side<(delta==0?1:2);side++)
+        {
+            int y=preferred+(side==0?-delta:delta);if(y<3 || y>49)continue;
+            checks++;
+            if(!_world.IsSolid(x,y-1,z) || _world.IsSolid(x,y,z))continue;
+            Vector3 candidate=new(x+.5f,y,z+.5f);SpawnRejection reason=Reject(species,candidate,player);
+            if(reason!=SpawnRejection.None){last=reason;continue;}
+            var bounds=PassiveMob.BoundsAt(species,candidate);bool occupied=false;
+            foreach(var mob in _mobs)if(World.Overlaps(bounds,mob.Bounds)){occupied=true;break;}
+            if(!occupied && passive!=null)foreach(var mob in passive.Entities)if(World.Overlaps(bounds,mob.Bounds)){occupied=true;break;}
+            if(occupied){last=SpawnRejection.Occupied;continue;}
+            feet=candidate;return SpawnRejection.None;
+        }
+        return last;
     }
     public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems drops)
     {

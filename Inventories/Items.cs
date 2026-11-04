@@ -30,6 +30,15 @@ public static class Items
         Bucket=new(292),WaterBucket=new(293),LavaBucket=new(294);
     private static readonly ItemDefinition[] Definitions = CreateDefinitions();
     private static readonly ItemId[] SpriteItems = CreateSprites();
+    private static readonly ItemId[] Catalog = CreateCatalog();
+    public static ReadOnlySpan<ItemId> Obtainable => Catalog;
+    private static ItemId[] CreateCatalog()
+    {
+        var all = new System.Collections.Generic.List<ItemId>();
+        for (int id = 1; id < 256 + Definitions.Length; id++)
+        { var item = new ItemId((ushort)id); if (IsDefined(item)) all.Add(item); }
+        return all.ToArray();
+    }
     private static ItemDefinition[] CreateDefinitions()
     {
         var definitions = new ItemDefinition[72];

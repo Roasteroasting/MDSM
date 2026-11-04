@@ -50,7 +50,7 @@ public static class MiningRules
     public static bool Wears(ItemStack stack) => Items.Get(stack.Item).Tool is >=ToolKind.Pickaxe and <=ToolKind.Shovel;
     public static int Drops(BlockType block,ItemStack held,Random random,Span<ItemId> output)
     {
-        if(block==BlockType.TallGrass){if(random.NextDouble()>=.1)return 0;output[0]=Items.WheatSeeds;return 1;}
+        if(block==BlockType.TallGrass || Blocks.DoubleGrass(block)){if(random.NextDouble()>=(Blocks.DoubleGrass(block)?.2:.1))return 0;output[0]=Items.WheatSeeds;return 1;}
         if(Blocks.Crop(block))
         {
             int count=0;if(block==BlockType.Wheat7)output[count++]=Items.Wheat;

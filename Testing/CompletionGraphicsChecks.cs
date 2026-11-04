@@ -75,6 +75,7 @@ internal static class CompletionGraphicsChecks
         var fatal=new WorldSave(PigChecks.Flat(),"Rotten effect",new(40.5f,1,40.5f),0,0,fatalInventory,Health:1);string fatalId=store.Create(fatal);Call("BeginWorld",fatalId,fatal);Input();Right();
         var dead=Field<GameSession>("_session");Check(game.State==GameState.Death && dead.Player.IsDead && dead.Inventory.Selected.IsEmpty && dead.Items.Entities.Single().Durability==165,"Rotten Flesh did not cause immediate Armor-bypassing death without equipment wear.");
         Call("HandleMenuAction",MenuAction.SaveAndReturn);Check(game.State==GameState.MainMenu,"Dead-state save/return failed.");
+        HostileModelChecks.VerifyGraphics(game);
         Console.WriteLine("PASS: All 73 item icons, baby/hostile models, crop/soil/fence/door/machine/lava geometry, 26-point Armor HUD, graphics state, and real till/plant/equip/save input.");
     }
     private static ItemStack S(ItemId item,int count=1)=>new(item,count);

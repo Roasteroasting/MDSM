@@ -28,16 +28,17 @@ public enum BlockType : byte
     Glass = 25, IronOre = 26, CoalOre = 27, DiamondOre = 28, Furnace = 29, Chest = 30, Sapling = 31,
     Obsidian=32,FarmlandDry=33,FarmlandWet=34,Wheat1=35,Wheat2=36,Wheat3=37,Wheat4=38,Wheat5=39,Wheat6=40,Wheat7=41,
     Fence=42,FenceGate=43,Door=44,DoorUpper=45,Torch=46,Smoker=47,BlastFurnace=48,
-    LavaSource=49,LavaFlow1=50,LavaFlow2=51,LavaFlow3=52,LavaFlow4=53,LavaFlow5=54,LavaFlow6=55,LavaFlow7=56,LavaFalling=57
+    LavaSource=49,LavaFlow1=50,LavaFlow2=51,LavaFlow3=52,LavaFlow4=53,LavaFlow5=54,LavaFlow6=55,LavaFlow7=56,LavaFalling=57,
+    DoubleTallGrassLower=58,DoubleTallGrassUpper=59
 }
 
-public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch }
+public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
 {
     public bool Renderable => Shape != BlockShape.None;
-    public bool NeedsGrass => Shape == BlockShape.Cross;
+    public bool NeedsGrass => Shape is BlockShape.Cross or BlockShape.Crop;
     public int Tile(Vector3 normal) => normal.Y > 0 && TopTile >= 0 ? TopTile
         : normal.Y < 0 && BottomTile >= 0 ? BottomTile : normal.Z<0 && FrontTile>=0 ? FrontTile : SideTile;
 }
@@ -81,13 +82,13 @@ public static class Blocks
         new("OBSIDIAN",true,true,BlockShape.Cube,29,MiningSeconds:30),
         new("DRY FARMLAND",true,false,BlockShape.Farmland,2,30,2,Placeable:false,MiningSeconds:1.25f),
         new("WET FARMLAND",true,false,BlockShape.Farmland,2,31,2,Placeable:false,MiningSeconds:1.25f),
-        new("WHEAT",false,false,BlockShape.Cross,32,Placeable:false,MiningSeconds:0),
-        new("WHEAT",false,false,BlockShape.Cross,33,Placeable:false,MiningSeconds:0),
-        new("WHEAT",false,false,BlockShape.Cross,34,Placeable:false,MiningSeconds:0),
-        new("WHEAT",false,false,BlockShape.Cross,35,Placeable:false,MiningSeconds:0),
-        new("WHEAT",false,false,BlockShape.Cross,36,Placeable:false,MiningSeconds:0),
-        new("WHEAT",false,false,BlockShape.Cross,37,Placeable:false,MiningSeconds:0),
-        new("WHEAT",false,false,BlockShape.Cross,38,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,32,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,33,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,34,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,35,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,36,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,37,Placeable:false,MiningSeconds:0),
+        new("WHEAT",false,false,BlockShape.Crop,38,Placeable:false,MiningSeconds:0),
         new("FENCE",true,false,BlockShape.Fence,39,MiningSeconds:2),
         new("FENCE GATE",true,false,BlockShape.Gate,40,MiningSeconds:2),
         new("WOODEN DOOR",true,false,BlockShape.Door,41,MiningSeconds:3),
@@ -103,7 +104,9 @@ public static class Blocks
         new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
         new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
         new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
-        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1)
+        new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
+        new("DOUBLE TALL GRASS",false,false,BlockShape.Cross,51,Placeable:false,MiningSeconds:0),
+        new("DOUBLE TALL GRASS",false,false,BlockShape.Cross,52,Placeable:false,MiningSeconds:0)
     };
     private static readonly BlockType[] Palette =
     {
@@ -122,8 +125,12 @@ public static class Blocks
     public static bool IsPlaceable(BlockType block) => Get(block).Placeable;
     public static int Tile(BlockType block, Vector3 normal) => Get(block).Tile(normal);
     public static bool SupportsPlant(BlockType block) => block == BlockType.Grass;
-    public static bool SupportsPlant(BlockType ground,BlockType plant) => Crop(plant)?Soil(ground):SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
+    public static bool SupportsPlant(BlockType ground,BlockType plant) => plant==BlockType.DoubleTallGrassUpper?ground==BlockType.DoubleTallGrassLower
+        :Crop(plant)?Soil(ground):SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
     public static bool Soil(BlockType block)=>block is BlockType.FarmlandDry or BlockType.FarmlandWet;
     public static bool Crop(BlockType block)=>block is >=BlockType.Wheat1 and <=BlockType.Wheat7;
+    public static bool DoubleGrass(BlockType block)=>block is BlockType.DoubleTallGrassLower or BlockType.DoubleTallGrassUpper;
+    public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + ((int)block-(int)BlockType.Wheat1)*.125f)
+        :block==BlockType.Sapling?.8f:block is BlockType.RedFlower or BlockType.YellowFlower?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
 }

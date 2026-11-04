@@ -170,7 +170,7 @@ public class Game1 : Game
                 if (_session.TryReturnInterfaceItems()) { _session.CloseInterface();SetState(GameState.Playing); }
                 else _inventoryScreen.CannotClose();
             }
-            else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport);
+            else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport, keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift));
         }
         else
             HandleMenuAction(_menu.Update(keyboard, _previousKeyboard, mouse, _previousMouse, GraphicsDevice.Viewport));
@@ -209,7 +209,8 @@ public class Game1 : Game
         for (int i = 0; i < steps; i++)
         {
             const float dt = (float)SimulationClock.StepSeconds;
-            player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space));
+            player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
+                keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt);
             _pendingJump = false;
             camera.Position = player.EyePosition;
@@ -222,7 +223,7 @@ public class Game1 : Game
             world.Vegetation.Update(dt,_session.Items);
             _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items);
             _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
-                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory,_session.Hostiles);
+                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory,_session.Hostiles,player.Creative);
             _session.Hostiles.Update(dt,player,_session.Projectiles,_session.Mobs);
             _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear,_session.Hostiles,player);
             _session.Items.Update(player, _session.Inventory, dt);
@@ -262,7 +263,7 @@ public class Game1 : Game
         {
             if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
                 && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
-                BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds);
+                BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds,player.Creative);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
         if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward,hostiles:_session.Hostiles) != null) _selection = null;
@@ -336,6 +337,7 @@ public class Game1 : Game
                     SetState(GameState.Settings);
                     break;
                 case MenuAction.SettingsChanged:
+                    _session?.ApplySettings(_settings);
                     _settingsDirty = true;
                     _settingsSaveDelay = 0.5;
                     break;
@@ -405,6 +407,7 @@ public class Game1 : Game
     private void BeginWorld(string id, WorldSave save)
     {
         var session = new GameSession(id, save);
+        session.ApplySettings(_settings);
         var renderer = _preparingRenderer ?? new WorldRenderer(GraphicsDevice, _atlas, session.World);
         _preparingRenderer = null;
         _renderer?.Dispose();
@@ -605,7 +608,7 @@ public class Game1 : Game
             if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
-                _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics,_session.Bow.Power);
+                _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);

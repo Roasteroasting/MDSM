@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 
 using MDSM.Worlds;
 using MDSM.Inventories;
+using MDSM.Core;
 
 namespace MDSM.Gameplay;
 
@@ -14,9 +15,15 @@ public sealed class Player
     public const float StandingEyeHeight = 1.62f;
     public const float CrouchingEyeHeight = 1.50f;
     public const float MoveSpeed = 4.3f;
+    public const float CreativeFlightBoostMultiplier = 3f;
     public const float Gravity = 28f;
     public const float JumpSpeed = 8.4f;
     public const float TerminalVelocity = 60f;
+    public const float StepHeight = .6f;
+    public GameSettings Settings { get; set; } = new();
+    public bool Creative => Settings.GameMode == GameMode.Creative;
+    public BreathMeter Breath { get; } = new();
+    private bool _wasCreative, _canStep;
     private float _verticalSpeed;
     private Vector3 _horizontalSpeed;
     private readonly FallTracker _fall = new();
@@ -48,7 +55,8 @@ public sealed class Player
     public bool TakeDamage(double amount,bool invulnerability=true,bool bypassArmor=false)
     {
         if(!double.IsFinite(amount)||amount<0)throw new ArgumentOutOfRangeException(nameof(amount));
-        if(amount==0 || IsDead || invulnerability && _invulnerable>0)return false;
+        if(Creative || amount==0 || IsDead || invulnerability && _invulnerable>0)return false;
+        if (!bypassArmor) amount *= Settings.DamageMultiplier;
         double reduction=bypassArmor?0:Math.Min(26,_equipment?.ArmorPoints??0)*.03;
         _health=Math.Max(0,_health-amount*(1-reduction));if(!bypassArmor)_equipment?.WearArmor();
         if(invulnerability)_invulnerable=.5;if(IsDead)StopMovement();return true;
@@ -62,18 +70,31 @@ public sealed class Player
     }
     public void StopMovement()
     {
-        _verticalSpeed = 0; _horizontalSpeed=Vector3.Zero; Grounded = false; Crouching = false; _fall.Reset(Position.Y);
+        _verticalSpeed = 0; _horizontalSpeed=Vector3.Zero; Grounded = false; Crouching = false; _canStep=false; _fall.Reset(Position.Y);
     }
     public void StopCrouching() => Crouching = false;
 
-    public void Update(World world, Vector3 movement, bool jump, float elapsedSeconds, bool crouch = false, bool swimUp = false)
+    public void Update(World world, Vector3 movement, bool jump, float elapsedSeconds, bool crouch = false, bool swimUp = false, bool fastFlight = false)
     {
         if (IsDead || !float.IsFinite(elapsedSeconds) || elapsedSeconds <= 0)
             return;
 
         Crouching = crouch;
         float dt = MathF.Min(elapsedSeconds, 0.1f);
+        if (_wasCreative != Creative) { StopMovement(); Breath.Reset(); _wasCreative = Creative; }
+        if (Creative)
+        {
+            Crouching = false;
+            movement.Y = 0; if (movement.LengthSquared() > 1) movement.Normalize();
+            float flightSpeed = MoveSpeed * (fastFlight ? CreativeFlightBoostMultiplier : 1);
+            Vector3 flight = (movement + Vector3.Up * ((swimUp || jump ? 1 : 0) - (crouch ? 1 : 0))) * flightSpeed * dt;
+            int flightSteps = Math.Max(1, (int)MathF.Ceiling(flight.Length() / .2f));
+            for (int i = 0; i < flightSteps; i++)
+            { MoveAxis(world, flight.X / flightSteps, 0); MoveAxis(world, flight.Z / flightSteps, 2); MoveAxis(world, flight.Y / flightSteps, 1); }
+            Grounded = false; _fall.Reset(Position.Y); Breath.Reset(); return;
+        }
         _invulnerable=Math.Max(0,_invulnerable-elapsedSeconds);
+        Breath.Update(this, world, elapsedSeconds);
         if(Lava.Intersects(world,Bounds))
         { _lavaSeconds+=elapsedSeconds;if(_lavaSeconds>=1){_lavaSeconds%=1;TakeDamage(2);} }
         else _lavaSeconds=0;
@@ -104,6 +125,7 @@ public sealed class Player
         // Each step is narrower than a block, so fast falls cannot tunnel through terrain.
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.2f));
         Vector3 step = displacement / steps;
+        _canStep = Grounded && !jumping && !swimming;
         Grounded = false;
         for (int i = 0; i < steps; i++)
         {
@@ -152,7 +174,7 @@ public sealed class Player
 
         Vector3 next = Position;
         if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, world.Width - HalfWidth);
-        else if (axis == 1) next.Y += amount;
+        else if (axis == 1) next.Y = Creative ? Math.Clamp(next.Y + amount, 0, World.Height + 16) : next.Y + amount;
         else next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
 
         BoundingBox bounds = BoundsAt(next);
@@ -173,13 +195,40 @@ public sealed class Player
             }
         }
 
+        if (collided && axis != 1 && _canStep && TryStep(world, amount, axis)) return false;
         Position = next;
         return collided;
     }
 
+    private bool TryStep(World world, float amount, int axis)
+    {
+        Vector3 destination = Position + (axis == 0 ? Vector3.UnitX : Vector3.UnitZ) * amount;
+        if (destination.X < HalfWidth || destination.Z < HalfWidth || destination.X > world.Width - HalfWidth || destination.Z > world.Depth - HalfWidth) return false;
+        BoundingBox bounds = BoundsAt(destination);
+        Span<BoundingBox> boxes = stackalloc BoundingBox[9];
+        float rise = 0;
+        for (int x = (int)MathF.Floor(bounds.Min.X); x <= (int)MathF.Floor(bounds.Max.X); x++)
+        for (int y = Math.Max(0, (int)MathF.Floor(Position.Y) - 1); y <= (int)MathF.Floor(bounds.Max.Y); y++)
+        for (int z = (int)MathF.Floor(bounds.Min.Z); z <= (int)MathF.Floor(bounds.Max.Z); z++)
+        {
+            int count = world.BlockBoxes(new(x, y, z), boxes, true);
+            for (int i = 0; i < count; i++) if (World.Overlaps(bounds, boxes[i])) rise = Math.Max(rise, boxes[i].Max.Y - Position.Y);
+        }
+        if (rise <= 0 || rise > StepHeight + .0001f) return false;
+        Vector3 raised = Position + Vector3.Up * rise;
+        // Check the short upward sweep and raised destination, including headroom.
+        for (float h = Math.Min(.05f, rise); h < rise; h += .05f)
+            if (world.IntersectsSolid(BoundsAt(Position + Vector3.Up * h))) return false;
+        destination.Y += rise;
+        // A high-frequency step may reach the new surface by less than the crouch support inset.
+        bool supported = world.IntersectsSolid(new BoundingBox(destination + new Vector3(-HalfWidth,-.05f,-HalfWidth),destination + new Vector3(HalfWidth,0,HalfWidth)));
+        if (world.IntersectsSolid(BoundsAt(raised)) || world.IntersectsSolid(BoundsAt(destination)) || !supported) return false;
+        Position = destination; _verticalSpeed = 0; _fall.Reset(Position.Y); return true;
+    }
+
     public void Respawn(World world)
     {
-        _health = MaximumHealth;_invulnerable=_lavaSeconds=0;
+        _health = MaximumHealth;_invulnerable=_lavaSeconds=0; Breath.Reset();
         MoveToSpawn(world);
     }
 

@@ -25,7 +25,8 @@ internal static class PassiveMobModels
                 {
                     Matrix leg=Matrix.CreateRotationX(swing*side)*Matrix.CreateTranslation(side*.13f,.7f,0)*world;
                     mesh.Cuboid(new(-limb,-.7f,-limb),new(limb,0,limb),leg,3,tint);
-                    Matrix arm=Matrix.CreateRotationX(skeleton?.35f:-1.2f)*Matrix.CreateTranslation(side*.31f,1.28f,0)*world;
+                    // Limbs start along -Y; positive X rotation points zombie arms toward local -Z (forward).
+                    Matrix arm=Matrix.CreateRotationX(skeleton?.35f:MathHelper.PiOver2)*Matrix.CreateTranslation(side*.31f,1.28f,0)*world;
                     mesh.Cuboid(new(-limb,-.65f,-limb),new(limb,0,limb),arm,0,tint);
                 }
                 if(skeleton)
@@ -37,7 +38,9 @@ internal static class PassiveMobModels
                 for(int leg=0;leg<8;leg++)
                 {
                     int side=leg%2==0?-1:1;float z=-.25f+leg/2*.2f;
-                    Matrix transform=Matrix.CreateRotationZ(side*.65f+MathF.Sin(mob.WalkPhase+leg)*.12f)*Matrix.CreateTranslation(side*.3f,.5f,z)*world;
+                    // The signed X span needs the opposite Z rotation on each side to lower both outer ends.
+                    float gait=mob.Walking?MathF.Sin(mob.WalkPhase+leg)*.12f:0;
+                    Matrix transform=Matrix.CreateRotationZ(-side*.65f+gait)*Matrix.CreateTranslation(side*.3f,.5f,z)*world;
                     mesh.Cuboid(new(side<0?-.5f:0,-.08f,-.045f),new(side<0?0:.5f,.02f,.045f),transform,3,tint);
                 }
                 break;

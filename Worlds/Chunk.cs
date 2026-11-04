@@ -20,6 +20,7 @@ public sealed class Chunk
     public int LavaCount { get; private set; }
     public int StructureCount { get; private set; }
     public int CropCount { get; private set; }
+    public int DoubleGrassCount { get; private set; }
     private static bool Special(BlockType block)=>block is BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.Torch;
     public BoundingBox Bounds { get; }
     internal System.ReadOnlySpan<byte> Blocks => _blocks;
@@ -38,6 +39,8 @@ public sealed class Chunk
     internal void SetBlock(int x, int y, int z, BlockType block)
     {
         int index = (y * Size + z) * Size + x;
+        if (MDSM.Worlds.Blocks.DoubleGrass((BlockType)_blocks[index])) DoubleGrassCount--;
+        if (MDSM.Worlds.Blocks.DoubleGrass(block)) DoubleGrassCount++;
         if (Water.IsWater((BlockType)_blocks[index])) WaterCount--;
         if (Lava.IsLava((BlockType)_blocks[index])) LavaCount--;
         if(Special((BlockType)_blocks[index]))StructureCount--;
@@ -69,9 +72,11 @@ public sealed class Chunk
         LavaCount=0;
         StructureCount=0;
         CropCount=0;
+        DoubleGrassCount=0;
         Array.Clear(_solidTops);
         Span<int> counts=stackalloc int[256];counts.Clear();
         foreach(byte block in blocks)counts[block]++;
+        DoubleGrassCount=counts[(int)BlockType.DoubleTallGrassLower]+counts[(int)BlockType.DoubleTallGrassUpper];
         for(int i=(int)BlockType.WaterSource;i<=(int)BlockType.WaterFalling;i++)WaterCount+=counts[i];
         for(int i=(int)BlockType.LavaSource;i<=(int)BlockType.LavaFalling;i++)LavaCount+=counts[i];
         for(int i=(int)BlockType.Wheat1;i<=(int)BlockType.Wheat7;i++)CropCount+=counts[i];

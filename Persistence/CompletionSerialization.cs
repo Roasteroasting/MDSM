@@ -26,7 +26,7 @@ public static partial class WorldSerializer
         writer.Write(pigs.Length+others.Length);
         void Life(MobState state){writer.Write(state.BabySeconds);writer.Write(state.LoveSeconds);writer.Write(state.BreedCooldown);writer.Write(state.Bred);}
         foreach(var pig in pigs)Life(pig.ToMobState());foreach(var mob in others)Life(mob);
-        MobState[] hostiles=save.Hostiles??Array.Empty<MobState>();if(hostiles.Length>8)throw new InvalidDataException("Too many hostiles.");writer.Write(hostiles.Length);
+        MobState[] hostiles=save.Hostiles??Array.Empty<MobState>();if(hostiles.Length>HostilePopulation.Maximum)throw new InvalidDataException("Too many hostiles.");writer.Write(hostiles.Length);
         foreach(var state in hostiles)
         {
             HostilePopulation.Validate(state,save.World);writer.Write((byte)state.Species);writer.Write(state.Position.X);writer.Write(state.Position.Y);writer.Write(state.Position.Z);writer.Write(state.Yaw);writer.Write(state.Health);
@@ -58,7 +58,7 @@ public static partial class WorldSerializer
             if(i<pigs.Length){pigs[i]=pigs[i] with {BabySeconds=baby,LoveSeconds=love,BreedCooldown=cooldown,Bred=bred};PassiveMobPopulation.Validate(pigs[i].ToMobState(),world.Size);}
             else {int index=i-pigs.Length;others[index]=others[index] with {BabySeconds=baby,LoveSeconds=love,BreedCooldown=cooldown,Bred=bred};PassiveMobPopulation.Validate(others[index],world.Size);}
         }
-        hostiles=new MobState[Count(8)];for(int i=0;i<hostiles.Length;i++){hostiles[i]=new((MobSpecies)reader.ReadByte(),new(reader.ReadSingle(),reader.ReadSingle(),reader.ReadSingle()),reader.ReadSingle(),reader.ReadInt32());HostilePopulation.Validate(hostiles[i],world);}
+        hostiles=new MobState[Count(HostilePopulation.Maximum)];for(int i=0;i<hostiles.Length;i++){hostiles[i]=new((MobSpecies)reader.ReadByte(),new(reader.ReadSingle(),reader.ReadSingle(),reader.ReadSingle()),reader.ReadSingle(),reader.ReadInt32());HostilePopulation.Validate(hostiles[i],world);}
         int flags=Count(arrows.Length);var seen=new System.Collections.Generic.HashSet<int>();for(int i=0;i<flags;i++){int index=reader.ReadInt32();if(index<0||index>=arrows.Length||!seen.Add(index))throw new InvalidDataException("Invalid hostile projectile.");arrows[index]=arrows[index] with {Hostile=true};}
     }
     private static void ValidateStructures(World world)

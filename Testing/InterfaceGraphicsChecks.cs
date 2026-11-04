@@ -207,6 +207,7 @@ internal static class InterfaceGraphicsChecks
                     ProgressionGraphicsChecks.Verify(this);
                     RefinementGraphicsChecks.Verify(this);
                     CompletionGraphicsChecks.Verify(this);
+                    GameplayRefinementGraphicsChecks.Verify(this);
                     VerifyCrafting();
                     VerifyMassiveNotice();
                     Click(2); Require(State == GameState.Settings, "Main menu Settings entry failed.");
@@ -215,7 +216,7 @@ internal static class InterfaceGraphicsChecks
                     Click(0); Require(State == GameState.Controls, "Controls entry failed.");
                     Press(Keys.End); Require(FieldScroll() > 0, "Controls cannot scroll to last binding.");
                     Click(0); Require(State == GameState.Settings, "Controls Back skipped Settings.");
-                    Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Enter);
+                    Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Enter);
                     Require(State == GameState.About, "Keyboard About entry failed.");
                     Capture(); break;
                 case 2:

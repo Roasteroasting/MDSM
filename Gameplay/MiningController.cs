@@ -20,12 +20,23 @@ public sealed class MiningController
 
     public void Reset() { Target = null; Progress = _elapsed = 0; _block = BlockType.Air; }
 
-    public bool Update(World world, DroppedItems items, BlockHit? selection, bool held, float elapsed,Inventory inventory=null)
+    public bool Update(World world, DroppedItems items, BlockHit? selection, bool held, float elapsed,Inventory inventory=null,bool creative=false)
     {
         if (!held || selection is not BlockHit hit || !float.IsFinite(hit.Distance) || hit.Distance < 0 || hit.Distance > BlockRaycaster.Reach
             || !world.Contains(hit.Cell.X, hit.Cell.Y, hit.Cell.Z)) { Reset(); return false; }
         BlockType block = world.GetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z);
         ItemStack tool=inventory?.Selected??default;
+        if (creative && Blocks.IsRenderable(block) && !Lava.Fluid(block))
+        {
+            BlockContainer contents = world.Containers.Get(hit.Cell);
+            world.Containers.Detach(hit.Cell);
+            world.SuppressHarvest = true;
+            bool changed;
+            try { changed = world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air); }
+            finally { world.SuppressHarvest = false; }
+            if (!changed) world.Containers.Reattach(contents);
+            Reset(); return changed;
+        }
         float seconds = MiningRules.Seconds(block,tool);
         if (!Blocks.IsRenderable(block) || seconds < 0) { Reset(); return false; }
         if (Target != hit.Cell || _block != block || _tool!=tool || _slot!=(inventory?.SelectedSlot??-1))
@@ -34,7 +45,7 @@ public sealed class MiningController
         Progress = seconds == 0 ? 1 : Math.Clamp(_elapsed / seconds, 0, 1);
         if (Progress < 1) return false;
         BlockType above = world.GetBlock(hit.Cell.X, hit.Cell.Y + 1, hit.Cell.Z);
-        bool removesPlant = Blocks.Get(above).NeedsGrass;
+        bool removesPlant = !Blocks.DoubleGrass(block) && Blocks.Get(above).NeedsGrass;
         if(block==BlockType.Leaves && !items.CanSpawn(3))return false;
         Span<ItemId> loot=stackalloc ItemId[5];
         int lootCount=MiningRules.Drops(block,tool,_random,loot);
@@ -59,12 +70,12 @@ public sealed class MiningController
 
 public static class BlockPlacement
 {
-    public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds)
+    public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false)
     {
         ItemStack stack = inventory.Selected;
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)
             || !(block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds))) return false;
-        inventory.ConsumeSelected();
+        if (!creative) inventory.ConsumeSelected();
         return true;
     }
 }

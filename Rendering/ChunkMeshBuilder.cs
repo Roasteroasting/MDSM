@@ -105,6 +105,19 @@ internal sealed class ChunkMeshBuilder
                 }
                 continue;
             }
+            if (definition.Shape == BlockShape.Crop)
+            {
+                float height = Blocks.PlantHeight(block);
+                for (int plane = 0; plane < 2; plane++)
+                {
+                    float offset = plane == 0 ? .25f : .75f;
+                    AddQuad(position + new Vector3(offset,0,0), position + new Vector3(offset,0,1),
+                        position + new Vector3(offset,height,1), position + new Vector3(offset,height,0), definition.SideTile, Color.White, true);
+                    AddQuad(position + new Vector3(0,0,offset), position + new Vector3(1,0,offset),
+                        position + new Vector3(1,height,offset), position + new Vector3(0,height,offset), definition.SideTile, Color.White, true);
+                }
+                continue;
+            }
             if (definition.Shape == BlockShape.Cross)
             {
                 AddQuad(position + new Vector3(0.1f, 0, 0.1f), position + new Vector3(0.9f, 0, 0.9f),

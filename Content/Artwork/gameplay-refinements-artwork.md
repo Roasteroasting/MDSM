@@ -1,0 +1,9 @@
+# Double-height grass
+
+The existing 256×256 [terrain atlas](../Blocks/terrain.png) adds only tile 51 (lower half) and tile 52 (upper half). Every pixel outside those two tiles is preserved, including transparent RGB values. Tile indexing remains row-major, 16 pixels per tile. Existing crop textures at tiles 32–38 are unchanged.
+
+Generated using the built-in image-generation tool. Prompt: “Original early-voxel-sandbox pixel-art green wild grass on transparent background; separate matching lower and upper halves, irregular jagged blades and pointed tips, muted green highlights, no ground, dirt, flowers, text, framing or blur.” The generated grass artwork was sampled using nearest-neighbor into a 16×32 plant and split vertically into aligned 16×16 halves for the atlas. No artwork is generated at runtime or build time.
+
+Exact generation prompt:
+
+> Create a tiny game sprite sheet for an original early voxel sandbox. Transparent background. Exactly 32 pixels wide and 16 pixels high logical pixel-art sprite sheet (can be delivered at larger nearest-neighbor resolution). Two square 16x16 tiles directly adjacent, no margin, no text, no framing, no grid lines. Left tile is lower half of a double-height green wild grass plant: several jagged thin green blades rise continuously from bottom to top, stems cut across its top edge. Right tile is its matching upper half: same blade positions at bottom edge continuing upward to pointed tips at varying heights, with transparent gaps. Combined plant is 16 pixels wide by 32 pixels tall when right tile placed above left tile. Sparse irregular green grass blades, muted medium green and lighter green pixel highlights, hard pixel edges, absolutely no blur, no ground, no dirt, no shadows. These must work as transparent billboard cutouts. Do not include flowers, seed heads, wheat or extra sprites.

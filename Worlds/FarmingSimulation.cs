@@ -54,17 +54,17 @@ public sealed class FarmingSimulation(World world)
         crop.Wet=wet;crop.Version++;
         if(wet && world.GetBlock(p.X,p.Y,p.Z)!=BlockType.Wheat7){crop.Due=_time+crop.Remaining;_growth.Enqueue((p,crop.Version),crop.Due);}
     }
-    public bool Till(Point3 p,Inventory inventory)
+    public bool Till(Point3 p,Inventory inventory,bool creative=false)
     {
         if(Items.Get(inventory.Selected.Item).Tool!=ToolKind.Hoe || world.GetBlock(p.X,p.Y,p.Z) is not (BlockType.Dirt or BlockType.Grass)
             || world.GetBlock(p.X,p.Y+1,p.Z)!=BlockType.Air)return false;
-        if(!world.SetBlock(p.X,p.Y,p.Z,Hydrated(p)?BlockType.FarmlandWet:BlockType.FarmlandDry))return false;inventory.WearSelected();return true;
+        if(!world.SetBlock(p.X,p.Y,p.Z,Hydrated(p)?BlockType.FarmlandWet:BlockType.FarmlandDry))return false;if(!creative)inventory.WearSelected();return true;
     }
-    public bool Plant(Point3 soil,Inventory inventory)
+    public bool Plant(Point3 soil,Inventory inventory,bool creative=false)
     {
         if(inventory.Selected.Item!=Items.WheatSeeds || _crops.Count>=MaximumCrops || !Blocks.Soil(world.GetBlock(soil.X,soil.Y,soil.Z))
             || world.GetBlock(soil.X,soil.Y+1,soil.Z)!=BlockType.Air || !world.Contains(soil.X,soil.Y+1,soil.Z))return false;
-        if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,BlockType.Wheat1))return false;inventory.ConsumeSelected();return true;
+        if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,BlockType.Wheat1))return false;if(!creative)inventory.ConsumeSelected();return true;
     }
     public void Update(double elapsed)
     {

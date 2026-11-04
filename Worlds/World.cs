@@ -107,6 +107,8 @@ public sealed partial class World
     public bool SetBlock(int x, int y, int z, BlockType block)
     {
         if (!Contains(x, y, z) || !Blocks.IsDefined(block)
+            || !_plantEdit && block==BlockType.DoubleTallGrassLower && (!Contains(x,y+1,z) || GetBlock(x,y+1,z)!=BlockType.Air || GetBlock(x,y-1,z)!=BlockType.Grass)
+            || !_plantEdit && block==BlockType.DoubleTallGrassUpper && GetBlock(x,y-1,z)!=BlockType.DoubleTallGrassLower
             || block==BlockType.Sapling && !Vegetation.CanPlant
             || !CanDetailChange(new(x,y,z),GetBlock(x,y,z),block)
             || GetBlock(x, y, z) == block || !Containers.CanChange(new Point3(x,y,z),block))
@@ -120,6 +122,7 @@ public sealed partial class World
         Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
         DetailChanged(new Point3(x,y,z),previous,block);
+        PairedPlantChanged(new Point3(x,y,z),previous,block);
         // Air/fluid both expose terrain faces; changing a flow level only invalidates water.
         bool terrainChanged = !(previous == BlockType.Air || Water.IsWater(previous))
             || !(block == BlockType.Air || Water.IsWater(block));

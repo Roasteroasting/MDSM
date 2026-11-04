@@ -69,10 +69,12 @@ internal static class DecorationChecks
                 if (Blocks.Get(block).NeedsGrass)
                 {
                     plants++;
-                    Require(y == ground + 1 && world.GetBlock(x, y - 1, z) == BlockType.Grass, "Plant lacks grass support.");
+                    Require(y == ground + (block==BlockType.DoubleTallGrassUpper?2:1)
+                        && Blocks.SupportsPlant(world.GetBlock(x,y-1,z),block), "Plant lacks correct grass/paired support.");
                 }
                 Require(block is BlockType.Air or BlockType.WoodLog or BlockType.Leaves
-                    or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower, "Unexpected generated feature.");
+                    or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower
+                    or BlockType.DoubleTallGrassLower or BlockType.DoubleTallGrassUpper, "Unexpected generated feature.");
             }
             if (world.GetBlock(x, ground + 1, z) == BlockType.WoodLog)
             {
@@ -92,7 +94,7 @@ internal static class DecorationChecks
                 Require(max - min <= 2, "Tree generated on a steep slope.");
             }
         }
-        Require(roots >= 40 && roots <= 450 && leaves > 1000 && plants > 500 && plants < 6000, "Decoration density is outside the intended sparse range.");
+        Require(roots >= 40 && roots <= 450 && leaves > 1000 && plants > 15000 && plants < 35000, "Decoration density is outside the intended abundant-grass range.");
         Require(trunkHeights.Count >= 2, "Trunk heights lack variation.");
         for (int z = 126; z <= 130; z++)
         for (int x = 126; x <= 130; x++)

@@ -4,6 +4,9 @@ using System.Text.Json;
 
 namespace MDSM.Core;
 
+public enum Difficulty { Peaceful, Easy, Normal, Hard }
+public enum GameMode { Survival, Creative }
+
 public sealed class GameSettings
 {
     public const int MinimumFps = 5, MaximumFps = 360, DefaultFps = 60;
@@ -11,6 +14,11 @@ public sealed class GameSettings
     public int FpsCap { get => _fpsCap; set => _fpsCap = Math.Clamp(value, MinimumFps, MaximumFps); }
     public bool UncappedFps { get; set; }
     public bool ViewBobbing { get; set; } = true;
+    private Difficulty _difficulty = Difficulty.Normal;
+    private GameMode _gameMode;
+    public Difficulty Difficulty { get => _difficulty; set => _difficulty = Enum.IsDefined(value) ? value : Difficulty.Normal; }
+    public GameMode GameMode { get => _gameMode; set => _gameMode = Enum.IsDefined(value) ? value : GameMode.Survival; }
+    public double DamageMultiplier => Difficulty is Difficulty.Peaceful or Difficulty.Easy ? .5 : Difficulty == Difficulty.Hard ? 1.5 : 1;
     public int? EffectiveFps => UncappedFps ? null : FpsCap;
 }
 
@@ -37,6 +45,10 @@ public sealed class SettingsStore
                 settings.UncappedFps = uncapped.GetBoolean();
             if(root.TryGetProperty("ViewBobbing",out var bobbing) && bobbing.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 settings.ViewBobbing=bobbing.GetBoolean();
+            if (root.TryGetProperty("Difficulty", out var difficulty) && difficulty.TryGetInt32(out int difficultyValue))
+                settings.Difficulty = (Difficulty)difficultyValue;
+            if (root.TryGetProperty("GameMode", out var mode) && mode.TryGetInt32(out int modeValue))
+                settings.GameMode = (GameMode)modeValue;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
@@ -54,7 +66,7 @@ public sealed class SettingsStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing }, new JsonSerializerOptions { WriteIndented = true });
+                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Difficulty, settings.GameMode }, new JsonSerializerOptions { WriteIndented = true });
                 file.Flush(true);
             }
             if (File.Exists(FilePath)) File.Replace(temporary, FilePath, null);

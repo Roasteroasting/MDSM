@@ -51,8 +51,14 @@ public sealed class WorldDecorator
                 || world.GetBlock(x, ground + 1, z) != BlockType.Air) continue;
             float choice = Unit(Hash(x, z, 3));
             BlockType plant = choice < 0.003f ? BlockType.RedFlower : choice < 0.006f ? BlockType.YellowFlower
-                : choice < 0.024f + Density(x, z) * 0.04f ? BlockType.TallGrass : BlockType.Air;
-            if (plant != BlockType.Air) world.SetGeneratedBlock(x, ground + 1, z, plant);
+                : choice < 0.24f + Density(x, z) * 0.22f ? BlockType.TallGrass : BlockType.Air;
+            if (plant == BlockType.TallGrass && Unit(Hash(x,z,7)) < .08f && ground+2<World.Height
+                && world.GetBlock(x,ground+2,z)==BlockType.Air)
+            {
+                world.SetGeneratedBlock(x,ground+1,z,BlockType.DoubleTallGrassLower);
+                world.SetGeneratedBlock(x,ground+2,z,BlockType.DoubleTallGrassUpper);
+            }
+            else if (plant != BlockType.Air) world.SetGeneratedBlock(x, ground + 1, z, plant);
         }
     }
 

@@ -47,6 +47,7 @@ public static partial class WorldSerializer
 
     public static void Write(Stream destination, WorldSave save)
     {
+        save.World.ValidatePairedPlants();
         string name = ValidateName(save.Name);
         ValidatePose(save.PlayerPosition, save.Yaw, save.Pitch, save.World.Size);
         ValidateHealth(save.Health);
@@ -160,6 +161,7 @@ public static partial class WorldSerializer
                 source.ReadExactly(chunkBytes); hash.AppendData(chunkBytes); ValidateBlocks(chunkBytes);
                 chunk.RestoreBlocks(chunkBytes, metadata.StoredHeight);
             }
+            world.ValidatePairedPlants();
             byte[] tail = Array.Empty<byte>();
             if (metadata.Version >= 2)
             {
@@ -376,7 +378,7 @@ public static partial class WorldSerializer
 
     private static void ValidateBlocks(ReadOnlySpan<byte> blocks)
     {
-        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.LavaFalling);
+        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.DoubleTallGrassUpper);
         if(invalid>=0)throw new InvalidDataException($"Save contains unknown block ID {blocks[invalid]}.");
     }
 

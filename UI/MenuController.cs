@@ -82,7 +82,7 @@ internal sealed class MenuController : IDisposable
         _ => MainButtons
     };
     private int FocusOffset => _screen == GameState.WorldCreation ? 3
-        : _screen == GameState.Settings ? 3 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+        : _screen == GameState.Settings ? 5 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
     public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
     {
@@ -204,6 +204,7 @@ internal sealed class MenuController : IDisposable
         if (_screen == GameState.Settings)
         {
             int oldCap = _settings.FpsCap; bool oldUncapped = _settings.UncappedFps,oldBobbing=_settings.ViewBobbing;
+            Difficulty oldDifficulty = _settings.Difficulty; GameMode oldMode = _settings.GameMode;
             Rectangle slider = SettingsLayout.Slider(viewport), toggle = SettingsLayout.Toggle(viewport);
             if (click && slider.Contains(_mouse)) { _focus = 0; _draggingSlider = true; }
             if (mouse.LeftButton == ButtonState.Released) _draggingSlider = false;
@@ -219,8 +220,19 @@ internal sealed class MenuController : IDisposable
             else if (_focus == 1 && (Pressed(Keys.Space) || Pressed(Keys.Enter))) _settings.UncappedFps = !_settings.UncappedFps;
             if(click && SettingsLayout.Bobbing(viewport).Contains(_mouse)){_focus=2;_settings.ViewBobbing=!_settings.ViewBobbing;}
             else if(_focus==2 && (Pressed(Keys.Space)||Pressed(Keys.Enter)))_settings.ViewBobbing=!_settings.ViewBobbing;
-            if (oldCap != _settings.FpsCap || oldUncapped != _settings.UncappedFps || oldBobbing!=_settings.ViewBobbing) return MenuAction.SettingsChanged;
-            if (Pressed(Keys.Enter) && _focus < 3) return MenuAction.None;
+            for (int option = 0; option < 2; option++)
+            {
+                bool clicked = click && SettingsLayout.Choice(viewport, option).Contains(_mouse);
+                if (clicked) _focus = option + 3;
+                int change = clicked || _focus == option + 3 && (Pressed(Keys.Enter) || Pressed(Keys.Space) || Pressed(Keys.Right)) ? 1
+                    : _focus == option + 3 && Pressed(Keys.Left) ? -1 : 0;
+                if (change == 0) continue;
+                if (option == 0) _settings.Difficulty = (Difficulty)(((int)_settings.Difficulty + change + 4) % 4);
+                else _settings.GameMode = (GameMode)(((int)_settings.GameMode + change + 2) % 2);
+            }
+            if (oldCap != _settings.FpsCap || oldUncapped != _settings.UncappedFps || oldBobbing!=_settings.ViewBobbing
+                || oldDifficulty != _settings.Difficulty || oldMode != _settings.GameMode) return MenuAction.SettingsChanged;
+            if (Pressed(Keys.Enter) && _focus < 5) return MenuAction.None;
         }
 
         if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
@@ -366,13 +378,22 @@ internal sealed class MenuController : IDisposable
             int thumb = SettingsLayout.ThumbX(slider, _settings.FpsCap);
             Fill(new Rectangle(thumb - 5, slider.Y + 4, 11, slider.Height - 8), Color.LightGray);
             Fill(toggle, _focus == 1 ? new Color(84, 91, 94) : new Color(38, 44, 52));
-            Fill(new Rectangle(toggle.X + 8, toggle.Y + 8, 20, 20), Color.LightGray);
-            Fill(new Rectangle(toggle.X + 10, toggle.Y + 10, 16, 16), new Color(24, 29, 35));
-            if (_settings.UncappedFps) Text("X", toggle.X + 12, toggle.Y + 11, 2, Color.LightGoldenrodYellow);
+            int checkSize = Math.Min(20,toggle.Height-8),checkY=toggle.Center.Y-checkSize/2;
+            Fill(new Rectangle(toggle.X + 8, checkY, checkSize, checkSize), Color.LightGray);
+            Fill(new Rectangle(toggle.X + 10, checkY+2, checkSize-4, checkSize-4), new Color(24, 29, 35));
+            if (_settings.UncappedFps) Text("X", toggle.X + 12, checkY+3, checkSize>=18?2:1, Color.LightGoldenrodYellow);
             Text("UNCAPPED FPS", toggle.X + 38, toggle.Center.Y - 3 * scale, scale, Color.White);
             Rectangle bobbing=SettingsLayout.Bobbing(viewport);
             Fill(bobbing,_focus==2?new Color(84,91,94):new Color(38,44,52));
             Text((_settings.ViewBobbing?"[X] ":"[ ] ")+"VIEW BOBBING",bobbing.X+8,bobbing.Center.Y-3*scale,scale,Color.White);
+            for (int option = 0; option < 2; option++)
+            {
+                Rectangle bounds = SettingsLayout.Choice(viewport, option);
+                Fill(bounds, _focus == option + 3 ? new Color(84,91,94) : new Color(38,44,52));
+                string label = option == 0 ? $"DIFFICULTY: {_settings.Difficulty}" : $"MODE: {_settings.GameMode}";
+                int choiceScale = label.Length * 6 * scale <= bounds.Width - 12 ? scale : 1;
+                Text(label, bounds.X + 6, bounds.Center.Y - 3 * choiceScale, choiceScale, Color.White);
+            }
         }
 
         if (MenuInformation.IsInformation(_screen))

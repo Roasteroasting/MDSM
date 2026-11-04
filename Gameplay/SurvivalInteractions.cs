@@ -34,11 +34,11 @@ public static class SurvivalInteractions
         if(held.Item==Items.Bucket || held.Item==Items.WaterBucket || held.Item==Items.LavaBucket)
         {UseBucket(session,hit);return true;}
         if(hit is not BlockHit block)return false;
-        if(held.Item==Items.WheatSeeds){world.Farming.Plant(block.Cell,session.Inventory);return true;}
-        if(Items.Get(held.Item).Tool==ToolKind.Hoe){world.Farming.Till(block.Cell,session.Inventory);return true;}
+        if(held.Item==Items.WheatSeeds){world.Farming.Plant(block.Cell,session.Inventory,session.Player.Creative);return true;}
+        if(Items.Get(held.Item).Tool==ToolKind.Hoe){world.Farming.Till(block.Cell,session.Inventory,session.Player.Creative);return true;}
         if(Items.TryGetBlock(held.Item,out BlockType type) && type is BlockType.Door or BlockType.FenceGate or BlockType.Torch)
         {
-            if(block.HasPlacementFace && world.PlaceStructure(block.PlacementCell,type,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),new(-block.Normal.X,-block.Normal.Y,-block.Normal.Z),session.Player.Bounds))session.Inventory.ConsumeSelected();
+            if(block.HasPlacementFace && world.PlaceStructure(block.PlacementCell,type,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),new(-block.Normal.X,-block.Normal.Y,-block.Normal.Z),session.Player.Bounds) && !session.Player.Creative)session.Inventory.ConsumeSelected();
             return true;
         }
         return false;
@@ -58,9 +58,10 @@ public static class SurvivalInteractions
         {
             if(held.Item!=Items.WaterBucket && held.Item!=Items.LavaBucket || solidHit is not BlockHit target || !target.HasPlacementFace)return false;
             cell=target.PlacementCell;BlockType before=world.GetBlock(cell.X,cell.Y,cell.Z);
-            if(!world.Contains(cell.X,cell.Y,cell.Z) || before is BlockType.WaterSource or BlockType.LavaSource || before!=BlockType.Air && !Lava.Fluid(before) && Blocks.Get(before).Shape!=BlockShape.Cross)return false;
+            if(!world.Contains(cell.X,cell.Y,cell.Z) || before is BlockType.WaterSource or BlockType.LavaSource || before!=BlockType.Air && !Lava.Fluid(before) && !Blocks.Get(before).NeedsGrass)return false;
             next=held.Item==Items.WaterBucket?BlockType.WaterSource:BlockType.LavaSource;receive=Items.Bucket;
         }
+        if(session.Player.Creative)return world.SetBlock(cell.X,cell.Y,cell.Z,next);
         if(held.Count==1)copy.SetSlot(copy.SelectedSlot,new(receive,1));
         else {copy.ConsumeSelected();if(!copy.Add(new ItemStack(receive,1)).IsEmpty)return false;}
         if(!world.SetBlock(cell.X,cell.Y,cell.Z,next))return false;

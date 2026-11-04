@@ -1,4 +1,16 @@
-if (System.Array.Exists(args, argument => argument == "--completion-performance-test"))
+if (System.Array.Exists(args, argument => argument == "--hostile-model-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.HostileModelChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--hostile-spawn-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.HostileSpawnChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--gameplay-refinement-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.GameplayRefinementChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--completion-performance-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.CompletionPerformanceChecks.Run();
 }

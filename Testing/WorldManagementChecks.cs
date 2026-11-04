@@ -81,7 +81,8 @@ internal static class WorldManagementChecks
                 {
                     BlockType block = world.GetBlock(x, y, z);
                     Require(block is BlockType.Air or BlockType.WoodLog or BlockType.Leaves
-                        or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower, "An excluded material generated naturally.");
+                        or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower
+                        or BlockType.DoubleTallGrassLower or BlockType.DoubleTallGrassUpper, "An excluded material generated naturally.");
                     if (Blocks.Get(block).NeedsGrass) plants++;
                 }
                 if (world.GetBlock(x, top + 1, z) == BlockType.WoodLog) roots++;

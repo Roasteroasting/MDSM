@@ -64,7 +64,7 @@ public sealed partial class World
     {
         if(Blocks.Crop(next) && !Blocks.Crop(previous) && !Farming.CanPlant)return false;
         if(next is BlockType.Torch or BlockType.Door or BlockType.FenceGate && !Structures.ContainsKey(cell) && Structures.Count>=65536)return false;
-        if(LiveDrops==null)return true;int drops=Blocks.Crop(previous)?5:0;
+        if(LiveDrops==null || SuppressHarvest)return true;int drops=Blocks.Crop(previous)?5:0;
         if(Blocks.IsSolid(previous) && !Blocks.IsSolid(next))foreach(Point3 direction in Adjacent)
         {
             Point3 p=cell+direction;BlockType b=GetBlock(p.X,p.Y,p.Z);
@@ -91,9 +91,9 @@ public sealed partial class World
         {
             Point3 p=cell+direction;BlockType b=GetBlock(p.X,p.Y,p.Z);
             if(b==BlockType.Torch && !IsSolid(cell.X,cell.Y,cell.Z) && p+Structure(p).Support==cell)
-            {SetBlock(p.X,p.Y,p.Z,BlockType.Air);LiveDrops?.Spawn(MDSM.Inventories.Items.FromBlock(b),1,new(p.X+.5f,p.Y+.5f,p.Z+.5f));}
+            {SetBlock(p.X,p.Y,p.Z,BlockType.Air);if(!SuppressHarvest)LiveDrops?.Spawn(MDSM.Inventories.Items.FromBlock(b),1,new(p.X+.5f,p.Y+.5f,p.Z+.5f));}
             if(direction.Y==1 && b==BlockType.Door && !IsSolid(cell.X,cell.Y,cell.Z))
-            {SetBlock(p.X,p.Y,p.Z,BlockType.Air);LiveDrops?.Spawn(MDSM.Inventories.Items.FromBlock(b),1,new(p.X+.5f,p.Y+.5f,p.Z+.5f));}
+            {SetBlock(p.X,p.Y,p.Z,BlockType.Air);if(!SuppressHarvest)LiveDrops?.Spawn(MDSM.Inventories.Items.FromBlock(b),1,new(p.X+.5f,p.Y+.5f,p.Z+.5f));}
         }
     }
     // Shared geometry for voxel meshes, collision and accurate ray hitboxes. World-space boxes.
@@ -106,6 +106,12 @@ public sealed partial class World
         if(shape==BlockShape.Fluid)
         {float height=Lava.IsLava(block)?Lava.Height(block):Water.Height(block);boxes[0]=new(origin,origin+new Vector3(1,height,1));return 1;}
         if(shape is BlockShape.Farmland){boxes[0]=new(origin,origin+new Vector3(1,15f/16,1));return 1;}
+        if (shape is BlockShape.Cross or BlockShape.Crop)
+        {
+            float inset = shape == BlockShape.Crop || Blocks.DoubleGrass(block) ? .1f : block == BlockType.TallGrass ? .15f : .25f;
+            boxes[0] = new(origin + new Vector3(inset, 0, inset), origin + new Vector3(1-inset, Blocks.DoubleGrass(block)?1:Blocks.PlantHeight(block), 1-inset));
+            return 1;
+        }
         if(shape==BlockShape.Torch)
         {Point3 support=Structure(cell).Support;Vector3 shift=new(support.X*.28f,support.Y==0?.2f:0,support.Z*.28f);boxes[0]=new(origin+shift+new Vector3(.4f,0,.4f),origin+shift+new Vector3(.6f,.7f,.6f));return 1;}
         if(shape is BlockShape.Gate or BlockShape.Door)
