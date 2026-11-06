@@ -162,15 +162,24 @@ public sealed class WorldRenderer : IDisposable
     {
         BoundingBox box = World.Bounds(hit.Cell);
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];int count=_world.BlockBoxes(hit.Cell,boxes);
+        _selectionEffect.View = camera.View;
+        _selectionEffect.Projection = camera.Projection(_device.Viewport.AspectRatio);
+        if(_world.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)==BlockType.GlassPane)
+        {
+            for(int i=0;i<count;i++)DrawSelectionBox(boxes[i],miningProgress);
+            return;
+        }
         if(count>0){box=boxes[0];for(int i=1;i<count;i++)box=BoundingBox.CreateMerged(box,boxes[i]);}
+        DrawSelectionBox(box,miningProgress);
+    }
+    private void DrawSelectionBox(BoundingBox box,float miningProgress)
+    {
         box.Min -= new Vector3(0.003f);
         box.Max += new Vector3(0.003f);
         box.GetCorners(_corners);
         for (int i = 0; i < OutlineEdges.Length; i++)
             _outline[i] = new VertexPositionColor(_corners[OutlineEdges[i]], miningProgress > 0 ? Color.Orange : new Color(25, 30, 35));
 
-        _selectionEffect.View = camera.View;
-        _selectionEffect.Projection = camera.Projection(_device.Viewport.AspectRatio);
         foreach (EffectPass pass in _selectionEffect.CurrentTechnique.Passes)
         {
             pass.Apply();

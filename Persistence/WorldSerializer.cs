@@ -378,7 +378,7 @@ public static partial class WorldSerializer
 
     private static void ValidateBlocks(ReadOnlySpan<byte> blocks)
     {
-        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.DoubleTallGrassUpper);
+        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.GlassPane);
         if(invalid>=0)throw new InvalidDataException($"Save contains unknown block ID {blocks[invalid]}.");
     }
 

@@ -166,13 +166,14 @@ public sealed partial class World
             _chunks[z * ChunksX + x].MarkDirty();
     }
 
-    public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds)
+    public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds,Point3? support=null)
     {
         BlockDefinition definition = Blocks.Get(block);
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
+            || support.HasValue && support.Value.Y>0 && Blocks.RejectsUnderside(block)
             || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
-            || (definition.Solid && Overlaps(Bounds(cell), playerBounds))
+            || (definition.Solid && PlacementOverlaps(cell,block,playerBounds))
             || (definition.Solid && Gravity.Intersects(Bounds(cell)))
             || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z),block)))
             return false;

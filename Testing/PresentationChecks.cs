@@ -158,7 +158,7 @@ internal static class PresentationChecks
                 Require(vertex.TextureCoordinate.X > 0 && vertex.TextureCoordinate.X < 1 && vertex.TextureCoordinate.Y > 0 && vertex.TextureCoordinate.Y < 1,
                     "Model UVs escaped atlas texel centers.");
             }
-            float minimumDepth=Blocks.Get(block).Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door?.1f:.5f;
+            float minimumDepth=Blocks.Get(block).Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door or BlockShape.Pane?.1f:.5f;
             Require(maxZ - minZ > minimumDepth, "Held cube/plant became a flat HUD icon.");
         }
         inventory.SelectedSlot = 1; Require(ViewModelSelection.Select(GameState.Playing, inventory).Kind == ViewModelKind.Hidden, "Empty slot did not hide the held item.");

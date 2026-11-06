@@ -263,7 +263,7 @@ public class Game1 : Game
         {
             if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
                 && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
-                BlockPlacement.TryPlace(world, _session.Inventory, hit.PlacementCell, player.Bounds,player.Creative);
+                BlockPlacement.TryPlace(world, _session.Inventory, hit, player.Bounds,player.Creative);
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
         if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward,hostiles:_session.Hostiles) != null) _selection = null;

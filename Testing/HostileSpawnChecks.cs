@@ -16,7 +16,7 @@ internal static class HostileSpawnChecks
     private static void Check(bool value,string message){if(!value)throw new InvalidOperationException(message);}
     public static void Verify()
     {
-        Check(HostilePopulation.Maximum==16 && HostilePopulation.MaximumSpawnAttempts==128
+        Check(HostilePopulation.Maximum==36 && HostilePopulation.MaximumSpawnAttempts==128
             && HostilePopulation.MinimumSpawnSeconds==2 && HostilePopulation.MaximumSpawnSeconds==4
             && HostilePopulation.MinimumSpawnDistance==24 && HostilePopulation.SpawnRadius==64
             && HostilePopulation.ActiveRadius==64 && HostilePopulation.DespawnRadius==128,"Agreed spawn settings changed.");
@@ -33,27 +33,27 @@ internal static class HostileSpawnChecks
         population.Update(.02f,player,arrows);
         Check(population.Entities.Count==1 && population.LastSpawnSearch.Spawned==1,"Floor-aware search failed in a suitable chamber.");
         Check(population.Entities[0].Position.Y==20,"Search used the surface/ceiling instead of the nearby cave floor.");
-        for(int cycle=0;cycle<30 && population.Entities.Count<HostilePopulation.Maximum;cycle++)
+        for(int cycle=0;cycle<HostilePopulation.Maximum*2 && population.Entities.Count<HostilePopulation.Maximum;cycle++)
         {
             double interval=population.SpawnSecondsRemaining;
             Check(interval>=2 && interval<=4,"Spawn interval escaped 2-4 seconds.");
             int before=population.Entities.Count;
             population.Update((float)(interval+.001),player,arrows);
-            Check(population.Entities.Count>=before && population.Entities.Count<=Math.Min(16,before+1),"More than one hostile spawned in a cycle.");
+            Check(population.Entities.Count>=before && population.Entities.Count<=Math.Min(HostilePopulation.Maximum,before+1),"More than one hostile spawned in a cycle.");
             var stats=population.LastSpawnSearch;
             Check(stats.CandidateColumns<=128 && stats.FloorChecks<=128*47,"Search work was unbounded.");
             Check(stats.CandidateColumns==stats.Spawned+stats.OutsideWorld+stats.Distance+stats.NoFloor+stats.Blocked+stats.Fluid+stats.Torch+stats.Occupied,"Diagnostic accounting is inconsistent.");
         }
         population.Update(4.01f,player,arrows);
-        Check(population.Entities.Count==16 && population.LastSpawnAttempts==0,"Population did not reach or respect the shared cap.");
+        Check(population.Entities.Count==HostilePopulation.Maximum && population.LastSpawnAttempts==0,"Population did not reach or respect the shared cap.");
         foreach(var mob in population.Entities)
         {
             float distance=Vector3.Distance(mob.Position,player.Position);
             Check(distance>=24 && distance<=64 && !world.IntersectsSolid(mob.Bounds),"Spawn escaped distance/clearance restrictions.");
         }
-        Check(population.ActiveCount==16,"New nearby hostiles are not active.");
+        Check(population.ActiveCount==HostilePopulation.Maximum,"New nearby hostiles are not active.");
         var drops=new DroppedItems(world);Check(population.Hit(population.Entities[0],100,player.Position,drops),"Could not remove a hostile for replenishment.");
-        population.Update(4.01f,player,arrows);Check(population.Entities.Count==16,"Spawning failed to refill a freed slot.");
+        population.Update(4.01f,player,arrows);Check(population.Entities.Count==HostilePopulation.Maximum,"Spawning failed to refill a freed slot.");
 
         // Radius, collision volume, fluid and finite-boundary safeguards stay in effect.
         Check(!population.Suitable(MobSpecies.Zombie,new(140.5f,20,128.5f),player.Position)
@@ -78,7 +78,7 @@ internal static class HostileSpawnChecks
         Console.WriteLine($"  Protected search: {lastSearch.CandidateColumns} columns, {lastSearch.FloorChecks} floor checks, {lastSearch.Torch} Torch rejections.");
 
         // Variable-length version-10 entity records support both the former cap and the new cap.
-        foreach(int count in new[]{8,16})
+        foreach(int count in new[]{8,16,HostilePopulation.Maximum})
         {
             MobState[] states=population.Capture().Take(count).ToArray();
             using var stream=new MemoryStream();WorldSerializer.Write(stream,new(world,"Spawn cap",player.Position,0,0,Hostiles:states));stream.Position=0;
@@ -86,7 +86,7 @@ internal static class HostileSpawnChecks
             Check(restored.Hostiles.AsSpan().SequenceEqual(states),"Old/new hostile populations changed in a save roundtrip.");
         }
         bool rejected=false;
-        try{using var stream=new MemoryStream();WorldSerializer.Write(stream,new(world,"Invalid cap",player.Position,0,0,Hostiles:Enumerable.Repeat(population.Capture()[0],17).ToArray()));}
+        try{using var stream=new MemoryStream();WorldSerializer.Write(stream,new(world,"Invalid cap",player.Position,0,0,Hostiles:Enumerable.Repeat(population.Capture()[0],HostilePopulation.Maximum+1).ToArray()));}
         catch(InvalidDataException){rejected=true;}Check(rejected,"Oversized saved population was accepted.");
         foreach(int seed in new[]{173,-907})
         {

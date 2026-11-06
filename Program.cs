@@ -1,4 +1,20 @@
-if (System.Array.Exists(args, argument => argument == "--hostile-model-test"))
+if (System.Array.Exists(args, argument => argument == "--placement-update-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.PlacementUpdateChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--torch-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.TorchChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--door-graphics-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.DoorChecks.RunGraphics();
+}
+else if (System.Array.Exists(args, argument => argument == "--door-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.DoorChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--hostile-model-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.HostileModelChecks.Run();
 }
@@ -52,8 +68,9 @@ else if (System.Array.Exists(args, argument => argument == "--self-test"))
 }
 else if (System.Array.Exists(args, argument => argument == "--graphics-test"))
 {
-    System.Environment.ExitCode = System.Math.Max(System.Math.Max(MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.PigGraphicsChecks.Run()),
-        System.Math.Max(MDSM.Testing.WaterGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(), MDSM.Testing.WorldExpansionGraphicsChecks.Run())));
+    System.Environment.ExitCode = System.Math.Max(MDSM.Testing.DoorChecks.RunGraphics(),
+        System.Math.Max(System.Math.Max(MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.PigGraphicsChecks.Run()),
+        System.Math.Max(MDSM.Testing.WaterGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(), MDSM.Testing.WorldExpansionGraphicsChecks.Run()))));
 }
 else
 {

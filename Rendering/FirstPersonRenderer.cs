@@ -69,7 +69,7 @@ internal sealed class FirstPersonRenderer : IDisposable
     private readonly GraphicsDevice _device;
     private readonly TextureAtlas _atlas; // ContentManager owns all textures.
     private readonly AlphaTestEffect _effect;
-    private readonly DynamicVertexBuffer _buffer;
+    private DynamicVertexBuffer _buffer;
     private readonly ViewModelGeometry _geometry = new();
     private ViewModelSelection _previous = new(ViewModelKind.Hidden, default);
 
@@ -91,6 +91,14 @@ internal sealed class FirstPersonRenderer : IDisposable
         if (selection != _previous)
         {
             _geometry.Build(selection);
+            if (_buffer.VertexCount < _geometry.VertexCount)
+            {
+                int capacity = _buffer.VertexCount;
+                while (capacity < _geometry.VertexCount) capacity *= 2;
+                var replacement = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), capacity, BufferUsage.WriteOnly);
+                _buffer.Dispose();
+                _buffer = replacement;
+            }
             _buffer.SetData(_geometry.Vertices, 0, _geometry.VertexCount, SetDataOptions.Discard);
             _previous = selection;
         }

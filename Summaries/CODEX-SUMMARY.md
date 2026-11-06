@@ -25,6 +25,12 @@ dotnet run --no-build
 
 The MonoGame build task restores the MGCB tool from the existing local tool manifest and compiles [Content/Blocks/terrain.png](./Content/Blocks/terrain.png) through [Content/Content.mgcb](./Content/Content.mgcb). The resulting atlas texture is copied into the build output and owned by the game's ContentManager. The small UI font remains generated in code and needs no installed system fonts.
 
+## Placement and building
+Six Glass blocks arranged in two rows of three craft 16 Glass Panes. Panes stack to 64, are available in Creative, and connect horizontally to other panes and solid full blocks. Their collision and targeting follow the thin connected shape. Like ordinary Glass, panes drop nothing when mined.
+Torches, Tall Grass and Flowers cannot be placed against block undersides. Valid floor and wall placement remains available under the existing support rules. Door edges use narrow strips of the existing artwork, while front/back textures remain unchanged.
+Both Survival and Creative apply a 150 ms cooldown after each successful block break. Holding LMB continues mining/breaking after the cooldown; Creative's first break is still instant when ready. Other mining times and tool rules are unchanged.
+
+
 ## Settings and frame rate
 
 Settings now also includes **Difficulty** (Peaceful, Easy, Normal, Hard) and **Game Mode** (Survival, Creative). Both are application-wide preferences saved alongside FPS settings and apply immediately to the active world. Normal/Survival are the defaults. Fall, Lava, hostile attacks and drowning use 0.5× damage on Peaceful/Easy, 1× on Normal and 1.5× on Hard, applied before unchanged Armor protection. Fractional health is retained. Rotten Flesh still causes exactly one Armor-bypassing damage in Survival. Peaceful immediately removes all hostiles and prevents their spawning; passive populations are unchanged.

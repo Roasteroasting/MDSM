@@ -16,6 +16,8 @@ internal static class PrototypeChecks
     {
         (string Name, Action Check)[] checks =
         {
+            ("Torch strip/cap UVs, floor and four wall transforms, targeting and persisted orientation",()=>{TorchChecks.Uvs();TorchChecks.PlacementAndPersistence();}),
+            ("Door Creative acquisition, inventory, crafting, placement, mining and save lifecycle",DoorChecks.InventoryAndWorld),
             ("Equipment identity, nonstackable transfers, durability and pickups",ProgressionChecks.Equipment),
             ("All survival shaped recipes, mirrors, offsets and full-durability outputs",ProgressionChecks.Recipes),
             ("Tool categories/tiers, hardness, harvesting, flint and interrupted wear",ProgressionChecks.Mining),
@@ -136,6 +138,7 @@ internal static class PrototypeChecks
         };
 
         int failures = 0;
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,PlacementUpdateChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,RefinementChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,CompletionChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,GameplayRefinementChecks.All));

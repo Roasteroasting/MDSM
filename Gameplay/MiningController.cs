@@ -9,6 +9,8 @@ namespace MDSM.Gameplay;
 
 public sealed class MiningController
 {
+    public const double BreakCooldownSeconds=.15;
+    public double CooldownRemaining { get; private set; }
     public Point3? Target { get; private set; }
     public float Progress { get; private set; }
     private BlockType _block;
@@ -22,6 +24,11 @@ public sealed class MiningController
 
     public bool Update(World world, DroppedItems items, BlockHit? selection, bool held, float elapsed,Inventory inventory=null,bool creative=false)
     {
+        double dt=float.IsFinite(elapsed) && elapsed>0?elapsed:0;
+        double blocked=Math.Min(CooldownRemaining,dt);
+        CooldownRemaining=Math.Max(0,CooldownRemaining-dt);
+        elapsed=(float)(dt-blocked);
+        if(CooldownRemaining>1e-9){Reset();return false;}
         if (!held || selection is not BlockHit hit || !float.IsFinite(hit.Distance) || hit.Distance < 0 || hit.Distance > BlockRaycaster.Reach
             || !world.Contains(hit.Cell.X, hit.Cell.Y, hit.Cell.Z)) { Reset(); return false; }
         BlockType block = world.GetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z);
@@ -35,7 +42,7 @@ public sealed class MiningController
             try { changed = world.SetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z, BlockType.Air); }
             finally { world.SuppressHarvest = false; }
             if (!changed) world.Containers.Reattach(contents);
-            Reset(); return changed;
+            Reset();if(changed)CooldownRemaining=BreakCooldownSeconds;return changed;
         }
         float seconds = MiningRules.Seconds(block,tool);
         if (!Blocks.IsRenderable(block) || seconds < 0) { Reset(); return false; }
@@ -64,17 +71,20 @@ public sealed class MiningController
         for(int i=0;i<plantCount;i++)items.Spawn(plantLoot[i],1,center+Vector3.Up);
         if(inventory!=null && (MiningRules.Wears(tool) || block==BlockType.Leaves && tool.Item==Items.Shears))inventory.WearSelected();
         Reset();
+        CooldownRemaining=BreakCooldownSeconds;
         return true;
     }
 }
 
 public static class BlockPlacement
 {
-    public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false)
+    public static bool TryPlace(World world, Inventory inventory, BlockHit hit, BoundingBox playerBounds,bool creative=false)
+        =>hit.HasPlacementFace && TryPlace(world,inventory,hit.PlacementCell,playerBounds,creative,new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z));
+    public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false,Point3? support=null)
     {
         ItemStack stack = inventory.Selected;
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)
-            || !(block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds))) return false;
+            || !(block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,support??new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds,support))) return false;
         if (!creative) inventory.ConsumeSelected();
         return true;
     }

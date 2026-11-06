@@ -39,7 +39,7 @@ public static class MiningRules
         || Items.Get(tool.Item).Tool==ToolKind.Pickaxe && Items.Get(tool.Item).Tier>=Profile(block).Required;
     public static ItemId? Drop(BlockType block,ItemStack held,Random random)
     {
-        if(!Harvests(block,held) || block is BlockType.Glass or BlockType.TallGrass or BlockType.Leaves || Blocks.Crop(block))return null;
+        if(!Harvests(block,held) || block is BlockType.Glass or BlockType.GlassPane or BlockType.TallGrass or BlockType.Leaves || Blocks.Crop(block))return null;
         return block switch
         {
             BlockType.Stone=>Items.FromBlock(BlockType.Cobblestone),BlockType.CoalOre=>Items.Coal,BlockType.DiamondOre=>Items.Diamond,

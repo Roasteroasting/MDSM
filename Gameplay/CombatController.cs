@@ -41,7 +41,7 @@ public sealed class CombatController
         _cooldown = Math.Max(0, _cooldown - elapsed);
         Target = EntityRaycaster.Cast(world, pigs, origin, direction,hostiles:hostiles);
         if (Target == null) { mining.Update(world, items, block, held, elapsed,inventory,creative); return; }
-        mining.Reset();
+        mining.Update(world,items,null,false,elapsed,inventory,creative);
         if(held && _cooldown<=0)
         {
             ItemStack tool=inventory?.Selected??default;int damage=Items.Get(tool.Item).AttackDamage;

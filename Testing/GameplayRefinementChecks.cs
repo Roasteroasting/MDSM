@@ -135,6 +135,7 @@ internal static class GameplayRefinementChecks
         ItemStack tool=inventory.Selected;var mining=new MiningController();Point3 cell=new(20,1,20);
         foreach(BlockType block in new[]{BlockType.Bedrock,BlockType.Stone,BlockType.Leaves,BlockType.Wheat1,BlockType.TallGrass,BlockType.Chest})
         {
+            mining.Update(world,items,null,false,.15f,inventory,true);
             world.SetBlock(cell.X,cell.Y,cell.Z,block);Check(mining.Update(world,items,new(cell,default,1),true,0,inventory,true),"Creative failed instant break: "+block);
             Check(items.Entities.Count==0 && inventory.Selected==tool,"Creative mined loot or wore tool.");
         }
@@ -230,7 +231,7 @@ internal static class GameplayRefinementChecks
         Check(world.SetBlock(20,1,20,BlockType.DoubleTallGrassLower) && world.GetBlock(20,2,20)==BlockType.DoubleTallGrassUpper,"Lower did not create upper.");
         var mining=new MiningController(1);mining.Update(world,items,new(new(20,2,20),default,1),true,0);
         Check(world.GetBlock(20,1,20)==BlockType.Air && world.GetBlock(20,2,20)==BlockType.Air && items.Entities.Sum(d=>d.Count)<=1,"Upper break orphaned plant or duplicated loot.");
-        world.SetBlock(20,1,20,BlockType.DoubleTallGrassLower);int oldDrops=items.Entities.Sum(d=>d.Count);mining.Update(world,items,new(new(20,1,20),default,1),true,0);
+        world.SetBlock(20,1,20,BlockType.DoubleTallGrassLower);int oldDrops=items.Entities.Sum(d=>d.Count);mining.Update(world,items,new(new(20,1,20),default,1),true,.15f);
         Check(world.GetBlock(20,1,20)==BlockType.Air && world.GetBlock(20,2,20)==BlockType.Air && items.Entities.Sum(d=>d.Count)-oldDrops<=1,"Lower break duplicated loot.");
         world.SetBlock(20,1,20,BlockType.DoubleTallGrassLower);world.SetBlock(20,0,20,BlockType.Dirt);
         Check(world.GetBlock(20,1,20)==BlockType.Air && world.GetBlock(20,2,20)==BlockType.Air,"Support loss orphaned grass.");

@@ -185,7 +185,7 @@ internal static class MobChecks
     public static void StartingAndRespawn()
     {
         Inventory inventory = Inventory.CreateNewWorld();
-        Require(Blocks.Selection.Length == 29 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
+        Require(Blocks.Selection.Length == 30 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
             "Placeable palette omitted wool/table or reordered existing blocks.");
         for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New worlds must not grant starting items.");
         Require(Inventory.CreateStarter()[13].IsEmpty, "Legacy migration granted new wool.");

@@ -43,6 +43,7 @@ public sealed partial class World
     }
     public bool PlaceStructure(Point3 cell,BlockType block,byte facing,Point3 support,BoundingBox player)
     {
+        if (support.Y>0 && Blocks.RejectsUnderside(block)) return false;
         if(Structures.Count>=65536)return false;
         if(block==BlockType.Door)
         {
@@ -53,7 +54,7 @@ public sealed partial class World
         else
         {
             if(block==BlockType.Torch && !IsSolid(cell.X+support.X,cell.Y+support.Y,cell.Z+support.Z))return false;
-            if(!TryPlace(cell,block,player))return false;
+            if(!TryPlace(cell,block,player,support))return false;
         }
         byte orientation=(byte)(facing%4);
         if(block==BlockType.Door)
@@ -101,6 +102,7 @@ public sealed partial class World
     {
         BlockType block=GetBlock(cell.X,cell.Y,cell.Z);BlockShape shape=Blocks.Get(block).Shape;
         if(collision && !Blocks.IsSolid(block))return 0;
+        if(shape==BlockShape.Pane)return PaneBoxes(cell,boxes);
         int count=0;Vector3 origin=new(cell.X,cell.Y,cell.Z);
         count=1;boxes[0]=new(origin,origin+Vector3.One);
         if(shape==BlockShape.Fluid)

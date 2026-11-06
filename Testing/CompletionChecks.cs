@@ -38,7 +38,7 @@ internal static class CompletionChecks
     public static int Run(){int failures=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}Console.WriteLine($"{All.Length-failures}/{All.Length} completion checks passed.");return failures==0?0:1;}
     public static void Recipes()
     {
-        Check(CraftingRecipes.All.Length==79,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
+        Check(CraftingRecipes.All.Length==80,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
         foreach(var recipe in CraftingRecipes.All)
         {
             outputs.Add(recipe.Output.Item);var pattern=(CraftingIngredient[])typeof(ShapedRecipe).GetField("_ingredients",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(recipe);
@@ -128,7 +128,7 @@ internal static class CompletionChecks
         world.SetBlock(22,1,22,BlockType.WaterSource);world.Farming.Update(1);for(int i=0;i<6;i++)world.Farming.Update(interval+.001);Check(world.GetBlock(20,1,20)==BlockType.Wheat7,"Wet crop did not mature.");
         var items=new DroppedItems(world);var mining=new MiningController(173);Check(mining.Update(world,items,new BlockHit(new(20,1,20),default,1),true,0),"Crop could not harvest.");
         Check(items.Entities.Count(d=>d.Item==Items.Wheat)==1 && items.Entities.Count(d=>d.Item==Items.WheatSeeds) is >=1 and <=4,"Mature harvest not guaranteed.");
-        world.SetBlock(20,1,20,BlockType.Wheat1);int count=items.Entities.Count;mining.Update(world,items,new(new(20,1,20),default,1),true,0);Check(items.Entities.Count==count+1 && items.Entities[^1].Item==Items.WheatSeeds,"Immature crop did not return one seed.");
+        world.SetBlock(20,1,20,BlockType.Wheat1);int count=items.Entities.Count;mining.Update(world,items,new(new(20,1,20),default,1),true,.15f);Check(items.Entities.Count==count+1 && items.Entities[^1].Item==Items.WheatSeeds,"Immature crop did not return one seed.");
         var random=new Random(173);Span<ItemId> loot=stackalloc ItemId[5];int seeds=0;for(int i=0;i<10000;i++)seeds+=MiningRules.Drops(BlockType.TallGrass,default,random,loot);Check(seeds is >900 and <1100,"Tall Grass seed probability wrong.");
         var player=new Player(new(20.5f,2,20.5f));for(int i=0;i<240;i++)player.Update(world,Vector3.Zero,false,1f/120);Check(Math.Abs(player.Position.Y-15f/16)<.001f,"Farmland collision is not lowered.");
     }
