@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MDSM.Entities;
 using MDSM.Gameplay;
+using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
@@ -16,13 +17,16 @@ internal sealed class ProjectileRenderer:IDisposable
         _device=device;_effect=new BasicEffect(device){VertexColorEnabled=true,World=Matrix.Identity,FogEnabled=true,
             FogColor=WorldRenderer.SkyColor.ToVector3(),FogStart=WorldRenderer.FogStart,FogEnd=WorldRenderer.FogEnd};
     }
-    public void Draw(Camera camera,Projectiles projectiles)
+    public void Draw(Camera camera,Projectiles projectiles,World world=null,float brightness=.5f)
     {
         int count=0;
+        float light=1;
+        if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
         for(int i=0;i<projectiles.Arrows.Count;i++)
         {
             var arrow=projectiles.Arrows[i];
             if(Vector3.DistanceSquared(camera.Position,arrow.Position)>WorldRenderer.FogEnd*WorldRenderer.FogEnd)continue;
+            light=world==null?1:BlockLighting.Visibility(world.Lighting.Effective(arrow.Position),brightness);
             Vector3 forward=arrow.Velocity.LengthSquared()>.00001f?Vector3.Normalize(arrow.Velocity):Vector3.Down,side=Vector3.Cross(forward,Vector3.Up);
             if(side.LengthSquared()<.001f)side=Vector3.Right;else side.Normalize();Vector3 up=Vector3.Cross(side,forward);
             Vector3 tail=arrow.Position-forward*.6f;
@@ -43,7 +47,7 @@ internal sealed class ProjectileRenderer:IDisposable
             foreach(var pass in _effect.CurrentTechnique.Passes){pass.Apply();_device.DrawUserPrimitives(PrimitiveType.LineList,_vertices,0,count/2);}
         }
         finally{_device.BlendState=blend;_device.DepthStencilState=depth;_device.RasterizerState=raster;_device.Textures[0]=null;_device.Textures[0]=texture;}
-        void Line(Vector3 a,Vector3 b,Color color){_vertices[count++]=new(a,color);_vertices[count++]=new(b,color);}
+        void Line(Vector3 a,Vector3 b,Color color){color=new Color(color.ToVector3()*light);_vertices[count++]=new(a,color);_vertices[count++]=new(b,color);}
     }
     public void Dispose()=>_effect.Dispose();
 }

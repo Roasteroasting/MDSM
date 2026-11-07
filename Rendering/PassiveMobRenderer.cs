@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework.Content;
 using Microsoft.Xna.Framework.Graphics;
 using MDSM.Entities;
 using MDSM.Gameplay;
+using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
@@ -29,7 +30,7 @@ internal sealed class PassiveMobRenderer : IDisposable
             AlphaFunction = CompareFunction.GreaterEqual, ReferenceAlpha = 128,
             FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
     }
-    public void Draw(Camera camera, PassiveMobPopulation population,HostilePopulation hostiles=null)
+    public void Draw(Camera camera, PassiveMobPopulation population,HostilePopulation hostiles=null,World world=null,float brightness=.5f)
     {
         _frustum.Matrix = camera.View * camera.Projection(_device.Viewport.AspectRatio);
         BlendState blend = _device.BlendState; DepthStencilState depth = _device.DepthStencilState;
@@ -39,16 +40,17 @@ internal sealed class PassiveMobRenderer : IDisposable
             _device.BlendState = BlendState.Opaque; _device.DepthStencilState = DepthStencilState.Default;
             _device.RasterizerState = RasterizerState.CullCounterClockwise; _device.SamplerStates[0] = SamplerState.PointClamp;
             _effect.View = camera.View; _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
+            if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
             for (int species = 0; species < _textures.Length; species++)
             {
                 _builder.Clear();
                 for (int i = 0; i < population.Entities.Count; i++)
                 {
                     PassiveMob mob = population.Entities[i];
-                    if ((int)mob.Species == species && !mob.IsDead && _frustum.Intersects(mob.RenderBounds)) PassiveMobModels.Append(_builder, mob);
+                    if ((int)mob.Species == species && !mob.IsDead && _frustum.Intersects(mob.RenderBounds)) Append(mob);
                 }
                 if(hostiles!=null)for(int i=0;i<hostiles.Entities.Count;i++)
-                {var mob=hostiles.Entities[i];if((int)mob.Species==species && !mob.IsDead && _frustum.Intersects(mob.RenderBounds))PassiveMobModels.Append(_builder,mob);}
+                {var mob=hostiles.Entities[i];if((int)mob.Species==species && !mob.IsDead && _frustum.Intersects(mob.RenderBounds))Append(mob);}
                 if (_builder.Count == 0) continue;
                 if (_buffer == null || _buffer.VertexCount < _builder.Count)
                 {
@@ -65,6 +67,13 @@ internal sealed class PassiveMobRenderer : IDisposable
         {
             _device.BlendState = blend; _device.DepthStencilState = depth; _device.RasterizerState = raster; _device.SamplerStates[0] = sampler;
             _device.Textures[0] = null; _device.Textures[0] = texture;
+        }
+        void Append(PassiveMob mob)
+        {
+            int start=_builder.Count;PassiveMobModels.Append(_builder,mob);
+            if(world==null)return;
+            float light=BlockLighting.Visibility(world.Lighting.Effective(mob.Position+Vector3.Up*(mob.Definition.Height*.5f)),brightness);
+            for(int v=start;v<_builder.Count;v++)_builder.Vertices[v].Color=new Color(_builder.Vertices[v].Color.ToVector3()*light);
         }
     }
     public void Dispose() { _buffer?.Dispose(); _effect.Dispose(); }

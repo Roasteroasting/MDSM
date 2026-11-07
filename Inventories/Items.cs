@@ -61,7 +61,7 @@ public static class Items
             definitions[48+material*4+slot]=new($"{(ArmorMaterial)material} {(ArmorSlot)slot}".ToUpperInvariant(),1,Durability:durability[material,slot],Sprite:49+material*4+slot,Armor:(ArmorSlot)slot,ArmorPoints:points[material,slot]);
         return definitions;
     }
-    private static ItemId[] CreateSprites() { var all=new ItemId[73];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;return all; }
+    private static ItemId[] CreateSprites() { var all=new ItemId[74];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;all[73]=new((byte)BlockType.Bed);return all; }
     public static ItemId Armor(ArmorMaterial material,ArmorSlot slot)=>material is >=ArmorMaterial.Leather and <=ArmorMaterial.Obsidian && slot is >=ArmorSlot.Helmet and <=ArmorSlot.Boots
         ?new((ushort)(304+(int)material*4+(int)slot)):throw new ArgumentException("Invalid armor.");
     public static bool LavaResistant(ItemId item)=>item.Value==(byte)BlockType.Obsidian || Get(item).Tier==ToolTier.Obsidian || item.Value is >=324 and <=327;
@@ -71,10 +71,10 @@ public static class Items
         :tier is >= ToolTier.Wood and <= ToolTier.Diamond && kind is >= ToolKind.Pickaxe and <= ToolKind.Shovel
         ? new ItemId((ushort)(267+((int)tier-1)*4+(int)kind-1)) : throw new ArgumentException("Invalid tiered tool.");
     public static ItemDefinition Get(ItemId item) => item.Value >=256 && item.Value <328 ? Definitions[item.Value-256]
-        : TryGetBlock(item,out BlockType block) ? new(Blocks.Get(block).Name,Sprite:block==BlockType.Sapling?28:-1) : default;
+        : TryGetBlock(item,out BlockType block) ? new(Blocks.Get(block).Name,StackLimit:block==BlockType.Bed?1:64,Sprite:block==BlockType.Sapling?28:block==BlockType.Bed?73:-1) : default;
     public static int StackLimit(ItemId item) => Get(item).StackLimit;
     public static ReadOnlySpan<ItemId> Sprites => SpriteItems;
-    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <328 || item==Sapling;
+    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <328 || item==Sapling || item.Value==(byte)BlockType.Bed;
     public static bool IsDefined(ItemId item) => IsSprite(item) || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
         ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));

@@ -29,10 +29,10 @@ public enum BlockType : byte
     Obsidian=32,FarmlandDry=33,FarmlandWet=34,Wheat1=35,Wheat2=36,Wheat3=37,Wheat4=38,Wheat5=39,Wheat6=40,Wheat7=41,
     Fence=42,FenceGate=43,Door=44,DoorUpper=45,Torch=46,Smoker=47,BlastFurnace=48,
     LavaSource=49,LavaFlow1=50,LavaFlow2=51,LavaFlow3=52,LavaFlow4=53,LavaFlow5=54,LavaFlow6=55,LavaFlow7=56,LavaFalling=57,
-    DoubleTallGrassLower=58,DoubleTallGrassUpper=59,GlassPane=60
+    DoubleTallGrassLower=58,DoubleTallGrassUpper=59,GlassPane=60,Bed=61,BedHead=62
 }
 
-public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane }
+public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
@@ -107,7 +107,9 @@ public static class Blocks
         new("LAVA",false,false,BlockShape.Fluid,50,Placeable:false,MiningSeconds:-1),
         new("DOUBLE TALL GRASS",false,false,BlockShape.Cross,51,Placeable:false,MiningSeconds:0),
         new("DOUBLE TALL GRASS",false,false,BlockShape.Cross,52,Placeable:false,MiningSeconds:0),
-        new("GLASS PANE",true,false,BlockShape.Pane,18,MiningSeconds:.45f)
+        new("GLASS PANE",true,false,BlockShape.Pane,18,MiningSeconds:.45f),
+        new("BED",true,false,BlockShape.Bed,56,54,59,MiningSeconds:.4f),
+        new("BED",true,false,BlockShape.Bed,55,53,59,Placeable:false,MiningSeconds:.4f)
     };
     private static readonly BlockType[] Palette =
     {
@@ -115,7 +117,7 @@ public static class Blocks
         BlockType.WoodenPlanks, BlockType.Cobblestone, BlockType.Sand, BlockType.Gravel,
         BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable,
         BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest,BlockType.Sapling,
-        BlockType.Obsidian,BlockType.Fence,BlockType.FenceGate,BlockType.Door,BlockType.Torch,BlockType.Smoker,BlockType.BlastFurnace,BlockType.GlassPane
+        BlockType.Obsidian,BlockType.Fence,BlockType.FenceGate,BlockType.Door,BlockType.Torch,BlockType.Smoker,BlockType.BlastFurnace,BlockType.GlassPane,BlockType.Bed
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
     public static bool IsDefined(BlockType block) => (int)block < Definitions.Length;
@@ -134,6 +136,7 @@ public static class Blocks
     public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + ((int)block-(int)BlockType.Wheat1)*.125f)
         :block==BlockType.Sapling?.8f:block is BlockType.RedFlower or BlockType.YellowFlower?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
+    public static bool Bed(BlockType block)=>block is BlockType.Bed or BlockType.BedHead;
     public static bool RejectsUnderside(BlockType block)=>block is BlockType.Torch or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower;
     public static bool ConnectsPane(BlockType block)=>block==BlockType.GlassPane || IsSolid(block) && Get(block).Shape==BlockShape.Cube;
 }

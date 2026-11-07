@@ -8,26 +8,22 @@ namespace MDSM.UI;
 
 internal static class SettingsLayout
 {
-    public static Rectangle Slider(Viewport viewport) => new((viewport.Width - Width(viewport)) / 2,
-        viewport.Height<300 ? 64 : Math.Max(42, Math.Min(viewport.Height / 2 - 64, viewport.Height - 210)), Width(viewport), viewport.Height<300?20:32);
-    public static Rectangle Toggle(Viewport viewport) => new(Slider(viewport).X,
-        Slider(viewport).Bottom + (viewport.Height<300?4:viewport.Height < 400 ? 4 : 16), Width(viewport), viewport.Height<300?24:viewport.Height<400?28:36);
-    public static Rectangle Bobbing(Viewport viewport)=>new(Toggle(viewport).X,Toggle(viewport).Bottom+(viewport.Height<300?4:6),Width(viewport),viewport.Height<300?24:viewport.Height<400?28:36);
-    public static Rectangle Choice(Viewport viewport, int index)
+    private static Rectangle Row(Viewport v,int row,int column=-1)
     {
-        int width = (Width(viewport) - 12) / 2;
-        return new(Slider(viewport).X + index * (width + 12), Bobbing(viewport).Bottom + (viewport.Height<300?4:6), width, viewport.Height<300?24:viewport.Height < 400 ? 28 : 36);
+        int gap=v.Height<400?4:10,height=v.Height<300?20:v.Height<400?28:36;
+        int width=Width(v),x=(v.Width-width)/2,top=v.Height<400?42:Math.Max(60,(v.Height-8*(height+gap))/2);
+        if(column>=0){width=(width-gap)/2;x+=column*(width+gap);}
+        return new(x,top+row*(height+gap),width,height);
     }
-    public static Rectangle Information(Viewport viewport, int index)
-    {
-        int width = (Width(viewport) - 12) / 2;
-        return new Rectangle(Slider(viewport).X + index * (width + 12),
-            Choice(viewport, 0).Bottom + (viewport.Height<300?4:8), width, viewport.Height<300?24:viewport.Height < 400 ? 28 : 42);
-    }
-    public static Rectangle Back(Viewport viewport) => new(Slider(viewport).X,
-        Information(viewport, 0).Bottom + (viewport.Height<300?4:8), (Width(viewport)-12)/2, viewport.Height<300?28:viewport.Height < 400 ? 32 : 42);
-    public static Rectangle Sounds(Viewport viewport){var back=Back(viewport);return new(back.Right+12,back.Y,back.Width,back.Height);}
-    private static int Width(Viewport viewport) => Math.Min(520, Math.Max(32, viewport.Width - 32));
+    public static Rectangle Slider(Viewport viewport)=>Row(viewport,0);
+    public static Rectangle Brightness(Viewport viewport)=>Row(viewport,1);
+    public static Rectangle Volume(Viewport viewport,int index)=>Row(viewport,2+index/2,index%2);
+    public static Rectangle Toggle(Viewport viewport)=>Row(viewport,4,0);
+    public static Rectangle Bobbing(Viewport viewport)=>Row(viewport,4,1);
+    public static Rectangle Choice(Viewport viewport,int index)=>Row(viewport,5,index);
+    public static Rectangle Information(Viewport viewport,int index)=>Row(viewport,6,index);
+    public static Rectangle Back(Viewport viewport)=>Row(viewport,7);
+    private static int Width(Viewport viewport) => Math.Min(600, Math.Max(32, viewport.Width - 32));
     public static int ValueAt(Rectangle slider, int x) => Math.Clamp(GameSettings.MinimumFps + (int)Math.Round(
         (x - slider.Left - 8) / (double)Math.Max(1, slider.Width - 17) * (GameSettings.MaximumFps - GameSettings.MinimumFps)),
         GameSettings.MinimumFps, GameSettings.MaximumFps);

@@ -16,7 +16,7 @@ internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId It
     {
         if (state != GameState.Playing) return new(ViewModelKind.Hidden, default);
         ItemStack stack = inventory.Selected;
-        if (!stack.IsEmpty && Items.IsSprite(stack.Item) && !Items.TryGetBlock(stack.Item,out _)) return new(ViewModelKind.Sprite, stack.Item);
+        if (!stack.IsEmpty && Items.IsSprite(stack.Item) && (!Items.TryGetBlock(stack.Item,out var spriteBlock) || spriteBlock==BlockType.Bed)) return new(ViewModelKind.Sprite, stack.Item);
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)) return new(ViewModelKind.Hidden, default);
         return new(Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch ? ViewModelKind.Plant : ViewModelKind.Cube, stack.Item);
     }
@@ -84,7 +84,7 @@ internal sealed class FirstPersonRenderer : IDisposable
         _buffer = new DynamicVertexBuffer(device, typeof(VertexPositionColorTexture), 48, BufferUsage.WriteOnly);
     }
 
-    public void Draw(GameState state, Inventory inventory)
+    public void Draw(GameState state, Inventory inventory,float light=1)
     {
         ViewModelSelection selection = ViewModelSelection.Select(state, inventory);
         if (selection.Kind == ViewModelKind.Hidden) return;
@@ -116,6 +116,7 @@ internal sealed class FirstPersonRenderer : IDisposable
             _device.Clear(ClearOptions.DepthBuffer, Color.Transparent, 1, 0);
             _device.Viewport = new Viewport(bounds);
             _effect.Texture = selection.Kind==ViewModelKind.Sprite?_atlas.ItemTexture(selection.Item):_atlas.Texture;
+            _effect.DiffuseColor=new Vector3(light);
             _effect.Projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(50), bounds.Width / (float)bounds.Height, 0.05f, 10);
             _effect.World = Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(0.25f) * Matrix.CreateRotationZ(-0.1f) * Matrix.CreateTranslation(0, 0, -2.2f);
             _device.SetVertexBuffer(_buffer);

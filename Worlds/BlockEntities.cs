@@ -131,6 +131,7 @@ public sealed class BlockEntities(World world)
             if(!_entries.TryGetValue(cell,out var entry)){_sleep.Add(cell);continue;}
             double burn=entry.Burn;int output=entry[2].Count;
             entry.Update(elapsed);LastProcessed++;if(!entry.Active)_sleep.Add(cell);
+            if((burn>0)!=(entry.Burn>0))world.Lighting.Invalidate(cell);
             if(burn<=0 && entry.Burn>0)world.Sounds?.At(SoundKind.Ignite,BlockSounds.Center(cell));
             if(entry[2].Count>output)world.Sounds?.At(SoundKind.Smelt,BlockSounds.Center(cell));
         }

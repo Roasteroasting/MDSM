@@ -1,4 +1,28 @@
-if (System.Array.Exists(args, argument => argument == "--audio-graphics-test"))
+if(System.Array.Exists(args,a=>a=="--lighting-graphics-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.LightingGraphicsChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--lighting-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.LightingChecks.Run();
+}
+else if(args.Length==2 && args[0]=="--lighting-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var lightingSize))
+{
+    System.Environment.ExitCode=MDSM.Testing.LightingChecks.Performance(lightingSize);
+}
+else if(args.Length==3 && args[0]=="--compression-benchmark" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var benchmarkWorldSize))
+{
+    System.Environment.ExitCode=MDSM.Testing.CompressionBenchmarks.Pipeline(benchmarkWorldSize,args[2]);
+}
+else if(System.Array.Exists(args,a=>a=="--compression-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.CompressionChecks.Run();
+}
+else if(args.Length==2 && args[0]=="--compression-fixture" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var fixtureSize))
+{
+    System.Environment.ExitCode=MDSM.Testing.CompressionBenchmarks.Fixture(fixtureSize);
+}
+else if (System.Array.Exists(args, argument => argument == "--audio-graphics-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.AudioGraphicsChecks.Run();
 }

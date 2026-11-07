@@ -21,7 +21,7 @@ public sealed class Chunk
     public int StructureCount { get; private set; }
     public int CropCount { get; private set; }
     public int DoubleGrassCount { get; private set; }
-    private static bool Special(BlockType block)=>block is BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.Torch;
+    private static bool Special(BlockType block)=>block is BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.Torch or BlockType.Bed or BlockType.BedHead;
     public BoundingBox Bounds { get; }
     internal System.ReadOnlySpan<byte> Blocks => _blocks;
 
@@ -80,7 +80,7 @@ public sealed class Chunk
         for(int i=(int)BlockType.WaterSource;i<=(int)BlockType.WaterFalling;i++)WaterCount+=counts[i];
         for(int i=(int)BlockType.LavaSource;i<=(int)BlockType.LavaFalling;i++)LavaCount+=counts[i];
         for(int i=(int)BlockType.Wheat1;i<=(int)BlockType.Wheat7;i++)CropCount+=counts[i];
-        StructureCount=counts[(int)BlockType.FenceGate]+counts[(int)BlockType.Door]+counts[(int)BlockType.DoorUpper]+counts[(int)BlockType.Torch];
+        StructureCount=counts[(int)BlockType.FenceGate]+counts[(int)BlockType.Door]+counts[(int)BlockType.DoorUpper]+counts[(int)BlockType.Torch]+counts[(int)BlockType.Bed]+counts[(int)BlockType.BedHead];
         for (int z = 0; z < Size; z++) for (int x = 0; x < Size; x++)
         {
             int y=storedHeight-1;while(y>=0 && !MDSM.Worlds.Blocks.IsSolid(GetBlock(x,y,z)))y--;

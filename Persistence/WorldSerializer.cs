@@ -15,7 +15,8 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
-    public const int FormatVersion = 10;
+    public const int FormatVersion = 12;
+    internal const int LegacyFormatVersion = 10;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
     private const int ChecksumSize = 32;
@@ -45,7 +46,7 @@ public static partial class WorldSerializer
         return name;
     }
 
-    public static void Write(Stream destination, WorldSave save)
+    internal static void WriteLegacy(Stream destination, WorldSave save)
     {
         save.World.ValidatePairedPlants();
         string name = ValidateName(save.Name);
@@ -67,7 +68,7 @@ public static partial class WorldSerializer
         using (var writer = new BinaryWriter(hashed, Utf8, true))
         {
             writer.Write(Magic);
-            writer.Write(FormatVersion);
+            writer.Write(LegacyFormatVersion);
             writer.Write(save.World.Width); writer.Write(World.Height); writer.Write(save.World.Depth);
             writer.Write(save.World.Seed);
             byte[] nameBytes = Utf8.GetBytes(name);
@@ -132,7 +133,7 @@ public static partial class WorldSerializer
         destination.Write(hash.GetHashAndReset());
     }
 
-    public static WorldSave Read(Stream source)
+    private static WorldSave ReadLegacy(Stream source)
     {
         try
         {
@@ -150,6 +151,7 @@ public static partial class WorldSerializer
             source.ReadExactly(header.AsSpan(prefix.Length));
             using var reader = new BinaryReader(new MemoryStream(header, false), Utf8);
             WorldMetadata metadata = ReadHeader(reader);
+            if(metadata.Version>LegacyFormatVersion)throw new InvalidDataException("Unsupported uncompressed payload version.");
             if (source.CanSeek && source.Length - source.Position < (long)metadata.StoredBlockCount + ChecksumSize)
                 throw new InvalidDataException("Save file is truncated.");
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -298,7 +300,7 @@ public static partial class WorldSerializer
     }
 
     // Listing reads only the small header. The complete checksum is checked when loading.
-    public static WorldMetadata ReadMetadata(Stream source)
+    private static WorldMetadata ReadLegacyMetadata(Stream source)
     {
         using var reader = new BinaryReader(source, Utf8, true);
         WorldMetadata metadata = ReadHeader(reader);
@@ -378,7 +380,7 @@ public static partial class WorldSerializer
 
     private static void ValidateBlocks(ReadOnlySpan<byte> blocks)
     {
-        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.GlassPane);
+        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.BedHead);
         if(invalid>=0)throw new InvalidDataException($"Save contains unknown block ID {blocks[invalid]}.");
     }
 

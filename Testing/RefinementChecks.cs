@@ -141,7 +141,7 @@ internal static class RefinementChecks
         Require(population.TryShear(sheep,inv,items),"Regrown sheep cannot be sheared.");int before=items.Entities.Sum(d=>d.Count);
         population.Hit(sheep,20,Vector3.Zero,items);Require(items.Entities.Sum(d=>d.Count)==before && population.Entities.Count==0,"Sheared sheep dropped duplicate wool.");
     }
-    internal static byte[] Encode(WorldSave save){using var stream=new MemoryStream();WorldSerializer.Write(stream,save);return stream.ToArray();}
+    internal static byte[] Encode(WorldSave save){using var stream=new MemoryStream();WorldSerializer.WriteLegacy(stream,save);return stream.ToArray();} // v10 layout fixtures
     private static WorldSave Decode(byte[] bytes)=>WorldSerializer.Read(new MemoryStream(bytes));
     public static void Persistence()
     {

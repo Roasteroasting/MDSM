@@ -13,6 +13,11 @@
 
 #---------------------------------- Content ---------------------------------#
 
+#begin Effects/BlockLighting.fx
+/importer:EffectImporter
+/processor:EffectProcessor
+/build:Effects/BlockLighting.fx
+
 #begin Blocks/terrain.png
 /importer:TextureImporter
 /processor:TextureProcessor

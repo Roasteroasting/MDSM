@@ -57,7 +57,7 @@ internal static class RefinementGraphicsChecks
             using(var file=File.Create(Path.Combine(AppContext.BaseDirectory,"sheared-sheep.png")))target.SaveAsPng(file,640,360);RestoreTexture();
         }
         // Menus use elapsed update time; changing FPS or drawing frames cannot expire messages.
-        menu.Message("WORLD SAVED.",seconds:8);Input(7.999);Require(menu.CurrentMessage!="","Save notice expired early.");Input(.001);Require(menu.CurrentMessage=="","Save notice did not expire at eight seconds.");
+        menu.Message("WORLD SAVED.",seconds:3);Input(2.999);Require(menu.CurrentMessage!="","Save notice expired early.");Input(.001);Require(menu.CurrentMessage=="","Save notice did not expire at three seconds.");
         menu.Message("ERROR",true);Input(100);Require(menu.CurrentMessage=="ERROR","Error messages were given an unsolicited expiration.");
         Call("HandleMenuAction",MenuAction.OpenSettings);Require(game.State==GameState.Settings,"Settings could not open.");
         var viewport=device.Viewport;Rectangle bob=SettingsLayout.Bobbing(viewport);
@@ -66,7 +66,7 @@ internal static class RefinementGraphicsChecks
         foreach(var size in new[]{new Point(320,240),new Point(640,480),new Point(1280,720)})
         {
             viewport=new Viewport(0,0,size.X,size.Y);Rectangle a=SettingsLayout.Toggle(viewport),b=SettingsLayout.Bobbing(viewport),c=SettingsLayout.Information(viewport,0),d=SettingsLayout.Back(viewport);
-            Require(a.Bottom<b.Top && b.Bottom<c.Top && c.Bottom<d.Top && d.Bottom<=size.Y,"New setting overlaps another control.");
+            Require(a.Right<b.Left && a.Y==b.Y && b.Bottom<c.Top && c.Bottom<d.Top && d.Bottom<=size.Y,"New setting overlaps another control.");
         }
         Call("HandleMenuAction",MenuAction.Back);Input(1);Require(game.State==GameState.MainMenu,"Settings Back failed.");
         var store=Field<SettingsStore>("_settingsStore");Require(!store.Load().ViewBobbing,"View bobbing did not persist through real menu action.");settings.ViewBobbing=true;
@@ -86,7 +86,7 @@ internal static class RefinementGraphicsChecks
         Input(60);Require(session.Mobs.Entities[0].WoolSeconds==woolTimer && liveWorld.Vegetation.Capture().Saplings.Single().Remaining==growth,"Pause advanced sheep/sapling timers.");
         Call("HandleMenuAction",MenuAction.SaveAndReturn);var restored=saves.Load(id);
         Require(restored.Mobs.Single().Sheared && restored.Mobs.Single().WoolSeconds==woolTimer && restored.DroppedItems.Sum(d=>d.Count)==wool,"Real save/return changed sheared state or wool drops.");
-        Input(7.999);Require(menu.CurrentMessage!="","Save/exit notice expired too early.");Input(.001);Require(menu.CurrentMessage=="","Real save/exit notice remained after eight seconds.");
-        Console.WriteLine("PASS: Unified GPU atlas/new held items, visibly sheared geometry, texture/depth restoration, real bobbing Settings input/persistence, responsive layout and eight-second save message.");
+        Input(2.999);Require(menu.CurrentMessage!="","Save/exit notice expired too early.");Input(.001);Require(menu.CurrentMessage=="","Real save/exit notice remained after three seconds.");
+        Console.WriteLine("PASS: Unified GPU atlas/new held items, visibly sheared geometry, texture/depth restoration, real bobbing Settings input/persistence, responsive layout and three-second save message.");
     }
 }

@@ -72,17 +72,19 @@ public sealed partial class World
     }
     private bool CanDetailChange(Point3 cell,BlockType previous,BlockType next)
     {
+        if(Blocks.Bed(next) && !_bedEdit)return false;
         if(Blocks.Crop(next) && !Blocks.Crop(previous) && !Farming.CanPlant)return false;
         if(next is BlockType.Torch or BlockType.Door or BlockType.FenceGate && !Structures.ContainsKey(cell) && Structures.Count>=65536)return false;
         return true; // The outer block-change context reserves the complete cascade's loot.
     }
     private void DetailChanged(Point3 cell,BlockType previous,BlockType next)
     {
+        BedChanged(cell,previous,next);
         Farming.Changed(cell,previous,next);
         if(previous==BlockType.Torch)Torches.Remove(cell);
         if(next==BlockType.Torch){Torches.Add(cell);Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));}
         if(next is BlockType.FenceGate or BlockType.Door)Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));
-        if(previous!=next && next is not (BlockType.Torch or BlockType.FenceGate or BlockType.Door))Structures.Remove(cell);
+        if(previous!=next && next is not (BlockType.Torch or BlockType.FenceGate or BlockType.Door) && !Blocks.Bed(next))Structures.Remove(cell);
         if(!_structureEdit && _doorPartnerEdit!=cell && previous is BlockType.Door or BlockType.DoorUpper)
         {
             Point3 other=cell+new Point3(0,previous==BlockType.Door?1:-1,0);
@@ -119,6 +121,7 @@ public sealed partial class World
         if(shape==BlockShape.Fluid)
         {float height=Lava.IsLava(block)?Lava.Height(block):Water.Height(block);boxes[0]=new(origin,origin+new Vector3(1,height,1));return 1;}
         if(shape is BlockShape.Farmland){boxes[0]=new(origin,origin+new Vector3(1,15f/16,1));return 1;}
+        if(shape==BlockShape.Bed){boxes[0]=new(origin,origin+new Vector3(1,9f/16,1));return 1;}
         if (shape is BlockShape.Cross or BlockShape.Crop)
         {
             float inset = shape == BlockShape.Crop || Blocks.DoubleGrass(block) ? .1f : block == BlockType.TallGrass ? .15f : .25f;

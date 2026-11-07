@@ -258,7 +258,7 @@ internal static class PigChecks
         SHA256.HashData(v3.AsSpan(0, v3.Length - 32)).CopyTo(v3, v3.Length - 32);
         return v3;
     }
-    private static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.Write(stream, save); return stream.ToArray(); }
+    private static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.WriteLegacy(stream, save); return stream.ToArray(); } // v10 layout fixtures
     private static WorldSave Decode(byte[] bytes) => WorldSerializer.Read(new MemoryStream(bytes));
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
     private static void Throws<T>(Action action) where T : Exception { try { action(); } catch (T) { return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }

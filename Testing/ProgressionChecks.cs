@@ -50,7 +50,7 @@ internal static class ProgressionChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length==80,"Recipe registration count wrong.");
+        Require(CraftingRecipes.All.Length==81,"Recipe registration count wrong.");
         ItemId P=Block(BlockType.WoodenPlanks),C=Block(BlockType.Cobblestone),S=Items.Stick,T=Items.String;
         void Check(int w,int h,ItemId result,int quantity,params ItemId[] cells)
         {
@@ -212,7 +212,7 @@ internal static class ProgressionChecks
         high.Projectiles.Update(.5f,high.Mobs,high.Items,high.WearEquipment);
         Require(high.Projectiles.Arrows.Count==1 && high.Projectiles.Arrows[0].Position.Y>World.Height+16,"Valid arrow arc above the build ceiling disappeared.");
     }
-    private static byte[] Encode(WorldSave save){using var stream=new MemoryStream();WorldSerializer.Write(stream,save);return stream.ToArray();}
+    private static byte[] Encode(WorldSave save){using var stream=new MemoryStream();WorldSerializer.WriteLegacy(stream,save);return stream.ToArray();} // v10 layout fixtures
     private static WorldSave Decode(byte[] bytes)=>WorldSerializer.Read(new MemoryStream(bytes));
     public static void Persistence()
     {

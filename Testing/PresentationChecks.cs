@@ -147,6 +147,8 @@ internal static class PresentationChecks
         {
             inventory.SetSlot(0, new ItemStack(Items.FromBlock(block), 1));
             selection = ViewModelSelection.Select(GameState.Playing, inventory);
+            if(block==BlockType.Bed)
+            {Require(selection.Kind==ViewModelKind.Sprite,"Bed must use its item artwork in first person.");geometry.Build(selection);Require(geometry.VertexCount==ItemSpriteGeometry.VertexCount,"Bed sprite is missing.");continue;}
             bool plant = Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch;
             Require(selection.Item == inventory.Selected.Item && selection.Kind == (plant ? ViewModelKind.Plant : ViewModelKind.Cube), "Held item ignores inventory/shape.");
             geometry.Build(selection);int expected=plant?24:block==BlockType.Door?72:block is BlockType.Fence or BlockType.FenceGate?108:36;

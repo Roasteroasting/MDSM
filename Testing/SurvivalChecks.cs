@@ -344,7 +344,7 @@ internal static class SurvivalChecks
     {
         var counts = new int[14]; foreach (DroppedItem item in items.Entities) { Require(item.Count is >= 1 and <= 64, "Invalid entity stack size."); counts[item.Item.Value] += item.Count; } return counts;
     }
-    private static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.Write(stream, save); return stream.ToArray(); }
+    private static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.WriteLegacy(stream, save); return stream.ToArray(); } // v10 layout fixtures
     private static WorldSave Decode(byte[] bytes) => WorldSerializer.Read(new MemoryStream(bytes));
     private static void Sign(byte[] bytes) => SHA256.HashData(bytes.AsSpan(0, bytes.Length - 32)).CopyTo(bytes, bytes.Length - 32);
     private static bool Near(float a, float b) => MathF.Abs(a - b) < 0.002f;

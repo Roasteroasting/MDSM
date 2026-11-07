@@ -106,9 +106,9 @@ internal static class AudioGraphicsChecks
         }
         private void VerifyNavigation()
         {
-            Call("HandleMenuAction",MenuAction.OpenSettings);Click(SettingsLayout.Sounds(GraphicsDevice.Viewport));Check(State==GameState.SoundSettings,"Sounds submenu inaccessible.");
+            Call("HandleMenuAction",MenuAction.OpenSettings);Check(State==GameState.Settings,"Integrated sound settings inaccessible.");
             Rectangle slider=SoundSettingsLayout.Slider(GraphicsDevice.Viewport,0);Click(new(slider.X+slider.Width/4,slider.Y,1,slider.Height));Check(Settings.MasterVolume is >.2f and <.3f,"Master volume slider not interactive.");
-            Call("HandleMenuAction",MenuAction.Back);Check(State==GameState.Settings,"Sounds Back lost Settings.");Call("HandleMenuAction",MenuAction.Back);Check(State==GameState.MainMenu,"Main-menu origin lost.");
+            Call("HandleMenuAction",MenuAction.Back);Check(State==GameState.MainMenu,"Main-menu origin lost.");
             var store=Field<SettingsStore>("_settingsStore");Check(Math.Abs(store.Load().MasterVolume-Settings.MasterVolume)<.0001,"Sound preference not saved.");
         }
         private void VerifyMiningAndCrafting()
@@ -123,8 +123,8 @@ internal static class AudioGraphicsChecks
             for(int slot=0;slot<4;slot++)Session.Crafting.SetSlot(slot,new(Items.FromBlock(BlockType.WoodenPlanks),1));
             Pump();before=Audio.Played;Click(InventoryLayout.Output(GraphicsDevice.Viewport,2));Check(Session.InventoryInteraction.Cursor.Item==Items.FromBlock(BlockType.CraftingTable) && Audio.Played==before+1,"Successful crafting did not emit exactly one result sound.");
             before=Audio.Played;Click(InventoryLayout.Output(GraphicsDevice.Viewport,2));Check(Audio.Played==before,"Failed crafting produced sound.");
-            Input();Input(default,Keys.E);Call("SetState",GameState.Paused);Call("HandleMenuAction",MenuAction.OpenSettings);Click(SettingsLayout.Sounds(GraphicsDevice.Viewport));
-            Check(State==GameState.SoundSettings,"Paused Sounds entry failed.");Call("HandleMenuAction",MenuAction.Back);Call("HandleMenuAction",MenuAction.Back);Check(State==GameState.Paused,"Sounds resumed paused gameplay.");
+            Input();Input(default,Keys.E);Call("SetState",GameState.Paused);Call("HandleMenuAction",MenuAction.OpenSettings);
+            Check(State==GameState.Settings,"Paused sound settings entry failed.");Call("HandleMenuAction",MenuAction.Back);Check(State==GameState.Paused,"Sounds resumed paused gameplay.");
             Call("HandleMenuAction",MenuAction.SaveAndReturn);Check(State==GameState.MainMenu,"Audio session save/return failed.");
         }
     }

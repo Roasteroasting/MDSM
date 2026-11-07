@@ -44,7 +44,7 @@ public static partial class WorldSerializer
         {
             Point3 p=ReadPoint(reader);byte facing=reader.ReadByte();bool open=reader.ReadBoolean();Point3 support=ReadPoint(reader);
             if(facing>(world.GetBlock(p.X,p.Y,p.Z)==BlockType.Door?7:3)||!world.Contains(p.X,p.Y,p.Z)||Math.Abs((long)support.X)+Math.Abs((long)support.Y)+Math.Abs((long)support.Z)!=1
-                ||world.GetBlock(p.X,p.Y,p.Z) is not (BlockType.Torch or BlockType.Door or BlockType.FenceGate)||!world.Structures.TryAdd(p,new(p,facing,open,support)))throw new InvalidDataException("Invalid structure state.");
+                ||world.GetBlock(p.X,p.Y,p.Z) is not (BlockType.Torch or BlockType.Door or BlockType.FenceGate or BlockType.Bed or BlockType.BedHead)||!world.Structures.TryAdd(p,new(p,facing,open,support)))throw new InvalidDataException("Invalid structure state.");
             if(world.GetBlock(p.X,p.Y,p.Z)==BlockType.Torch)world.Torches.Add(p);
         }
         ValidateStructures(world);
@@ -69,6 +69,12 @@ public static partial class WorldSerializer
             Point3 p=state.Cell;BlockType block=world.GetBlock(p.X,p.Y,p.Z);
             if(state.Facing>(block==BlockType.Door?7:3)||Math.Abs((long)state.Support.X)+Math.Abs((long)state.Support.Y)+Math.Abs((long)state.Support.Z)!=1)throw new InvalidDataException("Invalid structure orientation/support.");
             if(block==BlockType.Door){expected++;if(world.GetBlock(p.X,p.Y+1,p.Z)!=BlockType.DoorUpper)throw new InvalidDataException("Orphaned door.");}
+            else if(Blocks.Bed(block))
+            {
+                Point3 other=world.BedPartner(p,block);
+                if(state.Open || world.GetBlock(other.X,other.Y,other.Z)!=(block==BlockType.Bed?BlockType.BedHead:BlockType.Bed)
+                    || !world.Structures.TryGetValue(other,out var pair) || pair.Facing!=state.Facing)throw new InvalidDataException("Orphaned or mismatched Bed halves.");
+            }
             else if(block is not (BlockType.FenceGate or BlockType.Torch))throw new InvalidDataException("Structure/block mismatch.");
         }
         int actual=0;foreach(var chunk in world.Chunks)actual+=chunk.StructureCount;if(actual!=expected)throw new InvalidDataException("Missing structure metadata or orphaned door halves.");

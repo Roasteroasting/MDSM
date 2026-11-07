@@ -41,7 +41,7 @@ internal static class HostileSpawnChecks
             population.Update((float)(interval+.001),player,arrows);
             Check(population.Entities.Count>=before && population.Entities.Count<=Math.Min(HostilePopulation.Maximum,before+1),"More than one hostile spawned in a cycle.");
             var stats=population.LastSpawnSearch;
-            Check(stats.CandidateColumns<=128 && stats.FloorChecks<=128*47,"Search work was unbounded.");
+            Check(stats.CandidateColumns<=128 && stats.FloorChecks<=128*(World.Height-1),"Search work was unbounded.");
             Check(stats.CandidateColumns==stats.Spawned+stats.OutsideWorld+stats.Distance+stats.NoFloor+stats.Blocked+stats.Fluid+stats.Torch+stats.Occupied,"Diagnostic accounting is inconsistent.");
         }
         population.Update(4.01f,player,arrows);
@@ -68,11 +68,11 @@ internal static class HostileSpawnChecks
         Check(!population.Suitable(MobSpecies.Spider,new(160.5f,20,128.5f),player.Position),"Lava spawn was accepted.");world.SetBlock(160,20,128,BlockType.Air);
 
         // Fully Torch-protected chamber must fail without scanning the entire world or retrying every frame.
-        for(int z=64;z<=192;z+=16)for(int x=64;x<=192;x+=16)world.SetBlock(x,20,z,BlockType.Torch);
+        for(int z=64;z<=192;z+=8)for(int x=64;x<=192;x+=8)world.SetBlock(x,20,z,BlockType.Torch);
         var protectedPopulation=new HostilePopulation(world);protectedPopulation.Update(5.01f,player,arrows);
         Check(protectedPopulation.Entities.Count==0 && protectedPopulation.LastSpawnAttempts==128
             && protectedPopulation.LastSpawnSearch.Torch>100
-            && protectedPopulation.LastSpawnSearch.Torch+protectedPopulation.LastSpawnSearch.Distance==128,"Torch rejection/search budget incorrect.");
+            && protectedPopulation.LastSpawnSearch.Torch+protectedPopulation.LastSpawnSearch.Distance==128,$"Light rejection/search budget incorrect: {protectedPopulation.LastSpawnSearch}");
         HostileSpawnSearch lastSearch=protectedPopulation.LastSpawnSearch;protectedPopulation.Update(.001f,player,arrows);
         Check(protectedPopulation.LastSpawnAttempts==0 && protectedPopulation.LastSpawnSearch==lastSearch,"Failed spawning retried every tick or discarded diagnostics.");
         Console.WriteLine($"  Protected search: {lastSearch.CandidateColumns} columns, {lastSearch.FloorChecks} floor checks, {lastSearch.Torch} Torch rejections.");
@@ -105,7 +105,7 @@ internal static class HostileSpawnChecks
                 enemies.Update((float)seconds,explorer,projectiles);checks+=enemies.LastSpawnSearch.FloorChecks;
                 seconds=enemies.SpawnSecondsRemaining+.001;
             }
-            Check(enemies.Entities.Count>=3 && enemies.LastSpawnSearch.FloorChecks<=128*47,"Generated cave spawning remained excessively sparse or unbounded.");
+            Check(enemies.Entities.Count>=3 && enemies.LastSpawnSearch.FloorChecks<=128*(World.Height-1),"Generated cave spawning remained excessively sparse or unbounded.");
             Console.WriteLine($"  Natural Small seed {seed}, cave at {explorer.Position}: {enemies.Entities.Count} hostiles / 10 cycles, {checks} floor checks total.");
         }
     }

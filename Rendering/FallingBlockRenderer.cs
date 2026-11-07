@@ -27,10 +27,11 @@ internal sealed class FallingBlockRenderer : IDisposable
             AlphaFunction = CompareFunction.GreaterEqual, ReferenceAlpha = 128,
             FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
     }
-    public void Draw(Camera camera, FallingBlockSimulation simulation, float fraction = 1)
+    public void Draw(Camera camera, FallingBlockSimulation simulation, float fraction = 1,World world=null,float brightness=.5f)
     {
         if (simulation.Active.Count == 0) return;
         _effect.View = camera.View; _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
+        if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
         _frustum.Matrix = _effect.View * _effect.Projection;
         int count = 0;
         for (int i = 0; i < simulation.Active.Count; i++)
@@ -39,9 +40,10 @@ internal sealed class FallingBlockRenderer : IDisposable
             Vector3 position = block.RenderPosition(fraction);
             if (!_frustum.Intersects(new BoundingBox(position, position + Vector3.One))) continue;
             VertexPositionColorTexture[] template = block.Block == BlockType.Sand ? _sand : _gravel;
+            float light=world==null?1:BlockLighting.Visibility(world.Lighting.Effective(position+Vector3.One*.5f),brightness);
             if (count + template.Length > _vertices.Length) Array.Resize(ref _vertices, _vertices.Length * 2);
             foreach (VertexPositionColorTexture vertex in template)
-                _vertices[count++] = new VertexPositionColorTexture(vertex.Position + position, vertex.Color, vertex.TextureCoordinate);
+                _vertices[count++] = new VertexPositionColorTexture(vertex.Position + position, new Color(vertex.Color.ToVector3()*light), vertex.TextureCoordinate);
         }
         if (count == 0) return;
         if (_buffer == null || _buffer.VertexCount < count)

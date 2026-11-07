@@ -216,7 +216,7 @@ internal static class InterfaceGraphicsChecks
                     Click(0); Require(State == GameState.Controls, "Controls entry failed.");
                     Press(Keys.End); Require(FieldScroll() > 0, "Controls cannot scroll to last binding.");
                     Click(0); Require(State == GameState.Settings, "Controls Back skipped Settings.");
-                    Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Tab); Press(Keys.Enter);
+                    for(int navigation=0;navigation<11;navigation++)Press(Keys.Tab);Press(Keys.Enter);
                     Require(State == GameState.About, "Keyboard About entry failed.");
                     Capture(); break;
                 case 2:

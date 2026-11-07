@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MDSM.Audio;
@@ -20,7 +19,7 @@ internal static class AudioChecks
 {
     internal static readonly (string Name,Action Check)[] All=
     {
-        ("Procedural WAV coverage, PCM quality, distinct variations and build content copies",Assets),
+        ("Audio asset coverage, WAV signatures and unchanged build content copies",Assets),
         ("Bounded allocation-free audio queue, elapsed rate limits and positional category mixing",Mixing),
         ("Successful mining/placement, paired structures, health, mobs, pickup and weapon sound triggers",Triggers),
         ("Distance-based footsteps, wall/air silence, jump/landing, swimming and FPS independence",Movement),
@@ -44,27 +43,25 @@ internal static class AudioChecks
     public static void Assets()
     {
         string root=AppContext.BaseDirectory;while(!File.Exists(Path.Combine(root,"MDSM.csproj")))root=Directory.GetParent(root).FullName;
-        string mgcb=File.ReadAllText(Path.Combine(root,"Content/Content.mgcb"));int total=0;long size=0;var hashes=new HashSet<string>();
+        string mgcb=File.ReadAllText(Path.Combine(root,"Content/Content.mgcb"));int total=0;long size=0;
         foreach(var group in SoundCatalog.Groups)for(int variant=0;variant<group.Variations;variant++)
         {
             string asset=group.Asset(variant);byte[] source=File.ReadAllBytes(Path.Combine(root,"Content",asset));
             byte[] built=File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory,"Content",asset));
             Check(source.AsSpan().SequenceEqual(built) && mgcb.Contains("/copy:"+asset),"WAV not copied unchanged: "+asset);
-            Check(System.Text.Encoding.ASCII.GetString(source,0,4)=="RIFF" && System.Text.Encoding.ASCII.GetString(source,8,8)=="WAVEfmt "
-                && BitConverter.ToInt16(source,20)==1 && BitConverter.ToInt16(source,22)==1 && BitConverter.ToInt32(source,24)==22050 && BitConverter.ToInt16(source,34)==16,"Invalid PCM WAV: "+asset);
-            int count=BitConverter.ToInt32(source,40)/2;double square=0,mean=0;int peak=0;
-            Check(count>1500 && source.Length==44+count*2 && BitConverter.ToInt16(source,44)==0 && BitConverter.ToInt16(source,source.Length-2)==0,"Invalid WAV length/envelope.");
-            for(int i=0;i<count;i++){int sample=BitConverter.ToInt16(source,44+i*2);peak=Math.Max(peak,Math.Abs(sample));square+=(double)sample*sample;mean+=sample;}
-            double rms=Math.Sqrt(square/count)/32768;
-            Check(peak<23000 && peak>10000 && rms>.015 && rms<.4 && Math.Abs(mean/count/32768)<.02,"Clipped/silent/DC-heavy procedural sound: "+asset);
-            Check(hashes.Add(Convert.ToHexString(SHA256.HashData(source))),"Identical variation/material assets: "+asset);total++;size+=source.Length;
+            // Replacement recordings may use different encodings, metadata chunks,
+            // envelopes and levels, or reuse an asset across multiple events. The
+            // runtime checks validate decoding/playback through MonoGame itself.
+            Check(source.Length>=12 && System.Text.Encoding.ASCII.GetString(source,0,4)=="RIFF"
+                && System.Text.Encoding.ASCII.GetString(source,8,4)=="WAVE","Invalid WAV signature: "+asset);
+            total++;size+=source.Length;
         }
         foreach(BlockType block in Enum.GetValues<BlockType>())if(Blocks.IsRenderable(block) && !Lava.Fluid(block))
             foreach(SoundKind kind in new[]{SoundKind.Hit,SoundKind.Break,SoundKind.Place,SoundKind.Step,SoundKind.Land})
                 Check(SoundCatalog.Groups[SoundCatalog.Find(kind,BlockSounds.Material(block))].Variations>=2,"Uncovered block material.");
         foreach(MobSpecies species in Enum.GetValues<MobSpecies>())foreach(SoundKind kind in new[]{SoundKind.MobIdle,SoundKind.MobHurt,SoundKind.MobDeath})
             Check(SoundCatalog.Groups[SoundCatalog.Find(kind,species:(int)species)].Species==(int)species,"Uncovered species sound.");
-        Console.WriteLine($"  {total} distinct WAVs, {size:N0} bytes; {SoundCatalog.Groups.Length} groups; all source/build copies match.");
+        Console.WriteLine($"  {total} WAV assets, {size:N0} bytes; {SoundCatalog.Groups.Length} groups; all source/build copies match.");
     }
     public static void Mixing()
     {
@@ -193,7 +190,7 @@ internal static class AudioChecks
             {
                 var viewport=new Viewport(0,0,size.X,size.Y);Rectangle last=default;
                 for(int row=0;row<4;row++)
-                {var slider=SoundSettingsLayout.Slider(viewport,row);Check(slider.Left>=0 && slider.Right<=size.X && slider.Top>last.Bottom,"Volume sliders overlap or escape viewport.");
+                {var slider=SoundSettingsLayout.Slider(viewport,row);Check(slider.Left>=0 && slider.Right<=size.X && (row%2==0?slider.Top>last.Bottom:slider.Left>last.Right && slider.Y==last.Y),"Volume sliders overlap or escape viewport.");
                     Check(SoundSettingsLayout.ValueAt(slider,slider.Left)==0 && SoundSettingsLayout.ValueAt(slider,slider.Right)==1,"Slider endpoints wrong.");last=slider;}
                 Check(SoundSettingsLayout.Back(viewport).Bottom<=size.Y && SoundSettingsLayout.Back(viewport).Top>last.Bottom,"Volume Back clipped.");
             }

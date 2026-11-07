@@ -13,7 +13,9 @@ internal sealed class ChunkMeshBuilder
     private VertexPositionColorTexture[] _vertices = new VertexPositionColorTexture[4096];
     public VertexPositionColorTexture[] Vertices => _vertices;
     public int VertexCount { get; private set; }
-    public void Clear() => VertexCount = 0;
+    private World _world;
+    private BlockLighting.Page _lightPage;
+    public void Clear() { VertexCount = 0; _world=null; _lightPage=null; }
 
     public void AppendCube(BlockType block, Vector3 origin)
     {
@@ -77,6 +79,7 @@ internal sealed class ChunkMeshBuilder
     public void Build(World world, Chunk chunk)
     {
         VertexCount = 0;
+        _world=world;_lightPage=world.Lighting.GetPage(chunk.X,chunk.Z);
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         for (int y = 0; y < World.Height; y++)
         for (int z = 0; z < Chunk.Size; z++)
@@ -100,6 +103,8 @@ internal sealed class ChunkMeshBuilder
 
             int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = new(worldX, y, worldZ);
+            if(definition.Shape==BlockShape.Bed)
+            {AppendBed(new(worldX,y,worldZ),world.Structure(new(worldX,y,worldZ)).Facing,block==BlockType.BedHead);continue;}
             if (definition.Shape == BlockShape.Torch)
             {
                 AppendTorch(world, new(worldX,y,worldZ));
@@ -203,7 +208,7 @@ internal sealed class ChunkMeshBuilder
             int rows = face.Normal.Y == 0 ? 10 : 2;
             float left = (tile.X+7.5f)/TextureAtlas.AtlasSize, right = (tile.X+8.5f)/TextureAtlas.AtlasSize;
             float top = (tile.Y+firstRow+.5f)/TextureAtlas.AtlasSize, bottom = (tile.Y+firstRow+rows-.5f)/TextureAtlas.AtlasSize;
-            Color color = new(new Vector3(face.Shade));
+            Color color = Lit(new Color(new Vector3(face.Shade)),new(cell.X+.5f,cell.Y+.5f,cell.Z+.5f));
             Vector3 At(Vector3 corner) => Vector3.Transform(min+corner*size,transform);
             var a = new VertexPositionColorTexture(At(face.A),color,new(left,bottom));
             var b = new VertexPositionColorTexture(At(face.B),color,new(right,bottom));
@@ -256,6 +261,12 @@ internal sealed class ChunkMeshBuilder
 
     private void AddQuad(Vector3 aPosition, Vector3 bPosition, Vector3 cPosition, Vector3 dPosition, int tile, Color color, bool twoSided,Rectangle? region=null,bool transpose=false,bool flipU=false)
     {
+        if(_world!=null)
+        {
+            Vector3 normal=Vector3.Cross(bPosition-aPosition,cPosition-aPosition);
+            if(normal.LengthSquared()>0)normal.Normalize();
+            color=Lit(color,(aPosition+bPosition+cPosition+dPosition)*.25f+normal*.02f);
+        }
         int needed = twoSided ? 12 : 6;
         if (VertexCount + needed > _vertices.Length)
             Array.Resize(ref _vertices, _vertices.Length * 2);
@@ -276,6 +287,38 @@ internal sealed class ChunkMeshBuilder
         {
             _vertices[VertexCount++] = a; _vertices[VertexCount++] = b; _vertices[VertexCount++] = c;
             _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = d;
+        }
+    }
+    private Color Lit(Color color,Vector3 position)
+    {
+        if(_world==null)return color;
+        int x=(int)MathF.Floor(position.X),y=(int)MathF.Floor(position.Y),z=(int)MathF.Floor(position.Z);
+        byte packed=_lightPage!=null && x>=_lightPage.X-1 && x<=_lightPage.X+16 && z>=_lightPage.Z-1 && z<=_lightPage.Z+16
+            ?_lightPage.At(x,y,z):_world.Lighting.Packed(new(x,y,z));
+        return FlatLighting.Encode(color,packed);
+    }
+    private void AppendBed(Point3 cell,byte facing,bool head)
+    {
+        Matrix transform=Matrix.CreateTranslation(-.5f,0,-.5f)*Matrix.CreateRotationY(-(facing&3)*MathHelper.PiOver2)
+            *Matrix.CreateTranslation(cell.X+.5f,cell.Y,cell.Z+.5f);
+        Vector3 min=new(0,3f/16,0),size=new(1,6f/16,1);
+        foreach(Face face in Faces)
+        {
+            if(face.Offset.Z==(head?1:-1))continue; // No internal seam between halves.
+            int tile=face.Normal.Y>0?head?53:54:face.Normal.Y<0?59:face.Normal.Z!=0?head?57:58:head?55:56;
+            Rectangle region=face.Normal.Y!=0?new(0,0,16,16):new(0,3,16,6);
+            Vector3 At(Vector3 p)=>Vector3.Transform(min+p*size,transform);
+            AddQuad(At(face.A),At(face.B),At(face.C),At(face.D),tile,new Color(new Vector3(face.Shade)),false,region,flipU:face.Normal.X>0);
+        }
+        // Two outer corner legs per half, original wood underside mapped in texel scale.
+        for(int leg=0;leg<2;leg++)
+        {
+            min=new(leg==0?0:13f/16,0,head?0:13f/16);size=new(3f/16,3f/16,3f/16);
+            foreach(Face face in Faces)
+            {
+                Vector3 At(Vector3 p)=>Vector3.Transform(min+p*size,transform);
+                AddQuad(At(face.A),At(face.B),At(face.C),At(face.D),59,new Color(new Vector3(face.Shade)),false,new(0,0,3,3));
+            }
         }
     }
     private static Vector3 LavaVertex(World world,Vector3 at,Vector3 point)

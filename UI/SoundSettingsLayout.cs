@@ -9,11 +9,10 @@ internal static class SoundSettingsLayout
 {
     public static Rectangle Slider(Viewport viewport,int index)
     {
-        int width=Math.Min(520,Math.Max(32,viewport.Width-32));bool small=viewport.Height<400;
-        return new((viewport.Width-width)/2,(small?54:Math.Max(100,viewport.Height/2-110))+index*(small?36:62),width,small?16:32);
+        return SettingsLayout.Volume(viewport,index);
     }
     public static Rectangle Back(Viewport viewport)
-    {var last=Slider(viewport,3);return new((viewport.Width-Math.Min(300,last.Width))/2,last.Bottom+16,Math.Min(300,last.Width),viewport.Height<400?28:42);}
+    =>SettingsLayout.Back(viewport);
     public static float ValueAt(Rectangle slider,int x)=>Math.Clamp((float)Math.Round((x-slider.Left-8)*100d/Math.Max(1,slider.Width-17))/100,0,1);
     public static float Get(GameSettings settings,int index)=>index switch{0=>settings.MasterVolume,1=>settings.EffectsVolume,2=>settings.MobVolume,_=>settings.InterfaceVolume};
     public static void Set(GameSettings settings,int index,float value)

@@ -6,12 +6,12 @@ using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
-internal readonly record struct WaterFace(Vector3 A, Vector3 B, Vector3 C, Vector3 D, float Shade)
+internal readonly record struct WaterFace(Vector3 A, Vector3 B, Vector3 C, Vector3 D, float Shade,byte Light=0xe0)
 {
     public Vector3 Center => (A + B + C + D) * 0.25f;
     public void CopyTo(VertexPositionColorTexture[] vertices, int offset)
     {
-        Color color = new(new Vector4(Shade, Shade, Shade, 0.58f));
+        Color color = FlatLighting.Encode(new Color(new Vector4(Shade, Shade, Shade, 0.58f)),Light);
         // Standalone tile: stay inside texel centers just like the terrain atlas.
         const float lo = 0.5f / 16, hi = 15.5f / 16;
         var a = new VertexPositionColorTexture(A, color, new Vector2(lo, hi));
@@ -29,6 +29,7 @@ internal static class WaterMeshBuilder
     {
         faces.Clear();
         if (chunk.WaterCount == 0) return;
+        var light=world.Lighting.GetPage(chunk.X,chunk.Z);
         for (int y = 0; y < World.Height; y++)
         for (int z = chunk.OriginZ; z < chunk.OriginZ + Chunk.Size; z++)
         for (int x = chunk.OriginX; x < chunk.OriginX + Chunk.Size; x++)
@@ -43,12 +44,12 @@ internal static class WaterMeshBuilder
             Vector3 b = new(x + 1, y + Water.CornerHeight(world, x + 1, y, z), z);
             Vector3 c = new(x + 1, y + Water.CornerHeight(world, x + 1, y, z + 1), z + 1);
             Vector3 d = new(x, y + Water.CornerHeight(world, x, y, z + 1), z + 1);
-            if (top) faces.Add(new WaterFace(d, c, b, a, 1));
-            if (near) faces.Add(new WaterFace(new(x + 1, y, z), new(x, y, z), a, b, 0.9f));
-            if (far) faces.Add(new WaterFace(new(x, y, z + 1), new(x + 1, y, z + 1), c, d, 0.9f));
-            if (left) faces.Add(new WaterFace(new(x, y, z), new(x, y, z + 1), d, a, 0.78f));
-            if (right) faces.Add(new WaterFace(new(x + 1, y, z + 1), new(x + 1, y, z), b, c, 0.78f));
-            if (bottom) faces.Add(new WaterFace(new(x, y, z), new(x + 1, y, z), new(x + 1, y, z + 1), new(x, y, z + 1), 0.5f));
+            if (top) faces.Add(new WaterFace(d, c, b, a, 1,light.At(x,y+1,z)));
+            if (near) faces.Add(new WaterFace(new(x + 1, y, z), new(x, y, z), a, b, 0.9f,light.At(x,y,z-1)));
+            if (far) faces.Add(new WaterFace(new(x, y, z + 1), new(x + 1, y, z + 1), c, d, 0.9f,light.At(x,y,z+1)));
+            if (left) faces.Add(new WaterFace(new(x, y, z), new(x, y, z + 1), d, a, 0.78f,light.At(x-1,y,z)));
+            if (right) faces.Add(new WaterFace(new(x + 1, y, z + 1), new(x + 1, y, z), b, c, 0.78f,light.At(x+1,y,z)));
+            if (bottom) faces.Add(new WaterFace(new(x, y, z), new(x + 1, y, z), new(x + 1, y, z + 1), new(x, y, z + 1), 0.5f,light.At(x,y-1,z)));
         }
     }
 }

@@ -693,3 +693,110 @@ Focused verification passes 5/5 audio groups: all 279 source/build WAV copies, f
 Final verification: `dotnet build` succeeds with zero warnings/errors. The complete `--self-test` suite passes **179/179 groups**, including all prior checks and the five new audio groups. The complete `--graphics-test` suite passes with native exit code 0, including the audio playback/input checks, prior menus/inventory/world interactions, exact screenshot/F1/F2 regressions, water and entities, and Large/Massive bounded mesh residency, movement/re-entry, edits and GPU cleanup. All 279 WAVs are present unchanged in the development build output, and standalone generation verification passes. These representative graphics/performance checks are not a sustained real-world hardware benchmark.
 
 Remaining manual work is listening on speakers/headphones to assess timbre, relative loudness, many nearby entities/edits, motion/spatial balance and other sound devices/drivers. No human listening or physical-input playtesting is claimed. No publishing commands ran, and README.md was not edited.
+
+## Lossless compressed world saves (version 11)
+
+Added [SaveContainer.cs](../Persistence/SaveContainer.cs), [CompressedSaveStreams.cs](../Persistence/CompressedSaveStreams.cs) and [SaveCompression.cs](../Persistence/SaveCompression.cs). [WorldSerializer.cs](../Persistence/WorldSerializer.cs) now writes compressed version-11 containers by default and dispatches both new and legacy inputs transparently. Zstandard level 3 is implemented through the pinned managed [ZstdSharp.Port 0.8.8](https://github.com/oleg-st/ZstdSharp) dependency in [MDSM.csproj](../MDSM.csproj). Brotli quality 3 and stored records remain supported for testing/format flexibility; normal gameplay writes Zstandard and uses stored bytes if a record would not shrink.
+
+Compression is independent per 32 full-height chunks (1 MiB); core metadata remains directly readable for world listings. Tagged sections have independent versions, required/optional flags, sequences, codec/length fields and decoded SHA-256 checksums. A metadata checksum and complete-container checksum protect headers and encoded data, and the existing v10 checksum/semantic validation remain active. The current validated v10 payload is retained behind streaming adapters, preserving every existing field without a serialization rewrite. Future lighting, sunlight or world-time sections can be added with their own schemas and budgets; none of these features or placeholder arrays were implemented. Unknown required data is rejected rather than discarded; explicitly ignorable optional records are validated and skipped and are not preserved on resaving. Full layout details: [SAVE-FORMAT.md](../Persistence/SAVE-FORMAT.md).
+
+Legacy uncompressed versions 1-10 remain supported, including the existing 64-to-128 height migration for supported older dimensions. Loading does not regenerate terrain, repopulate entities, modify inventories or rewrite files. The next successful save uses v11. GUID directories, world.dat names, application settings, block/item IDs and gameplay systems remain unchanged. [WorldSaveManager.cs](../Persistence/WorldSaveManager.cs) retains its existing same-directory temporary-file, durable flush and atomic replacement/rename behavior; compression/checksums complete before replacement. No current world data is optional.
+
+Writers/readers use approximately two MiB of bounded staging plus reusable codec workspace, with decoded/encoded lengths, counts, order, schemas and window limits validated. There is no second 512 MiB world buffer. Actual CPU world storage remains one byte per block (512 MiB for Massive), and rendering/simulation are unchanged.
+
+### Measurements
+
+Fresh-process, single-pass pipeline runs on this Windows x64 i5-11400 (11th Gen, 2.60 GHz), .NET 10 hosting the net9.0 application. All cases use the same seed-173 fully generated world per size, scattered deterministic block edits, inventory/tool durability, dropped items and normal area-scaled passive populations. Every compressed result was restored and compared by complete v10 serialized-payload SHA-256. Files were cached/local; these are not cold-storage guarantees or sustained gameplay benchmarks. Save time includes validation, hashing, compression, flush and rename; load time includes decoding, validation and world reconstruction. Source-fixture preparation/loading and the final comparison hash are excluded.
+
+| World | Storage | File MiB | Save s | Load s | Write peak working-set MiB | Read peak working-set MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Small | Original raw v10 | 8.051 | 0.175 | 0.074 | 37.3 | 39.3 |
+| Small | Zstandard 3 | 0.210 | 0.154 | 0.120 | 44.8 | 46.4 |
+| Small | Brotli 3 | 0.197 | 0.087 | 0.091 | 40.1 | 40.9 |
+| Normal | Original raw v10 | 32.177 | 0.376 | 0.310 | 63.8 | 67.3 |
+| Normal | Zstandard 3 | 0.864 | 0.245 | 0.398 | 70.6 | 72.3 |
+| Normal | Brotli 3 | 0.819 | 0.155 | 0.369 | 65.8 | 67.7 |
+| Large | Original raw v10 | 128.683 | 1.180 | 1.258 | 168.7 | 168.5 |
+| Large | Zstandard 3 | 3.467 | 0.437 | 1.429 | 175.1 | 176.3 |
+| Large | Brotli 3 | 3.329 | 0.590 | 1.508 | 170.5 | 170.8 |
+| Massive | Original raw v10 | 514.775 | 3.711 | 5.272 | 590.6 | 597.4 |
+| Massive | Zstandard 3 | 13.950 | 1.440 | 5.916 | 597.1 | 606.8 |
+| Massive | Brotli 3 | 13.358 | 1.950 | 6.090 | 592.4 | 599.8 |
+
+Peak figures are process working sets sampled every 10 ms, including the world and runtime; brief peaks may be missed. They are not raw block-array sizes or VRAM. Massive pre-write working sets were about 589.3-589.4 MiB in all modes. Sampled managed write/read peaks were 544.3/558.2 MiB raw, 545.9/567.0 MiB Zstandard, and 546.0/567.0 MiB Brotli. Thus the compression increment is small and bounded, rather than another full-world copy.
+
+Zstandard reduced the representative Massive file by about 97.3%. Brotli yielded roughly 4.2% smaller files there, but Zstandard used about 26% less save time and loaded about 3% faster than Brotli; it also won the Large pipeline comparison. Brotli was faster and smaller for Small/Normal in these runs. Given the requested preference and Large/Massive responsiveness, Zstandard 3 was selected globally. Compression adds some load CPU time relative to raw (Massive 5.27 to 5.92 s); it does not reduce block RAM.
+
+The standalone codec comparison on the same Massive data used 13.937 MiB / 1.349 s encode / 0.819 s decode for Zstandard 3 versus 13.351 MiB / 1.690 s / 1.015 s for Brotli 3. These timings include file/hash work but exclude world reconstruction and therefore must not be confused with the pipeline table. Large 4 MiB frames provided no useful improvement over 1 MiB (Zstandard 3.524 vs 3.465 MiB; Brotli 3.327 vs 3.321 MiB) and required more scratch memory, supporting the smaller independent-group choice.
+
+Added [CompressionChecks.cs](../Testing/CompressionChecks.cs), [CompressionBenchmarks.cs](../Testing/CompressionBenchmarks.cs) and the standalone [Tools/SaveCompressionBench/](../Tools/SaveCompressionBench/) project. Existing fixed-offset corruption/legacy fixture encoders now explicitly use the unchanged v10 writer, while current-format direct calls and the new checks exercise v11. The bounded metadata test includes the new options/checksum bytes while still rejecting any payload read. No prior check group was removed or bypassed.
+
+Verification: `dotnet build` completes with zero warnings/errors. All **9/9** focused compression/persistence checks pass, including all four sizes, complete-state hashes, Zstandard/Brotli/stored frames, non-seekable reads, header-only listings, corrupted/truncated data, future-section policy, v1-v10 migration, interrupted temporary files and failed write/replacement safety. The full regression suite reports **182/183 passing**, including all four new compression groups and every existing world/persistence check. The sole failure is unrelated: the unchanged audio asset check requires 22,050 Hz but the current unchanged `Content/Sounds/Mobs/pig/idle-0.wav` is mono PCM16 at 44,100 Hz. Both test and clip were verified unchanged from HEAD; neither was altered to make the suite pass.
+
+The existing DesktopGL interface suite passes with native exit code 0 using compressed creation/save/load/menu paths and preserving screenshots/render state. No physical-input or extended gameplay testing, forced power-cut test, or cold-disk performance claim is made. Manual verification can include opening a personal legacy world, checking modifications/entities, saving, closing and reloading. Large temporary benchmark worlds/codecs were removed after measurement; commands regenerate them on demand, while the small benchmark logs/results remain. No publishing commands were run and README.md was not edited.
+
+
+## Lighting, day/night, Beds and Settings update (2026-11-06)
+
+Implemented on top of the existing compressed-save changes; no previous work was reset, no new dependency was added, and README.md remains unchanged.
+
+### Lighting and world time
+
+- Added [BlockLighting.cs](../Worlds/BlockLighting.cs): separate integer sky/block light channels, each 0-14, packed into one byte per cached cell. Torches and Lava emit 14; burning Furnaces/Smokers/Blast Furnaces emit 13. Opaque blocks block propagation, Leaves/Water attenuate it, and Glass/thin geometry transmit it. Artificial light loses one level per air-cell step. Full vertical sunlight stays at 14 until obstructed/attenuated, then spreads with normal attenuation.
+- Lighting is reconstructible from existing blocks/container burn state. There is no full-world light array or startup world scan. Each queried chunk is solved with a 15-cell horizontal halo and a one-cell sampling border; a bounded queue propagates the two channels. Shared source removal, roof edits, fluids and source changes invalidate only the local chunk neighborhood, including boundaries. The CPU cache holds at most 1,536 pages (60.75 MiB of packed light), enough for the normal 1080p mesh region plus a margin; scratch storage is reused. It is independent of total world size and contains no CPU terrain mesh cache.
+- Added [WorldTime.cs](../Worlds/WorldTime.cs): a 1,200-second active-gameplay day, new-world daytime at 60 seconds, continuous sky/celestial motion, dusk/dawn transitions and a night-only skip to morning. Normal pause/menu behavior stops this clock.
+- Added [BlockLighting.fx](../Content/Effects/BlockLighting.fx), [FlatLighting.cs](../Rendering/FlatLighting.cs), and [SkyRenderer.cs](../Rendering/SkyRenderer.cs). Terrain and water faces encode flat light and existing directional shade in their unchanged vertex layout. Daylight and Brightness are shader uniforms, so time/brightness changes rebuild neither light pages nor chunk meshes. No smooth lighting or AO is introduced. The minimum visual intensity ranges from .025 to .145 across Brightness settings; actual light/spawn eligibility is unaffected.
+- Terrain/water retain alpha cutouts/translucency, depth behavior, atlas sampling, fog distances and bounded GPU mesh residency. Moving mobs/items/falling blocks/projectiles and held items receive corresponding local light tint. Sun and Moon are simple moving, untextured squares. Texture bindings are explicitly invalidated/rebound to preserve the DesktopGL screenshot fix.
+- Hostiles now require effective light **exactly 0** at their spawn position. Removed the low-Y cutoff and fixed-radius Torch test from spawn eligibility. The bounded search covers the full height, including night surfaces and dark structures. The 36 cap, 2-4-second cycles, 128 candidate columns, player distances, collision/fluid safeguards, Peaceful behavior, AI suspension/despawning and existing mobs remain unchanged. The existing diagnostic `Torch` rejection field now counts light rejection generally.
+
+### Beds, settings and interface behavior
+
+- Added [Beds.cs](../Worlds/Beds.cs). Persistent IDs **61 Bed foot / 62 Bed head** append to existing IDs. Four orientations, both supports/clearances, player/mob-aware placement, shared 9/16-height collision/targeting, paired removal, one logical item/drop and one logical break/place sound are handled through the existing structure/support systems. Bed items stack to one. Creative placement/breaking uses existing consumption/drop rules.
+- Added the 3-Wool-over-3-Planks recipe and the registered Creative item. Bed interaction takes priority over item placement/food and skips only at night. Respawning deliberately continues to use the existing default world spawn.
+- Added original Bed artwork, with terrain tiles **53-59** and item tile **73**. The editable source, prompt/packing details and per-face regions are documented in [bed-artwork.md](../Content/Artwork/bed-artwork.md); [Pack.ps1](../Tools/BedArtwork/Pack.ps1) repacks offline. Mattress/frame sides use six-pixel strips, top/end/bottom faces are distinct, legs use wood subregions, and internal joining faces are omitted. All pre-existing atlas pixels outside these new tiles were verified unchanged.
+- New worlds explicitly start Survival. Active mode changes persist per-world without altering inventory/Armor/health. Older saves, which lacked a per-world mode, retain the previous application-preference inheritance policy until played. Merely renaming an old save preserves this inheritance instead of forcing a new mode.
+- Brightness (0-100%, default 50%) persists through the existing settings store. Master/Effects/Mobs/Interface volume sliders now live directly in Settings; the separate Sound screen/action is removed, with preferences and audio behavior retained. FPS, uncapped rendering, view bobbing, difficulty, game mode and information-menu navigation remain available. The compact two-column layout is checked at 320x240 and larger sizes.
+- Both HUD/menu World Saved notices now expire after three elapsed seconds, including while paused. Repeated saves refresh the timer. Storage errors retain their existing behavior.
+
+### Save compatibility
+
+[The format documentation](../Persistence/SAVE-FORMAT.md) now describes **compressed version 12**. It retains Zstandard level 3, independently compressed chunk groups, the v10 core payload, checksums, bounded buffers and safe temporary-file/atomic replacement. One required, schema-versioned ten-byte environment record stores Float64 world time, mode (Survival/Creative/legacy inheritance), and lighting-rules version. Packed lighting is deterministically reconstructed, avoiding redundant disk/RAM data. Bed orientations use the existing validated structure metadata layout. Uncompressed versions 1-10 and compressed v11 remain readable, including existing height migration, inventories, containers, entities and pending simulation state. Old terrain is not regenerated; unsupported/corrupt/missing required environment data is rejected.
+
+### Measured performance
+
+Isolated Windows x64 measurements on an i5-11400 with DesktopGL reporting **NVIDIA GeForce GTX 970/PCIe/SSE2**. Seed 173, complete generated worlds, existing populations, 1920x1080 configured backbuffer, uncapped rendering. Each gameplay phase lasts 15 seconds with synthetic input and begins after initial mesh preparation. These are short representative samples, not prolonged physical playtesting or guarantees for every scene/seed.
+
+| World | Stationary turns FPS / p95 frame ms | Walking turns FPS / p95 frame ms | Estimated terrain buffers, stationary / walking | Process working set, stationary / walking |
+| --- | --- | --- | --- | --- |
+| Large | 920.0 / 1.54 | 704.0 / 1.76 | 327.2 / 355.3 MiB | 645.5 / 681.2 MiB |
+| Massive | 584.3 / 2.22 | 491.7 / 2.44 | 329.1 / 357.1 MiB | 1083.2 / 1112.1 MiB |
+
+Both use 1,373 resident chunks initially and 1,487 during the walking sample; populations remain 512/2,048. Buffer estimates are application buffer-capacity sums, **not driver-reported VRAM**. Walking travel was 15.5/16.4 blocks while turning; this does not represent rapid cross-map travel.
+
+Separate isolated CPU checks generated Large/Massive in 6.21/24.75 seconds. Preparing 64 light pages took 504.31/549.51 ms total and 2.53 MiB of cached light. A complete nine-chunk local Torch relight took 52.90/55.37 ms total; ordinary rendering distributes these builds across frames using the existing maximum-four/soft-three-millisecond build budget. One completed page can exceed that soft budget. Advancing 1,000 simulated seconds took 1.92/1.85 ms and rebuilt nothing. Incremental allocations for the 64-page/relight scenario were 4.38 MiB. Scanning contiguous block rows and reusing opacity/source/queue scratch data reduced the initial measured 64-page cost from approximately 660/685 ms. Initial world/mesh preparation remains a noticeable load-time cost.
+
+### Verification
+
+- `dotnet build`: zero warnings/errors.
+- Focused lighting checks: **6/6 passed**, including packed propagation/removal, opacity/transmission, sunlight shafts, Furnace/Lava sources, cross-chunk/finite bounds, clock/brightness, four-way Beds/recipe/collision/drops/sounds, v11/v10 compatibility, required environment validation, legacy mode inheritance, zero-versus-one spawning, layouts/settings, cache eviction/distant edits/local invalidation and allocation-free repeated clock/light queries.
+- Compression/persistence checks: **9/9 passed** with native exit 0, including all four sizes, full payload hashes, legacy schemas/migration, metadata-only listing, corrupted/truncated files, non-seekable streams, failed writes/replacements and interrupted temporary files.
+- Complete existing regression suite: **188/189 passed**. The sole unchanged failure is the procedural-WAV assertion requiring 22,050 Hz while the existing Pig idle clip is 44,100 Hz. That clip was verified unchanged; runtime audio loading/playback graphics checks pass. No existing check group was removed or disabled; recipe/palette/icon counts and UI fixtures were updated for the explicitly added content and layout.
+- Focused real DesktopGL lighting checks: passed with native exit 0. Verified darkness versus maximum Brightness, unchanged actual light/mesh counts, Torch removal and readback binding restoration, visible Sun/Moon, all four textured Bed orientations, combined Settings mouse/layout behavior, paused clocks and refreshed three-second messages. Generated images were inspected. Physical input was not tested.
+
+The final full `--graphics-test` rerun passed with native exit 0: real audio, Creative collision/mob-aware placement, Door acquisition, all held items, inventory/crafting/settings, F1/F2/F3 exact PNG/readback regressions, mobs, water, interpolated gravity, and generated Large/Massive terrain/lake rendering. Large/Massive residency tests verified turning/elevation/edges, edits/re-entry, water eviction and GPU cleanup. Screenshot-error messages in this suite are intentional write-failure injections. After the final bottom-height spawn correction, the focused lighting suite passed 6/6 again and the existing completion suite passed 13/13, including its generated-cave spawn/cap/occlusion checks. No check was weakened to bypass the unrelated WAV failure. Manual follow-up should include ordinary cave exploration with Torch/roof edits, a full-length day/night transition, nighttime Bed use in all orientations, and extended movement through Large/Massive worlds. No publishing/distribution commands were run.
+
+
+## Audio sample-rate assertion removal (2026-11-06)
+
+Removed only the hardcoded 22,050 Hz condition from [AudioChecks.cs](../Testing/AudioChecks.cs), allowing the replacement Pig recording's 44,100 Hz rate. Audio assets and playback code are unchanged; existing PCM, content-copy, envelope, variation and interaction checks remain in place.
+
+Verification: `dotnet build --no-restore` passed with zero warnings/errors. `--audio-test` reports **4/5 passing**. After removing the rate condition, the asset group reaches a separate pre-existing length/envelope assertion. The replacement Pig idle recording contains a valid 33,506-byte PCM data chunk followed by LIST/ID3 metadata; the test assumes the complete WAV ends immediately after its data chunk and has zero-valued endpoint samples. The file is 33,896 bytes, while that assertion expects 33,550. This independent assertion was inspected but left unchanged to keep the edit limited to the requested sample-rate requirement. README.md was not edited; no publishing commands were run.
+
+
+## Replacement-audio test cleanup (2026-11-06)
+
+Updated [AudioChecks.cs](../Testing/AudioChecks.cs) at the user's request to remove assumptions specific to the original synthesized recordings: canonical header/chunk offsets, mono PCM16 encoding, minimum sample count, metadata-free file length, zero endpoint samples, fixed peak/RMS/DC ranges, and unique file hashes across variations/materials. The fixed sample-rate requirement was already removed. Replacement recordings may have metadata, different levels/envelopes or supported encodings, and reused sound files without failing these generator-specific assertions.
+
+Retained WAV signatures, required asset/material/species coverage, byte-identical source/build copies, content-pipeline inclusion, queue/rate/spatial/mixing tests, gameplay triggers, movement timing, settings persistence and missing-asset handling. Existing real-device checks still require every clip to decode through MonoGame and every sound group to play. No audio files or runtime playback code changed.
+
+Verification: `dotnet build --no-restore` passed with zero warnings/errors; `--audio-test` passed **5/5**, native exit 0. `--audio-graphics-test` passed with native exit 0, loading all **279** clips and playing all **112** groups, including voice limits, positional mixing, volume/mute, pause, UI, mining and crafting. The missing-asset warning in the CPU suite is its intentional injected-loader failure test, not a failure to load the actual assets. The full non-audio regression suite was not rerun for this test-only cleanup. README.md was unchanged and no publishing commands were run.

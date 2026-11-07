@@ -126,6 +126,7 @@ public class Game1 : Game
     private void ProcessInput(KeyboardState keyboard, MouseState mouse, bool back, GameTime gameTime, Point lookDelta)
     {
         _menu.UpdateMessage(gameTime.ElapsedGameTime.TotalSeconds);
+        if((_noticeSeconds-=gameTime.ElapsedGameTime.TotalSeconds)<=0)_notice=null;
         _presentation.Update(keyboard, _previousKeyboard, IsActive, _session != null);
         if (_creation != null || _created.HasValue)
         {
@@ -162,8 +163,6 @@ public class Game1 : Game
                 if (State == GameState.Playing)
                 {
                     _autosaveElapsed += gameTime.ElapsedGameTime.TotalSeconds;
-                    _noticeSeconds -= gameTime.ElapsedGameTime.TotalSeconds;
-                    if (_noticeSeconds <= 0) _notice = null;
                     if (_autosaveElapsed >= AutosaveInterval) SaveCurrentWorld();
                 }
             }
@@ -217,6 +216,7 @@ public class Game1 : Game
         for (int i = 0; i < steps; i++)
         {
             const float dt = (float)SimulationClock.StepSeconds;
+            world.Time.Advance(dt);
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
                 keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt);
@@ -357,11 +357,8 @@ public class Game1 : Game
                 case MenuAction.OpenAbout when State == GameState.Settings:
                     SetState(GameState.About);
                     break;
-                case MenuAction.OpenSounds when State==GameState.Settings:
-                    SetState(GameState.SoundSettings);
-                    break;
                 case MenuAction.Back:
-                    if (State is GameState.Controls or GameState.About or GameState.SoundSettings) SetState(GameState.Settings);
+                    if (State is GameState.Controls or GameState.About) SetState(GameState.Settings);
                     else if (State == GameState.Settings)
                     {
                         bool savedSettings = SaveSettings();
@@ -396,7 +393,7 @@ public class Game1 : Game
                         _saves.SetActiveWorld(null);
                         _selection = null;
                         SetState(GameState.MainMenu);
-                        _menu.Message("WORLD SAVED.",seconds:8);
+                        _menu.Message("WORLD SAVED.",seconds:3);
                     }
                     break;
                 case MenuAction.Exit:
@@ -419,6 +416,8 @@ public class Game1 : Game
 
     private void BeginWorld(string id, WorldSave save)
     {
+        if(save.World.SavedGameMode is GameMode mode && _settings.GameMode!=mode)
+        {_settings.GameMode=mode;_settingsDirty=true;_settingsSaveDelay=.5;}
         var session = new GameSession(id, save);
         session.ApplySettings(_settings);
         var renderer = _preparingRenderer ?? new WorldRenderer(GraphicsDevice, _atlas, session.World);
@@ -480,8 +479,8 @@ public class Game1 : Game
             _saves.Save(_session.Id, _session.Capture());
             _autosaveElapsed = 0;
             _notice = "WORLD SAVED";
-            _noticeSeconds = 4;
-            _menu.Message("WORLD SAVED.",seconds:8);
+            _noticeSeconds = 3;
+            _menu.Message("WORLD SAVED.",seconds:3);
             return true;
         }
         catch (Exception exception) when (IsStorageError(exception))
@@ -616,21 +615,23 @@ public class Game1 : Game
         {
             Vector2 bob=State==GameState.Playing && _settings.ViewBobbing?_session.Bobbing.Offset:Vector2.Zero;
             _session.Camera.PresentationOffset=_session.Camera.Right*bob.X+Vector3.Up*bob.Y;
-            GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, WorldRenderer.SkyColor, 1f, 0);
+            GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, _session.World.Time.Sky, 1f, 0);
+            _renderer.Brightness=_settings.Brightness;
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);
-            _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles);
-            _projectileRenderer.Draw(_session.Camera,_session.Projectiles);
+            _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles,_session.World,_settings.Brightness);
+            _projectileRenderer.Draw(_session.Camera,_session.Projectiles,_session.World,_settings.Brightness);
             _renderer.DrawWater(_session.Camera);
             _diagnostics.Mobs = _session.Mobs.Entities.Count+_session.Hostiles.Entities.Count; _diagnostics.Items = _session.Items.Entities.Count;
             _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
             _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
-            if (_presentation.HudVisible) _firstPerson.Draw(State, _session.Inventory);
+            if (_presentation.HudVisible && State==GameState.Playing) _firstPerson.Draw(State, _session.Inventory,
+                BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness));
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
                 _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
-            if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About or GameState.SoundSettings)
+            if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }
         else

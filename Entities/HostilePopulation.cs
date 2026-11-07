@@ -43,14 +43,14 @@ public sealed class HostilePopulation
         => Reject(species, feet, player) == SpawnRejection.None;
     private SpawnRejection Reject(MobSpecies species, Vector3 feet, Vector3 player)
     {
-        if (feet.Y<2 || feet.Y>=50 || feet.X<2 || feet.Z<2 || feet.X>=_world.Width-2 || feet.Z>=_world.Depth-2) return SpawnRejection.OutsideWorld;
+        if (feet.Y<1 || feet.Y+MobDefinitions.Get(species).Height>World.Height || feet.X<2 || feet.Z<2 || feet.X>=_world.Width-2 || feet.Z>=_world.Depth-2) return SpawnRejection.OutsideWorld;
         float distance=Vector3.DistanceSquared(feet,player);
         if (distance<MinimumSpawnDistance*MinimumSpawnDistance || distance>SpawnRadius*SpawnRadius) return SpawnRejection.Distance;
         if (!_world.IsSolid((int)feet.X,(int)feet.Y-1,(int)feet.Z)) return SpawnRejection.NoFloor;
         var bounds=PassiveMob.BoundsAt(species,feet);
         if (_world.IntersectsSolid(bounds)) return SpawnRejection.Blocked;
         if (Water.Intersects(_world,bounds) || Lava.Intersects(_world,bounds)) return SpawnRejection.Fluid;
-        if (_world.Torches.Protected(feet)) return SpawnRejection.Torch;
+        if (_world.Lighting.Effective(feet)!=0) return SpawnRejection.Torch; // Diagnostics: any light rejection, not a radius approximation.
         return SpawnRejection.None;
     }
     public void Update(float elapsed,Player player,Projectiles arrows,PassiveMobPopulation passive=null)
@@ -117,17 +117,16 @@ public sealed class HostilePopulation
     {
         feet=default;
         if(x<2 || z<2 || x>=_world.Width-2 || z>=_world.Depth-2)return SpawnRejection.OutsideWorld;
-        int preferred=Math.Clamp((int)MathF.Floor(player.Y)+_random.Next(-8,9),3,49);
+        int preferred=Math.Clamp((int)MathF.Floor(player.Y)+_random.Next(-8,9),1,World.Height-1);
         SpawnRejection last=SpawnRejection.NoFloor;
-        // At most 47 floor samples per column, nearest the player's elevation first.
-        // No surface-height query: cave floors are below the world's surface cache.
-        for(int delta=0;delta<=46;delta++)for(int side=0;side<(delta==0?1:2);side++)
+        // Bounded full-height floor search includes night surfaces and dark structures.
+        for(int delta=0;delta<World.Height;delta++)for(int side=0;side<(delta==0?1:2);side++)
         {
-            int y=preferred+(side==0?-delta:delta);if(y<3 || y>49)continue;
+            int y=preferred+(side==0?-delta:delta);if(y<1 || y>=World.Height)continue;
             checks++;
             if(!_world.IsSolid(x,y-1,z) || _world.IsSolid(x,y,z))continue;
             Vector3 candidate=new(x+.5f,y,z+.5f);SpawnRejection reason=Reject(species,candidate,player);
-            if(reason!=SpawnRejection.None){last=reason;continue;}
+            if(reason!=SpawnRejection.None){if(last==SpawnRejection.NoFloor || reason!=SpawnRejection.Distance)last=reason;continue;}
             var bounds=PassiveMob.BoundsAt(species,candidate);bool occupied=false;
             foreach(var mob in _mobs)if(World.Overlaps(bounds,mob.Bounds)){occupied=true;break;}
             if(!occupied && passive!=null)foreach(var mob in passive.Entities)if(World.Overlaps(bounds,mob.Bounds)){occupied=true;break;}

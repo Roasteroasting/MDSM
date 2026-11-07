@@ -115,10 +115,10 @@ internal static class WorldExpansionGraphicsChecks
             if(!found)throw new InvalidOperationException("Generated water is missing.");
             var camera=new Camera {Position=new Vector3(cell.X+0.5f,cell.Y+10,cell.Z+14)};camera.RestoreOrientation(0,-0.6f);
             using var target=new RenderTarget2D(GraphicsDevice,320,240,false,SurfaceFormat.Color,DepthFormat.Depth24);
-            using var effect=new AlphaTestEffect(GraphicsDevice) {Texture=_atlas.Texture,VertexColorEnabled=true,
-                World=Matrix.Identity,View=camera.View,Projection=camera.Projection(320f/240),ReferenceAlpha=128};
+            using var effect=_atlas.LightingEffect.Clone();
             var builder=new ChunkMeshBuilder();
             GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(WorldRenderer.SkyColor);
+            FlatLighting.Apply(effect,GraphicsDevice,_atlas.Texture,world,camera,.5f,.5f);
             GraphicsDevice.BlendState=BlendState.Opaque;GraphicsDevice.DepthStencilState=DepthStencilState.Default;
             GraphicsDevice.RasterizerState=RasterizerState.CullCounterClockwise;GraphicsDevice.SamplerStates[0]=SamplerState.PointClamp;
             int draws=0;

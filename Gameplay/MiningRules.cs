@@ -43,7 +43,7 @@ public static class MiningRules
         return block switch
         {
             BlockType.Stone=>Items.FromBlock(BlockType.Cobblestone),BlockType.CoalOre=>Items.Coal,BlockType.DiamondOre=>Items.Diamond,
-            BlockType.FarmlandDry or BlockType.FarmlandWet=>Items.FromBlock(BlockType.Dirt),BlockType.DoorUpper=>Items.FromBlock(BlockType.Door),
+            BlockType.FarmlandDry or BlockType.FarmlandWet=>Items.FromBlock(BlockType.Dirt),BlockType.DoorUpper=>Items.FromBlock(BlockType.Door),BlockType.BedHead=>Items.FromBlock(BlockType.Bed),
             BlockType.Gravel when random.Next(10)==0=>Items.Flint,_=>Items.FromBlock(block)
         };
     }

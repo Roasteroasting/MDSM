@@ -12,7 +12,7 @@ public static class BlockSounds
         BlockType.Dirt or BlockType.FarmlandDry or BlockType.FarmlandWet=>SoundMaterial.Dirt,
         BlockType.Sand=>SoundMaterial.Sand,BlockType.Gravel=>SoundMaterial.Gravel,
         BlockType.Glass or BlockType.GlassPane=>SoundMaterial.Glass,
-        BlockType.IronOre=>SoundMaterial.Metal,BlockType.WhiteWool=>SoundMaterial.Wool,
+        BlockType.IronOre=>SoundMaterial.Metal,BlockType.WhiteWool or BlockType.Bed or BlockType.BedHead=>SoundMaterial.Wool,
         BlockType.WoodLog or BlockType.WoodenPlanks or BlockType.CraftingTable or BlockType.Chest or BlockType.Door or BlockType.DoorUpper or BlockType.Fence or BlockType.FenceGate or BlockType.Torch=>SoundMaterial.Wood,
         BlockType.Leaves=>SoundMaterial.Leaves,
         _ when Blocks.Get(block).NeedsGrass=>SoundMaterial.Plant,

@@ -15,6 +15,8 @@ public sealed class GameSettings
     public int FpsCap { get => _fpsCap; set => _fpsCap = Math.Clamp(value, MinimumFps, MaximumFps); }
     public bool UncappedFps { get; set; }
     public bool ViewBobbing { get; set; } = true;
+    private float _brightness=.5f;
+    public float Brightness { get=>_brightness;set=>_brightness=float.IsFinite(value)?Math.Clamp(value,0,1):.5f; }
     private float _masterVolume=.8f,_effectsVolume=1,_mobVolume=1,_interfaceVolume=1;
     private static float ValidVolume(float value,float fallback)=>float.IsFinite(value)?Math.Clamp(value,0,1):fallback;
     public float MasterVolume { get=>_masterVolume;set=>_masterVolume=ValidVolume(value,.8f); }
@@ -59,6 +61,7 @@ public sealed class SettingsStore
                 settings.GameMode = (GameMode)modeValue;
             ReadVolume("MasterVolume",v=>settings.MasterVolume=v);ReadVolume("EffectsVolume",v=>settings.EffectsVolume=v);
             ReadVolume("MobVolume",v=>settings.MobVolume=v);ReadVolume("InterfaceVolume",v=>settings.InterfaceVolume=v);
+            ReadVolume("Brightness",v=>settings.Brightness=v);
             void ReadVolume(string name,Action<float> assign)
             {if(root.TryGetProperty(name,out var element) && element.ValueKind==JsonValueKind.Number && element.TryGetSingle(out float volume))assign(volume);}
         }
@@ -78,7 +81,7 @@ public sealed class SettingsStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Difficulty, settings.GameMode,
+                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Brightness,settings.Difficulty, settings.GameMode,
                     settings.MasterVolume,settings.EffectsVolume,settings.MobVolume,settings.InterfaceVolume }, new JsonSerializerOptions { WriteIndented = true });
                 file.Flush(true);
             }

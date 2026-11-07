@@ -164,6 +164,7 @@ internal static class DecorationChecks
         var cell = new Point3(16, 10, 16);
         var player = new Player(new Vector3(128.5f, 30, 128.5f));
         world.SetBlock(16, 9, 16, BlockType.Grass);
+        world.SetBlock(16, 9, 15, BlockType.Grass); // Bed head also needs support.
         foreach (BlockType block in Blocks.Selection)
         {
             Require(world.TryPlace(cell, block, player.Bounds), $"Cannot place {block}.");
@@ -205,7 +206,7 @@ internal static class DecorationChecks
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
         WorldSave restored = WorldSerializer.Read(oldFile);
-        Require(WorldSerializer.FormatVersion == 10 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
+        Require(WorldSerializer.FormatVersion == 12 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
         for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");
@@ -216,6 +217,8 @@ internal static class DecorationChecks
             int x = (int)block * 3;
             restored.World.SetBlock(x, 59, 16, BlockType.Grass);
             if(block==BlockType.Door)Require(restored.World.PlaceStructure(new(x,60,16),block,0,new(0,-1,0),new MDSM.Gameplay.Player(new Vector3(200,60,200)).Bounds),"Door fixture placement failed.");
+            else if(block==BlockType.Bed)
+            {restored.World.SetBlock(x,59,15,BlockType.Grass);Require(restored.World.PlaceBed(new(x,60,16),0,new Player(new(200,60,200)).Bounds),"Bed fixture placement failed.");}
             else restored.World.SetBlock(x, 60, 16, block);
         }
         // Loading must retain even canopies wider than the new generation rule.

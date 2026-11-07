@@ -117,7 +117,10 @@ internal static class InventoryChecks
         {
             Mine(null,false,.15f);
             inventory.SetSlot(0,MiningRules.Profile(block).Category==MiningCategory.Mineral?new ItemStack(Items.Tool(ToolTier.Diamond,ToolKind.Pickaxe),1):default);
-            world.SetBlock(15,10,16,block);int before=drops.Entities.Count;float duration=MiningRules.Seconds(block,inventory.Selected);
+            if(block==BlockType.Bed)
+            {world.SetBlock(15,9,16,BlockType.Grass);world.SetBlock(15,9,15,BlockType.Grass);Require(world.PlaceBed(new(15,10,16),0,new Player(new(128,30,128)).Bounds),"Bed mining fixture placement failed.");}
+            else world.SetBlock(15,10,16,block);
+            int before=drops.Entities.Count;float duration=MiningRules.Seconds(block,inventory.Selected);
             if(block==BlockType.Bedrock){Require(duration<0 && !Mine(hit,true,100) && world.GetBlock(15,10,16)==block && drops.Entities.Count==before,"Bedrock broke/dropped.");continue;}
             bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower or BlockType.Sapling or BlockType.Torch;
             Require(instant?duration==0:duration>0,"Mining duration policy invalid.");
@@ -262,7 +265,7 @@ internal static class InventoryChecks
         var world = new World(0, WorldSize.Small, false);
         var save = new WorldSave(world, "Validation", new Vector3(64.5f, 30, 64.5f), 0, 0,
             Inventory.CreateStarter(), new[] { new DroppedItemState(Dirt, 1, new Vector3(10.5f, 20, 10.5f), 0, 0) });
-        using var stream = new MemoryStream(); WorldSerializer.Write(stream, save);
+        using var stream = new MemoryStream(); WorldSerializer.WriteLegacy(stream, save); // Fixed-offset v10 corruption fixtures.
         byte[] original = stream.ToArray();
         int tail = 52 + Encoding.UTF8.GetByteCount(save.Name) + world.BlockCount;
         void Bad(int offset, byte[] value)

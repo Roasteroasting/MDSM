@@ -29,12 +29,19 @@ public static class SurvivalInteractions
     public static bool Use(GameSession session,BlockHit? hit)
     {
         ItemStack held=session.Inventory.Selected;World world=session.World;
+        if(hit is BlockHit bed && Blocks.Bed(world.GetBlock(bed.Cell.X,bed.Cell.Y,bed.Cell.Z)))
+        {world.UseBed(bed.Cell);return true;}
         if(hit is BlockHit structure && world.Toggle(structure.Cell))return true;
         if(held.Item==Items.Wheat)
         {session.Mobs.Feed(EntityRaycaster.Cast(world,session.Mobs,session.Camera.Position,session.Camera.Forward),session.Inventory);return true;}
         if(held.Item==Items.Bucket || held.Item==Items.WaterBucket || held.Item==Items.LavaBucket)
         {UseBucket(session,hit);return true;}
         if(hit is not BlockHit block)return false;
+        if(Items.TryGetBlock(held.Item,out var bedBlock) && bedBlock==BlockType.Bed)
+        {
+            if(block.HasPlacementFace && world.PlaceBed(block.PlacementCell,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),session.Player.Bounds)
+                && !session.Player.Creative)session.Inventory.ConsumeSelected();return true;
+        }
         if(held.Item==Items.WheatSeeds){world.Farming.Plant(block.Cell,session.Inventory,session.Player.Creative);return true;}
         if(Items.Get(held.Item).Tool==ToolKind.Hoe){world.Farming.Till(block.Cell,session.Inventory,session.Player.Creative);return true;}
         if(Items.TryGetBlock(held.Item,out BlockType type) && type is BlockType.Door or BlockType.FenceGate or BlockType.Torch)

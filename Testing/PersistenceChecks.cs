@@ -146,7 +146,7 @@ internal static class PersistenceChecks
     private static byte[] Encode(WorldSave save)
     {
         using var stream = new MemoryStream();
-        WorldSerializer.Write(stream, save);
+        WorldSerializer.WriteLegacy(stream, save); // Byte-corruption fixtures explicitly exercise the v10 layout.
         return stream.ToArray();
     }
     private static void ChangeInt(byte[] original, int offset, int value)

@@ -70,6 +70,7 @@ internal static class GameplayRefinementGraphicsChecks
             var creative=Read(target,"gameplay-creative-hud.png");Check(!creative.Contains(new Color(221,43,54)) && !creative.Contains(new Color(135,218,255)),"Creative rendered health/breath.");
         }
         // Exercise live Settings navigation from a paused session, then restore defaults for the rest of the suite.
+        world.SavedGameMode=GameMode.Survival; // This fixture intentionally starts Survival before testing a live mode switch.
         var store=Field<WorldSaveManager>("_saves");var save=new WorldSave(world,"Mode settings",new(40,1,40),0,0);string id=store.Create(save);Call("BeginWorld",id,save);Call("SetState",GameState.Paused);Call("HandleMenuAction",MenuAction.OpenSettings);
         var live=Field<GameSession>("_session");var options=Field<GameSettings>("_settings");
         var menu=Field<MenuController>("_menu");var viewportNow=device.Viewport;

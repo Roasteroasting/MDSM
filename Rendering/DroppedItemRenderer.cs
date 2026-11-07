@@ -31,7 +31,7 @@ internal sealed class DroppedItemRenderer : IDisposable
             FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd
         };
     }
-    public void Draw(Camera camera, DroppedItems items)
+    public void Draw(Camera camera, DroppedItems items,World world=null,float brightness=.5f)
     {
         if (items == null || items.Entities.Count == 0) return;
         _builder.Clear();
@@ -41,10 +41,19 @@ internal sealed class DroppedItemRenderer : IDisposable
         {
             DroppedItem item = items.Entities[i];
             if (!_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
-            if (!Items.IsSprite(item.Item) && Items.TryGetBlock(item.Item, out BlockType block)) _builder.AppendItem(block, item.Position);
+            if (!Items.IsSprite(item.Item) && Items.TryGetBlock(item.Item, out BlockType block))
+            {
+                int start=_builder.VertexCount;_builder.AppendItem(block,item.Position);
+                if(world!=null)
+                {
+                    float light=BlockLighting.Visibility(world.Lighting.Effective(item.Position),brightness);
+                    for(int v=start;v<_builder.VertexCount;v++)_builder.Vertices[v].Color=new Color(_builder.Vertices[v].Color.ToVector3()*light);
+                }
+            }
         }
         _effect.View = camera.View;
         _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
+        if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
         DrawBatch(_builder.Vertices, _builder.VertexCount, _atlas.Texture);
         {
             int spriteCount = 0;
@@ -54,6 +63,11 @@ internal sealed class DroppedItemRenderer : IDisposable
                 if (!Items.IsSprite(item.Item) || !_frustum.Intersects(new BoundingSphere(item.Position, DroppedItem.Radius * 2))) continue;
                 if (spriteCount + ItemSpriteGeometry.VertexCount > _sprites.Length) Array.Resize(ref _sprites, _sprites.Length * 2);
                 ItemSpriteGeometry.Fill(_sprites, spriteCount, item.Position, camera.Right, Vector3.Up,item.Item);
+                if(world!=null)
+                {
+                    Color tint=new(new Vector3(BlockLighting.Visibility(world.Lighting.Effective(item.Position),brightness)));
+                    for(int v=spriteCount;v<spriteCount+ItemSpriteGeometry.VertexCount;v++)_sprites[v].Color=tint;
+                }
                 spriteCount += ItemSpriteGeometry.VertexCount;
             }
             DrawBatch(_sprites, spriteCount, _atlas.ItemAtlas);

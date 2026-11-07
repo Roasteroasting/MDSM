@@ -138,7 +138,7 @@ internal static class WorldManagementChecks
             var save = new WorldSave(world, "Size " + size, new Vector3(world.Width - 2.5f, 70, world.Depth - 3.5f), 1.1f, -0.3f);
             using var stream = new MemoryStream();
             WorldSerializer.Write(stream, save);
-            int headerSize = 52 + System.Text.Encoding.UTF8.GetByteCount(save.Name);
+            int headerSize = 52 + System.Text.Encoding.UTF8.GetByteCount(save.Name) + 48; // v11 layout options + metadata checksum
             // Non-seekable stream throws if metadata reading attempts to read a block byte.
             using var header = new HeaderOnlyStream(stream.GetBuffer(), headerSize);
             WorldMetadata metadata = WorldSerializer.ReadMetadata(header);

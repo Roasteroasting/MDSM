@@ -12,7 +12,8 @@ internal sealed class WaterRenderer : IDisposable
 {
     private readonly GraphicsDevice _device;
     private readonly World _world;
-    private readonly BasicEffect _effect;
+    private readonly Effect _effect;
+    public float Brightness { get; set; }=.5f;
     private readonly List<WaterFace>[] _chunks;
     private readonly int[] _revisions;
     private readonly BoundingFrustum _frustum = new(Matrix.Identity);
@@ -57,8 +58,7 @@ internal sealed class WaterRenderer : IDisposable
         _ownsRegion = region == null; _region = region ?? new ChunkRegion(world);
         _chunks = new List<WaterFace>[world.ChunkCount]; _revisions = new int[world.ChunkCount];
         Array.Fill(_revisions, -1);
-        _effect = new BasicEffect(device) { World = Matrix.Identity, TextureEnabled = true, VertexColorEnabled = true,
-            Texture = _texture, FogEnabled = true, FogColor = WorldRenderer.SkyColor.ToVector3(), FogStart = WorldRenderer.FogStart, FogEnd = WorldRenderer.FogEnd };
+        _effect = atlas.LightingEffect.Clone();
     }
 
     public void Draw(Camera camera)
@@ -133,7 +133,7 @@ internal sealed class WaterRenderer : IDisposable
             _device.RasterizerState = RasterizerState.CullNone;
             _device.SamplerStates[0] = SamplerState.PointClamp;
             _device.Textures[0] = _texture;
-            _effect.View = camera.View; _effect.Projection = projection;
+            FlatLighting.Apply(_effect,_device,_texture,_world,camera,Brightness,0);
             _device.SetVertexBuffer(_buffer);
             foreach (EffectPass pass in _effect.CurrentTechnique.Passes)
             { pass.Apply(); _device.DrawPrimitives(PrimitiveType.TriangleList, 0, _count * 2); }

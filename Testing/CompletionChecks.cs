@@ -38,7 +38,7 @@ internal static class CompletionChecks
     public static int Run(){int failures=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}Console.WriteLine($"{All.Length-failures}/{All.Length} completion checks passed.");return failures==0?0:1;}
     public static void Recipes()
     {
-        Check(CraftingRecipes.All.Length==80,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
+        Check(CraftingRecipes.All.Length==81,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
         foreach(var recipe in CraftingRecipes.All)
         {
             outputs.Add(recipe.Output.Item);var pattern=(CraftingIngredient[])typeof(ShapedRecipe).GetField("_ingredients",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(recipe);
@@ -175,6 +175,7 @@ internal static class CompletionChecks
     public static void Hostiles()
     {
         var world=PigChecks.Flat();for(int z=10;z<100;z++)for(int x=10;x<100;x++)world.SetBlock(x,19,z,BlockType.Stone);
+        world.Time.Restore(800); // Surface spawning is now valid in total darkness at night.
         var player=new Player(new(40,20,40));var population=new HostilePopulation(world,new[]{new MobState(MobSpecies.Zombie,new(41,20,40),0,20)});var arrows=new Projectiles(world);
         Check(population.Suitable(MobSpecies.Zombie,new(70,20,40),player.Position) && !population.Suitable(MobSpecies.Zombie,new(42,20,40),player.Position),"Hostile spawn distance constraints failed.");
         world.SetBlock(70,20,40,BlockType.Torch);Check(!population.Suitable(MobSpecies.Zombie,new(70,20,40),player.Position),"Torch did not prevent hostile spawning.");world.SetBlock(70,20,40,BlockType.Air);

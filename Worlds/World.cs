@@ -26,6 +26,9 @@ public sealed partial class World
     public FallingBlockSimulation Gravity { get; }
     public BlockEntities Containers { get; }
     public VegetationSimulation Vegetation { get; }
+    public WorldTime Time { get; } = new();
+    public BlockLighting Lighting { get; }
+    public MDSM.Core.GameMode? SavedGameMode { get; internal set; }
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
     public OreGenerationStats GeneratedOres { get; private set; }
     public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
@@ -39,6 +42,7 @@ public sealed partial class World
     internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        Lighting = new BlockLighting(this);
         Farming=new FarmingSimulation(this);
         Vegetation=new VegetationSimulation(this);
         Containers=new BlockEntities(this);
@@ -64,6 +68,7 @@ public sealed partial class World
     {
         progress?.Invoke("ALLOCATING WORLD");
         var world = new World(seed, size, false);
+        world.SavedGameMode=MDSM.Core.GameMode.Survival;
         progress?.Invoke("GENERATING TERRAIN");
         new TerrainGenerator(seed).Generate(world);
         progress?.Invoke("CARVING PONDS, RIVERS AND LAKES");
@@ -124,9 +129,10 @@ public sealed partial class World
         Chunk chunk = GetChunk(chunkX, chunkZ);
         BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
+        Lighting.Changed(new(x,y,z),previous,block);
         Point3 changedCell=new(x,y,z);
         if(block==BlockType.Air && Blocks.IsRenderable(previous) && !Lava.Fluid(previous)
-            && _blockChangeRoot!=changedCell && _doorPartnerEdit!=changedCell && !(_plantEdit && Blocks.DoubleGrass(previous)))
+            && _blockChangeRoot!=changedCell && _doorPartnerEdit!=changedCell && !(_plantEdit && Blocks.DoubleGrass(previous)) && !(_bedEdit && Blocks.Bed(previous)))
             Sounds?.Block(SoundKind.Break,previous,BlockSounds.Center(changedCell));
         Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
@@ -180,6 +186,7 @@ public sealed partial class World
 
     private bool TryPlaceBlock(Point3 cell,BlockType block,BoundingBox playerBounds,Point3? support,StructureState? proposed)
     {
+        if(block==BlockType.Bed)return PlaceBed(cell,0,playerBounds);
         BlockDefinition definition = Blocks.Get(block);
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
             || support.HasValue && support.Value.Y>0 && Blocks.RejectsUnderside(block)

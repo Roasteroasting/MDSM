@@ -185,7 +185,7 @@ internal static class MobChecks
     public static void StartingAndRespawn()
     {
         Inventory inventory = Inventory.CreateNewWorld();
-        Require(Blocks.Selection.Length == 30 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable,
+        Require(Blocks.Selection.Length == 31 && Blocks.Selection[13] == BlockType.WhiteWool && Blocks.Selection[14] == BlockType.CraftingTable && Blocks.Selection[^1]==BlockType.Bed,
             "Placeable palette omitted wool/table or reordered existing blocks.");
         for (int i = 0; i < Inventory.SlotCount; i++) Require(inventory[i].IsEmpty, "New worlds must not grant starting items.");
         Require(Inventory.CreateStarter()[13].IsEmpty, "Legacy migration granted new wool.");
@@ -194,7 +194,7 @@ internal static class MobChecks
         Require(Enumerable.Range(0, 36).All(i => session.Inventory[i].IsEmpty) && session.Items.Entities.Count == 0, "Death/respawn replenished new-world stock.");
     }
 
-    internal static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.Write(stream, save); return stream.ToArray(); }
+    internal static byte[] Encode(WorldSave save) { using var stream = new MemoryStream(); WorldSerializer.WriteLegacy(stream, save); return stream.ToArray(); } // v10 layout fixtures
     private static WorldSave Decode(byte[] data) => WorldSerializer.Read(new MemoryStream(data));
     public static void Persistence()
     {

@@ -13,8 +13,7 @@ public enum GameState
     Death,
     Settings,
     Controls,
-    About,
-    SoundSettings
+    About
 }
 
 internal enum MenuAction
@@ -38,6 +37,5 @@ internal enum MenuAction
     OpenSettings,
     SettingsChanged,
     OpenControls,
-    OpenAbout,
-    OpenSounds
+    OpenAbout
 }

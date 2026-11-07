@@ -90,6 +90,8 @@ public static class CraftingRecipes
         Add(2,3,Items.FromBlock(BlockType.Door),3,P,P,P,P,P,P);
         ItemId glass=Items.FromBlock(BlockType.Glass);
         Add(3,2,Items.FromBlock(BlockType.GlassPane),16,glass,glass,glass,glass,glass,glass);
+        ItemId wool=Items.FromBlock(BlockType.WhiteWool);
+        Add(3,2,Items.FromBlock(BlockType.Bed),1,wool,wool,wool,P,P,P);
         Add(1,2,Items.FromBlock(BlockType.Torch),4,Items.Coal,S);Add(1,2,Items.FromBlock(BlockType.Torch),4,Items.Charcoal,S);
         Add(3,2,Items.Bucket,1,I,default,I,default,I,default);
         Add(3,3,Items.FromBlock(BlockType.Smoker),1,default,L,default,L,F,L,default,L,default);

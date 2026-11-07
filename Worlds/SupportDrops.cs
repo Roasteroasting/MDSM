@@ -46,7 +46,7 @@ public sealed partial class World
         bool cropRemoved=Blocks.Crop(previous) && !Blocks.Crop(next);
         // Most fluid-level/terrain changes cannot remove dependents. No allocation
         // or world scan is needed in that common path.
-        if(!cropRemoved && previous is not (BlockType.Door or BlockType.DoorUpper) && !Blocks.DoubleGrass(previous)
+        if(!cropRemoved && previous is not (BlockType.Door or BlockType.DoorUpper) && !Blocks.DoubleGrass(previous) && !Blocks.Bed(previous)
             && !(Blocks.IsSolid(previous) && !Blocks.IsSolid(next))
             && !(Blocks.Get(above).NeedsGrass && !Blocks.SupportsPlant(next,above)))return null;
         var changes=new List<SupportChange>{new(cell,previous,next,cropRemoved && !rootHarvested)};
@@ -68,6 +68,11 @@ public sealed partial class World
                 Point3 other=p+new Point3(0,change.Previous==BlockType.Door?1:-1,0);
                 if(GetBlock(other.X,other.Y,other.Z) is BlockType.Door or BlockType.DoorUpper)Remove(other,false);
             }
+            if(Blocks.Bed(change.Previous))
+            {
+                Point3 other=BedPartner(p,change.Previous);
+                if(Blocks.Bed(GetBlock(other.X,other.Y,other.Z)))Remove(other,false);
+            }
             if(Blocks.DoubleGrass(change.Previous))
             {
                 Point3 other=p+new Point3(0,change.Previous==BlockType.DoubleTallGrassLower?1:-1,0);
@@ -78,7 +83,11 @@ public sealed partial class World
             {
                 Point3 neighbor=p+direction;BlockType block=GetBlock(neighbor.X,neighbor.Y,neighbor.Z);
                 if(block==BlockType.Torch && neighbor+Structure(neighbor).Support==p
-                    || direction.Y==1 && block==BlockType.Door)Remove(neighbor,true);
+                    || direction.Y==1 && block==BlockType.Door || direction.Y==1 && Blocks.Bed(block))
+                {
+                    bool partnerPlanned=Blocks.Bed(block) && seen.Contains(BedPartner(neighbor,block));
+                    Remove(neighbor,!partnerPlanned);
+                }
             }
             Point3 upper=p+new Point3(0,1,0);BlockType plant=GetBlock(upper.X,upper.Y,upper.Z);
             if(Blocks.Get(plant).NeedsGrass && !Blocks.SupportsPlant(change.Next,plant))Remove(upper,true);

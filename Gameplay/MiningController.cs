@@ -92,7 +92,7 @@ public static class BlockPlacement
     {
         ItemStack stack = inventory.Selected;
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)
-            || !(block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,support??new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds,support))) return false;
+            || !(block==BlockType.Bed?world.PlaceBed(cell,0,playerBounds):block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,support??new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds,support))) return false;
         if (!creative) inventory.ConsumeSelected();
         return true;
     }

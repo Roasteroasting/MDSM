@@ -14,7 +14,10 @@ public sealed class WorldRenderer : IDisposable
     public static readonly Color SkyColor = new(143, 190, 232);
     public const float FogStart = 80, FogEnd = 144;
     private readonly GraphicsDevice _device;
-    private readonly AlphaTestEffect _terrainEffect;
+    private readonly Effect _terrainEffect;
+    private readonly Texture2D _texture;
+    private readonly SkyRenderer _sky;
+    public float Brightness { get; set; }=.5f;
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
     private readonly DroppedItemRenderer _items;
@@ -97,24 +100,14 @@ public sealed class WorldRenderer : IDisposable
     {
         _device = device;
         _world = world;
+        _texture=atlas.Texture;_sky=new SkyRenderer(device);
         _items = new DroppedItemRenderer(device, atlas);
         _falling = new FallingBlockRenderer(device, atlas);
         _region = new ChunkRegion(world);
         _water = new WaterRenderer(device, atlas, world, _region);
         _meshes = new ChunkMesh[world.ChunkCount];
         _visible = new ChunkMesh[world.ChunkCount];
-        _terrainEffect = new AlphaTestEffect(device)
-        {
-            World = Matrix.Identity,
-            Texture = atlas.Texture,
-            VertexColorEnabled = true,
-            AlphaFunction = CompareFunction.GreaterEqual,
-            ReferenceAlpha = 128,
-            FogEnabled = true,
-            FogColor = SkyColor.ToVector3(),
-            FogStart = WorldRenderer.FogStart,
-            FogEnd = WorldRenderer.FogEnd
-        };
+        _terrainEffect = atlas.LightingEffect.Clone();
         _selectionEffect = new BasicEffect(device)
         {
             World = Matrix.Identity,
@@ -129,6 +122,7 @@ public sealed class WorldRenderer : IDisposable
         _frustum.Matrix = view * projection;
         VisibleChunks = 0;
         Prepare(camera);
+        _sky.Draw(camera,_world.Time);
         foreach (int index in _region.Indices)
         {
             ChunkMesh mesh = _meshes[index];
@@ -141,8 +135,7 @@ public sealed class WorldRenderer : IDisposable
         _device.DepthStencilState = DepthStencilState.Default;
         _device.RasterizerState = RasterizerState.CullCounterClockwise;
         _device.SamplerStates[0] = SamplerState.PointClamp;
-        _terrainEffect.View = view;
-        _terrainEffect.Projection = projection;
+        FlatLighting.Apply(_terrainEffect,_device,_texture,_world,camera,Brightness,.5f);
         foreach (EffectPass pass in _terrainEffect.CurrentTechnique.Passes)
         {
             pass.Apply();
@@ -150,13 +143,13 @@ public sealed class WorldRenderer : IDisposable
                 _visible[i].Draw();
         }
 
-        _items.Draw(camera, items);
-        _falling.Draw(camera, _world.Gravity, fallingInterpolation);
+        _items.Draw(camera, items,_world,Brightness);
+        _falling.Draw(camera, _world.Gravity, fallingInterpolation,_world,Brightness);
         if (selection is BlockHit hit)
             DrawSelection(hit, camera, miningProgress);
     }
 
-    public void DrawWater(Camera camera) => _water.Draw(camera);
+    public void DrawWater(Camera camera) { _water.Brightness=Brightness;_water.Draw(camera); }
 
     private void DrawSelection(BlockHit hit, Camera camera, float miningProgress)
     {
@@ -197,5 +190,6 @@ public sealed class WorldRenderer : IDisposable
         _items.Dispose();
         _falling.Dispose();
         _water.Dispose();
+        _sky.Dispose();
     }
 }
