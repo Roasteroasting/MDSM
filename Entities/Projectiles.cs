@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Worlds;
+using MDSM.Audio;
 
 namespace MDSM.Entities;
 
@@ -17,6 +18,7 @@ public sealed class Projectiles
     private readonly World _world;
     private readonly List<ArrowState> _arrows=new();
     public IReadOnlyList<ArrowState> Arrows=>_arrows;
+    internal SoundEvents Sounds=>_world.Sounds;
     public Projectiles(World world,ArrowState[] states=null)
     {
         _world=world;if(states==null)return;
@@ -30,10 +32,10 @@ public sealed class Projectiles
             || direction.LengthSquared()<.00001f || origin.X<0 || origin.X>=_world.Width || origin.Z<0 || origin.Z>=_world.Depth || origin.Y<0 || origin.Y>MaximumAltitude)return false;
         if(!inventory.Consume(Items.Arrow))return false;
         direction.Normalize();power=Math.Clamp(power,0,1);
-        _arrows.Add(new(origin,direction*(12+18*power),0,1+(int)MathF.Round(power*4),bow));return true;
+        _arrows.Add(new(origin,direction*(12+18*power),0,1+(int)MathF.Round(power*4),bow));Sounds?.At(SoundKind.BowShoot,origin);return true;
     }
     public bool ShootHostile(Vector3 origin,Vector3 velocity)
-    {if(_arrows.Count>=Maximum)return false;var arrow=new ArrowState(origin,velocity,0,2,Guid.NewGuid(),true);Validate(arrow,_world);_arrows.Add(arrow);return true;}
+    {if(_arrows.Count>=Maximum)return false;var arrow=new ArrowState(origin,velocity,0,2,Guid.NewGuid(),true);Validate(arrow,_world);_arrows.Add(arrow);Sounds?.At(SoundKind.BowShoot,origin);return true;}
     internal void RestoreHostileFlag(int index){if(index<0||index>=_arrows.Count)throw new InvalidDataException("Invalid arrow flag.");_arrows[index]=_arrows[index] with {Hostile=true};}
     public void Update(float elapsed,PassiveMobPopulation mobs,DroppedItems drops,Action<Guid> wear,HostilePopulation hostiles=null,Player player=null)
     {
@@ -59,6 +61,7 @@ public sealed class Projectiles
                 if(target!=null)
                 {if((int)target.Species>=4?hostiles.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops):mobs.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops))wear(arrow.Bow);removed=true;}
                 else if(limit<=length || arrow.Age+dt>=Lifetime || next.X<0 || next.X>=_world.Width || next.Z<0 || next.Z>=_world.Depth || next.Y<0 || next.Y>MaximumAltitude)removed=true;
+                if(removed && (target!=null || playerHit.HasValue && playerHit.Value<=length || limit<=length))Sounds?.At(SoundKind.ArrowHit,arrow.Position+ray.Direction*Math.Min(length,limit));
                 arrow=arrow with {Position=next,Velocity=arrow.Velocity-Vector3.Up*Gravity*dt,Age=arrow.Age+dt};
             }
             if(removed){_arrows[i]=_arrows[^1];_arrows.RemoveAt(_arrows.Count-1);}else _arrows[i]=arrow;
@@ -86,7 +89,7 @@ public sealed class BowController
         bool ammunition=false;for(int i=0;i<Inventory.SlotCount;i++)if(inventory[i].Item==Items.Arrow && !inventory[i].IsEmpty){ammunition=true;break;}
         if(!ammunition){Cancel();return false;}
         if(_bow!=Guid.Empty && _bow!=inventory.Selected.InstanceId)Cancel();
-        if(right){_bow=inventory.Selected.InstanceId;DrawSeconds=Math.Min(1,DrawSeconds+elapsed);return false;}
+        if(right){if(_bow==Guid.Empty)projectiles.Sounds?.At(SoundKind.BowDraw,origin);_bow=inventory.Selected.InstanceId;DrawSeconds=Math.Min(1,DrawSeconds+elapsed);return false;}
         bool shot=_bow!=Guid.Empty && DrawSeconds>=.1f && projectiles.Shoot(inventory,origin,direction,Power,_bow);
         Cancel();return shot;
     }

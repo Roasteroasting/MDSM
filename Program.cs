@@ -1,4 +1,28 @@
-if (System.Array.Exists(args, argument => argument == "--placement-update-test"))
+if (System.Array.Exists(args, argument => argument == "--audio-graphics-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.AudioGraphicsChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--audio-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.AudioChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--support-drops-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.SupportDropChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--collision-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.CollisionUpdateChecks.Run();
+}
+else if (System.Array.Exists(args, argument => argument == "--collision-graphics-test") || System.Array.Exists(args, argument => argument == "--collision-repro-graphics"))
+{
+    System.Environment.ExitCode = MDSM.Testing.CollisionGraphicsChecks.Run(System.Array.Exists(args, argument => argument == "--collision-repro-graphics"));
+}
+else if (System.Array.Exists(args, argument => argument == "--collision-repro"))
+{
+    MDSM.Testing.CollisionUpdateChecks.Diagnose();
+}
+else if (System.Array.Exists(args, argument => argument == "--placement-update-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.PlacementUpdateChecks.Run();
 }
@@ -68,9 +92,9 @@ else if (System.Array.Exists(args, argument => argument == "--self-test"))
 }
 else if (System.Array.Exists(args, argument => argument == "--graphics-test"))
 {
-    System.Environment.ExitCode = System.Math.Max(MDSM.Testing.DoorChecks.RunGraphics(),
+    System.Environment.ExitCode = System.Math.Max(MDSM.Testing.AudioGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.CollisionGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.DoorChecks.RunGraphics(),
         System.Math.Max(System.Math.Max(MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.PigGraphicsChecks.Run()),
-        System.Math.Max(MDSM.Testing.WaterGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(), MDSM.Testing.WorldExpansionGraphicsChecks.Run()))));
+        System.Math.Max(MDSM.Testing.WaterGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(), MDSM.Testing.WorldExpansionGraphicsChecks.Run()))))));
 }
 else
 {

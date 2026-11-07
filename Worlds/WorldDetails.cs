@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using MDSM.Entities;
+using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -12,8 +13,11 @@ public sealed partial class World
     public Dictionary<Point3,StructureState> Structures { get; }=new();
     public TorchIndex Torches { get; }=new();
     internal DroppedItems LiveDrops { get; set; }
-    internal bool SuppressHarvest;
+    internal PassiveMobPopulation LiveMobs { get; set; }
+    internal HostilePopulation LiveHostiles { get; set; }
+    internal bool SuppressSupportDrops { get; set; }
     private bool _structureEdit;
+    private Point3? _doorPartnerEdit;
     public CaveStats GeneratedCaves { get; internal set; }
     internal List<Point3> CaveOreSites { get; set; }=new();
     internal void NoteCaveOres(int coal,int iron,int diamond,int veins)=>GeneratedOres=GeneratedOres with {Coal=GeneratedOres.Coal+coal,Iron=GeneratedOres.Iron+iron,Diamond=GeneratedOres.Diamond+diamond,Veins=GeneratedOres.Veins+veins};
@@ -22,9 +26,9 @@ public sealed partial class World
     {
         bool water=Water.IsWater(GetBlock(cell.X,cell.Y,cell.Z));
         if(water)
-        {foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Lava.IsLava(GetBlock(p.X,p.Y,p.Z)))SetBlock(p.X,p.Y,p.Z,BlockType.Obsidian);}}
+        {foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Lava.IsLava(GetBlock(p.X,p.Y,p.Z)) && SetBlock(p.X,p.Y,p.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,BlockSounds.Center(p));}}
         else if(Lava.IsLava(GetBlock(cell.X,cell.Y,cell.Z)))
-            foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Water.IsWater(GetBlock(p.X,p.Y,p.Z))){SetBlock(cell.X,cell.Y,cell.Z,BlockType.Obsidian);break;}}
+            foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Water.IsWater(GetBlock(p.X,p.Y,p.Z))){if(SetBlock(cell.X,cell.Y,cell.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,BlockSounds.Center(cell));break;}}
     }
     public StructureState Structure(Point3 cell)
     {
@@ -35,6 +39,7 @@ public sealed partial class World
     {
         BlockType block=GetBlock(cell.X,cell.Y,cell.Z);if(block is not (BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper))return false;
         var state=Structure(cell);Structures[state.Cell]=state with {Open=!state.Open};
+        Sounds?.At(block==BlockType.FenceGate?(state.Open?SoundKind.GateClose:SoundKind.GateOpen):(state.Open?SoundKind.DoorClose:SoundKind.DoorOpen),BlockSounds.Center(state.Cell));
         DirtyDetail(state.Cell);return true;
     }
     internal void DirtyDetail(Point3 cell)
@@ -45,34 +50,31 @@ public sealed partial class World
     {
         if (support.Y>0 && Blocks.RejectsUnderside(block)) return false;
         if(Structures.Count>=65536)return false;
+        byte orientation=(byte)(facing%4);
+        if(block==BlockType.Door)
+        {Vector3 center=(player.Min+player.Max)*.5f;if((orientation%2==0?center.X-cell.X:center.Z-cell.Z)<.5f)orientation|=4;}
+        var proposed = new StructureState(cell,orientation,false,support);
         if(block==BlockType.Door)
         {
             if(!Contains(cell.X,cell.Y+1,cell.Z) || GetBlock(cell.X,cell.Y,cell.Z)!=BlockType.Air || GetBlock(cell.X,cell.Y+1,cell.Z)!=BlockType.Air
-                || !IsSolid(cell.X,cell.Y-1,cell.Z) || Overlaps(new(new(cell.X,cell.Y,cell.Z),new(cell.X+1,cell.Y+2,cell.Z+1)),player))return false;
+                || !IsSolid(cell.X,cell.Y-1,cell.Z) || Overlaps(new(new(cell.X,cell.Y,cell.Z),new(cell.X+1,cell.Y+2,cell.Z+1)),player)
+                || PlacementBlockedByMobs(cell,block,proposed)
+                || PlacementBlockedByMobs(cell+new Point3(0,1,0),BlockType.DoorUpper,proposed))return false;
             _structureEdit=true;SetBlock(cell.X,cell.Y,cell.Z,block);SetBlock(cell.X,cell.Y+1,cell.Z,BlockType.DoorUpper);_structureEdit=false;
         }
         else
         {
             if(block==BlockType.Torch && !IsSolid(cell.X+support.X,cell.Y+support.Y,cell.Z+support.Z))return false;
-            if(!TryPlace(cell,block,player,support))return false;
+            if(!TryPlaceBlock(cell,block,player,support,proposed))return false;
         }
-        byte orientation=(byte)(facing%4);
-        if(block==BlockType.Door)
-        {Vector3 center=(player.Min+player.Max)*.5f;if((orientation%2==0?center.X-cell.X:center.Z-cell.Z)<.5f)orientation|=4;}
-        Structures[cell]=new(cell,orientation,false,support);if(block==BlockType.Torch)Torches.Add(cell);DirtyDetail(cell);return true;
+        Structures[cell]=proposed;if(block==BlockType.Torch)Torches.Add(cell);DirtyDetail(cell);
+        if(block==BlockType.Door)Sounds?.Block(SoundKind.Place,block,BlockSounds.Center(cell));return true;
     }
     private bool CanDetailChange(Point3 cell,BlockType previous,BlockType next)
     {
         if(Blocks.Crop(next) && !Blocks.Crop(previous) && !Farming.CanPlant)return false;
         if(next is BlockType.Torch or BlockType.Door or BlockType.FenceGate && !Structures.ContainsKey(cell) && Structures.Count>=65536)return false;
-        if(LiveDrops==null || SuppressHarvest)return true;int drops=Blocks.Crop(previous)?5:0;
-        if(Blocks.IsSolid(previous) && !Blocks.IsSolid(next))foreach(Point3 direction in Adjacent)
-        {
-            Point3 p=cell+direction;BlockType b=GetBlock(p.X,p.Y,p.Z);
-            if(b==BlockType.Torch && p+Structure(p).Support==cell)drops++;
-            if(direction.Y==1){if(b==BlockType.Door)drops++;if(Blocks.Crop(b))drops+=5;}
-        }
-        return LiveDrops.CanSpawn(drops);
+        return true; // The outer block-change context reserves the complete cascade's loot.
     }
     private void DetailChanged(Point3 cell,BlockType previous,BlockType next)
     {
@@ -81,28 +83,37 @@ public sealed partial class World
         if(next==BlockType.Torch){Torches.Add(cell);Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));}
         if(next is BlockType.FenceGate or BlockType.Door)Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));
         if(previous!=next && next is not (BlockType.Torch or BlockType.FenceGate or BlockType.Door))Structures.Remove(cell);
-        if(!_structureEdit && previous is BlockType.Door or BlockType.DoorUpper)
+        if(!_structureEdit && _doorPartnerEdit!=cell && previous is BlockType.Door or BlockType.DoorUpper)
         {
-            Point3 other=cell+new Point3(0,previous==BlockType.Door?1:-1,0);_structureEdit=true;
-            if(GetBlock(other.X,other.Y,other.Z) is BlockType.Door or BlockType.DoorUpper)SetBlock(other.X,other.Y,other.Z,BlockType.Air);
-            Structures.Remove(other);_structureEdit=false;
+            Point3 other=cell+new Point3(0,previous==BlockType.Door?1:-1,0);
+            Point3? prior=_doorPartnerEdit;_doorPartnerEdit=other;
+            try
+            {
+                if(GetBlock(other.X,other.Y,other.Z) is BlockType.Door or BlockType.DoorUpper)SetBlock(other.X,other.Y,other.Z,BlockType.Air);
+                Structures.Remove(other);
+            }
+            finally { _doorPartnerEdit=prior; }
         }
         // Only adjacent special placements need support invalidation.
         foreach(Point3 direction in Adjacent)
         {
             Point3 p=cell+direction;BlockType b=GetBlock(p.X,p.Y,p.Z);
             if(b==BlockType.Torch && !IsSolid(cell.X,cell.Y,cell.Z) && p+Structure(p).Support==cell)
-            {SetBlock(p.X,p.Y,p.Z,BlockType.Air);if(!SuppressHarvest)LiveDrops?.Spawn(MDSM.Inventories.Items.FromBlock(b),1,new(p.X+.5f,p.Y+.5f,p.Z+.5f));}
+                SetBlock(p.X,p.Y,p.Z,BlockType.Air);
             if(direction.Y==1 && b==BlockType.Door && !IsSolid(cell.X,cell.Y,cell.Z))
-            {SetBlock(p.X,p.Y,p.Z,BlockType.Air);if(!SuppressHarvest)LiveDrops?.Spawn(MDSM.Inventories.Items.FromBlock(b),1,new(p.X+.5f,p.Y+.5f,p.Z+.5f));}
+                SetBlock(p.X,p.Y,p.Z,BlockType.Air);
         }
     }
     // Shared geometry for voxel meshes, collision and accurate ray hitboxes. World-space boxes.
     public int BlockBoxes(Point3 cell,Span<BoundingBox> boxes,bool collision=false)
+        => ShapeBoxes(cell,GetBlock(cell.X,cell.Y,cell.Z),boxes,collision);
+
+    private int ShapeBoxes(Point3 cell,BlockType block,Span<BoundingBox> boxes,bool collision,
+        StructureState? proposed=null,Point3? changedNeighbor=null,BlockType replacement=BlockType.Air)
     {
-        BlockType block=GetBlock(cell.X,cell.Y,cell.Z);BlockShape shape=Blocks.Get(block).Shape;
+        BlockShape shape=Blocks.Get(block).Shape;
         if(collision && !Blocks.IsSolid(block))return 0;
-        if(shape==BlockShape.Pane)return PaneBoxes(cell,boxes);
+        if(shape==BlockShape.Pane)return PaneBoxes(cell,PaneConnections(cell,changedNeighbor,replacement),boxes);
         int count=0;Vector3 origin=new(cell.X,cell.Y,cell.Z);
         count=1;boxes[0]=new(origin,origin+Vector3.One);
         if(shape==BlockShape.Fluid)
@@ -118,7 +129,7 @@ public sealed partial class World
         {Point3 support=Structure(cell).Support;Vector3 shift=new(support.X*.28f,support.Y==0?.2f:0,support.Z*.28f);boxes[0]=new(origin+shift+new Vector3(.4f,0,.4f),origin+shift+new Vector3(.6f,.7f,.6f));return 1;}
         if(shape is BlockShape.Gate or BlockShape.Door)
         {
-            var state=Structure(cell);if(collision && shape==BlockShape.Gate && state.Open)return 0;
+            var state=proposed??Structure(cell);if(collision && shape==BlockShape.Gate && state.Open)return 0;
             int facing=((state.Facing&3)+(state.Open?(state.Facing&4)!=0?3:1:0))%4;float height=collision && shape==BlockShape.Gate?1.5f:1;
             if(shape==BlockShape.Gate && !state.Open)
                 boxes[0]=facing%2==0?new(origin+new Vector3(0,0,.40625f),origin+new Vector3(1,height,.59375f)):new(origin+new Vector3(.40625f,0,0),origin+new Vector3(.59375f,height,1));
@@ -137,7 +148,7 @@ public sealed partial class World
             for(int axis=0;axis<4;axis++)
             {
                 int dx=axis<2?axis==0?-1:1:0,dz=axis>=2?axis==2?-1:1:0;
-                BlockType neighbor=GetBlock(cell.X+dx,cell.Y,cell.Z+dz);if(neighbor is not (BlockType.Fence or BlockType.FenceGate) && !Blocks.IsOpaque(neighbor))continue;
+                BlockType neighbor=PlacementNeighbor(new(cell.X+dx,cell.Y,cell.Z+dz),changedNeighbor,replacement);if(neighbor is not (BlockType.Fence or BlockType.FenceGate) && !Blocks.IsOpaque(neighbor))continue;
                 for(int rail=0;rail<(collision?1:2);rail++)
                 {
                     float low=collision?0:rail==0?.3f:.7f,high=collision?1.5f:low+.15f;

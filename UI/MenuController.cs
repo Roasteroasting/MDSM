@@ -20,6 +20,7 @@ internal sealed class MenuController : IDisposable
     private readonly TextureAtlas _atlas;
     private readonly GameSettings _settings;
     private bool _draggingSlider;
+    private int _soundSlider=-1;
     private GameState _screen;
     private int _focus;
     private int _selected;
@@ -57,7 +58,7 @@ internal sealed class MenuController : IDisposable
     private static readonly Button[] DeathButtons = { new("RESPAWN", MenuAction.Respawn), new("MAIN MENU", MenuAction.SaveAndReturn) };
     private static readonly Button[] SettingsButtons =
     {
-        new("CONTROLS", MenuAction.OpenControls), new("ABOUT", MenuAction.OpenAbout), new("BACK", MenuAction.Back)
+        new("CONTROLS", MenuAction.OpenControls), new("ABOUT", MenuAction.OpenAbout), new("BACK", MenuAction.Back), new("SOUNDS",MenuAction.OpenSounds)
     };
     private static readonly Button[] InformationButtons = { new("BACK", MenuAction.Back) };
     private static readonly Button[] CreateButtons = { new("CREATE", MenuAction.CreateWorld), new("BACK", MenuAction.Back) };
@@ -74,6 +75,7 @@ internal sealed class MenuController : IDisposable
         GameState.Paused => PauseButtons,
         GameState.Death => DeathButtons,
         GameState.Settings => SettingsButtons,
+        GameState.SoundSettings => InformationButtons,
         GameState.Controls or GameState.About => InformationButtons,
         GameState.WorldCreation => CreateButtons,
         GameState.WorldSelection => SelectButtons,
@@ -82,7 +84,7 @@ internal sealed class MenuController : IDisposable
         _ => MainButtons
     };
     private int FocusOffset => _screen == GameState.WorldCreation ? 3
-        : _screen == GameState.Settings ? 5 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+        : _screen == GameState.Settings ? 5 : _screen==GameState.SoundSettings?4:_screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
     public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
     {
@@ -99,6 +101,7 @@ internal sealed class MenuController : IDisposable
         _focus = 0;
         _selectAll = false;
         _draggingSlider = false;
+        _soundSlider=-1;
         _message = "";
         _informationScroll = 0;
         _informationSize = Point.Zero;
@@ -235,6 +238,27 @@ internal sealed class MenuController : IDisposable
             if (Pressed(Keys.Enter) && _focus < 5) return MenuAction.None;
         }
 
+        if(_screen==GameState.SoundSettings)
+        {
+            bool changed=false;
+            for(int index=0;index<4;index++)
+            {
+                Rectangle slider=SoundSettingsLayout.Slider(viewport,index);float before=SoundSettingsLayout.Get(_settings,index);
+                if(click && slider.Contains(_mouse)){_focus=index;_soundSlider=index;}
+                if(mouse.LeftButton==ButtonState.Released)_soundSlider=-1;
+                float value=before;
+                if(_soundSlider==index)value=SoundSettingsLayout.ValueAt(slider,_mouse.X);
+                if(_focus==index)
+                {
+                    if(Pressed(Keys.Left))value-=.01f;if(Pressed(Keys.Right))value+=.01f;
+                    if(Pressed(Keys.Home))value=0;if(Pressed(Keys.End))value=1;
+                }
+                SoundSettingsLayout.Set(_settings,index,value);changed|=before!=SoundSettingsLayout.Get(_settings,index);
+            }
+            if(changed)return MenuAction.SettingsChanged;
+            if(Pressed(Keys.Enter) && _focus<4)return MenuAction.None;
+        }
+
         if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
             for (int i = 0; i < (_screen == GameState.WorldCreation ? 3 : 1); i++)
                 if (FieldBounds(viewport, i).Contains(_mouse))
@@ -306,7 +330,8 @@ internal sealed class MenuController : IDisposable
     private Rectangle ButtonBounds(Viewport viewport, int index)
     {
         if (_screen == GameState.WorldCreation) return WorldCreationLayout.Button(viewport, index);
-        if (_screen == GameState.Settings) return index < 2 ? SettingsLayout.Information(viewport, index) : SettingsLayout.Back(viewport);
+        if (_screen == GameState.Settings) return index < 2 ? SettingsLayout.Information(viewport, index) : index==2?SettingsLayout.Back(viewport):SettingsLayout.Sounds(viewport);
+        if(_screen==GameState.SoundSettings)return SoundSettingsLayout.Back(viewport);
         if (MenuInformation.IsInformation(_screen)) return MenuInformation.Back(viewport);
         if (_screen is GameState.MainMenu or GameState.Paused or GameState.Death)
         {
@@ -335,7 +360,7 @@ internal sealed class MenuController : IDisposable
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
         if (_screen is GameState.Paused or GameState.Death
-            || ((_screen == GameState.Settings || MenuInformation.IsInformation(_screen)) && worldName != null))
+            || ((_screen is GameState.Settings or GameState.SoundSettings || MenuInformation.IsInformation(_screen)) && worldName != null))
             Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.7f);
         else
         {
@@ -355,17 +380,30 @@ internal sealed class MenuController : IDisposable
             GameState.Paused => "PAUSED",
             GameState.Death => "You died!",
             GameState.Settings => "SETTINGS",
+            GameState.SoundSettings=>"SOUNDS",
             GameState.Controls => "CONTROLS",
             GameState.About => "ABOUT",
             _ => "MDSM"
         };
         int titleScale = _screen == GameState.MainMenu ? Math.Clamp(viewport.Width / 100, 6, 12)
             : _screen == GameState.Death && viewport.Width >= 900 ? 5 : 3;
-        int titleY = _screen==GameState.Settings && viewport.Height<400?8:MenuInformation.IsInformation(_screen) ? 20
+        int titleY = _screen is GameState.Settings or GameState.SoundSettings && viewport.Height<400?8:MenuInformation.IsInformation(_screen) ? 20
             : _screen == GameState.WorldSelection ? 38
             : _screen == GameState.WorldCreation && viewport.Height < 400 ? 12 : Math.Max(20, viewport.Height / 2 - 210);
         Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
         Center(title, viewport, titleY, titleScale, Color.White);
+        if(_screen==GameState.SoundSettings)
+        {
+            int soundScale=viewport.Height<400?1:scale;
+            for(int index=0;index<4;index++)
+            {
+                Rectangle slider=SoundSettingsLayout.Slider(viewport,index);float value=SoundSettingsLayout.Get(_settings,index);
+                Text($"{SoundSettingsLayout.Labels[index]}: {MathF.Round(value*100)}%",slider.X,slider.Y-(viewport.Height<400?10:20),soundScale,Color.White);
+                Fill(slider,_focus==index?new Color(235,216,135):new Color(74,80,89));
+                Fill(new(slider.X+3,slider.Y+3,slider.Width-6,slider.Height-6),new Color(24,29,35));
+                int thumb=slider.Left+8+(int)MathF.Round(value*(slider.Width-17));Fill(new(thumb-5,slider.Y+3,11,slider.Height-6),Color.LightGray);
+            }
+        }
         if (_screen == GameState.Paused)
             Center(PixelFont.Fit(worldName ?? "", 44), viewport, viewport.Height / 2 - 140, scale, Color.LightGray);
 

@@ -15,6 +15,7 @@ using MDSM.Persistence;
 using MDSM.Rendering;
 using MDSM.UI;
 using MDSM.Worlds;
+using MDSM.Audio;
 
 namespace MDSM.Core;
 
@@ -42,6 +43,9 @@ public class Game1 : Game
     private FirstPersonRenderer _firstPerson;
     private PassiveMobRenderer _mobRenderer;
     private ProjectileRenderer _projectileRenderer;
+    private AudioManager _audio;
+    private readonly SoundEvents _uiSounds=new();
+    private readonly PlayerAudio _playerAudio=new();
     private KeyboardState _previousKeyboard;
     private MouseState _previousMouse;
     private bool _previousBack;
@@ -90,6 +94,7 @@ public class Game1 : Game
 
     protected override void LoadContent()
     {
+        _audio=new AudioManager(Content.RootDirectory,_settings);
         _atlas = new TextureAtlas(Content);
         _hud = new Hud(GraphicsDevice, _atlas);
         _menu = new MenuController(GraphicsDevice, _atlas, _settings);
@@ -112,6 +117,8 @@ public class Game1 : Game
         bool back = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
         Point lookDelta = _mouseLook.ReadDelta();
         ProcessInput(keyboard, mouse, back, gameTime, lookDelta);
+        _audio.Update(gameTime.ElapsedGameTime.TotalSeconds,_uiSounds,_session?.Sounds,
+            _session?.Camera.Position??Vector3.Zero,_session?.Camera.Right??Vector3.Right,State==GameState.Playing,IsActive);
         base.Update(gameTime);
         _diagnostics.Update(start, GC.GetAllocatedBytesForCurrentThread() - allocations);
     }
@@ -185,6 +192,7 @@ public class Game1 : Game
         Player player = _session.Player;
         World world = _session.World;
         camera.Look(lookDelta.X, lookDelta.Y);
+        _session.Sounds.SetListener(camera.Position);
         Vector3 movement = Vector3.Zero;
         if (keyboard.IsKeyDown(Keys.W)) movement += camera.HorizontalForward;
         if (keyboard.IsKeyDown(Keys.S)) movement -= camera.HorizontalForward;
@@ -212,6 +220,7 @@ public class Game1 : Game
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
                 keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt);
+            _playerAudio.Update(player,world);
             _pendingJump = false;
             camera.Position = player.EyePosition;
             if (player.IsDead) { EnterDeath(); return; }
@@ -271,6 +280,7 @@ public class Game1 : Game
 
     private void HandleMenuAction(MenuAction action)
     {
+        if(action!=MenuAction.None)_uiSounds.Local(SoundKind.Click);
         try
         {
             switch (action)
@@ -347,8 +357,11 @@ public class Game1 : Game
                 case MenuAction.OpenAbout when State == GameState.Settings:
                     SetState(GameState.About);
                     break;
+                case MenuAction.OpenSounds when State==GameState.Settings:
+                    SetState(GameState.SoundSettings);
+                    break;
                 case MenuAction.Back:
-                    if (State is GameState.Controls or GameState.About) SetState(GameState.Settings);
+                    if (State is GameState.Controls or GameState.About or GameState.SoundSettings) SetState(GameState.Settings);
                     else if (State == GameState.Settings)
                     {
                         bool savedSettings = SaveSettings();
@@ -413,6 +426,7 @@ public class Game1 : Game
         _renderer?.Dispose();
         _renderer = renderer;
         _session = session;
+        _audio?.StopAll();_playerAudio.Reset();
         _saves.SetActiveWorld(id);
         _hud.InvalidateDebug();
         _selection = null;
@@ -514,6 +528,12 @@ public class Game1 : Game
 
     private void SetState(GameState state)
     {
+        _playerAudio.Reset();
+        if(_session!=null && state!=State)
+        {
+            if(state==GameState.Inventory)_session.Sounds.Local(SoundKind.InventoryOpen);
+            else if(State==GameState.Inventory)_session.Sounds.Local(SoundKind.InventoryClose);
+        }
         _session?.Mining.Reset();
         _session?.Bow.Cancel();
         _session?.Bobbing.Reset();
@@ -610,7 +630,7 @@ public class Game1 : Game
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
                 _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
-            if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
+            if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About or GameState.SoundSettings)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
         }
         else
@@ -650,6 +670,7 @@ public class Game1 : Game
         _firstPerson?.Dispose();
         _mobRenderer?.Dispose();
         _projectileRenderer?.Dispose();
+        _audio?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();
     }

@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework;
 using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Worlds;
+using MDSM.Audio;
 
 namespace MDSM.Entities;
 
@@ -145,17 +146,20 @@ public sealed class DroppedItems
             _mergeElapsed %= 0.25f;
         }
         BoundingBox playerBounds = player.Bounds;
+        bool collected=false;
         for (int i = _items.Count - 1; i >= 0; i--)
         {
             DroppedItem item = _items[i];
             Vector3 nearest = Vector3.Clamp(item.Position, playerBounds.Min, playerBounds.Max);
             if (player.IsDead || item.PickupDelay > 0 || Vector3.DistanceSquared(item.Position, nearest) > PickupRadius * PickupRadius) continue;
-            item.Count = inventory.Add(item.Stack).Count;
+            int before=item.Count;item.Count = inventory.Add(item.Stack).Count;
+            collected|=item.Count<before;
             if (item.Count != 0) continue;
             // Swap removal avoids shifting the list; the swapped entry was already updated.
             _items[i] = _items[^1];
             _items.RemoveAt(_items.Count - 1);
         }
+        if(collected)_world.Sounds?.Local(SoundKind.Pickup);
     }
 
     private void MergeNearby()

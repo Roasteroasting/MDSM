@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using MDSM.Worlds;
+using MDSM.Audio;
 
 namespace MDSM.Entities;
 
@@ -39,6 +40,8 @@ public sealed class PassiveMob
     private float _decisionSeconds;
     private float _shoreHopSeconds;
     private bool _wandering;
+    private float _idleSoundSeconds=3,_stepSoundDistance;
+    private uint _soundSeed;
     // Tiny local voxel cache, not a simulation throttle: all AI/physics still run at 120 Hz.
     // Conservative world revision invalidation preserves immediate edits/fluid changes.
     private readonly bool[] _solidCells = new bool[216];
@@ -49,6 +52,7 @@ public sealed class PassiveMob
         Species = state.Species;
         Definition = MobDefinitions.Get(Species);
         Position = state.Position; Yaw = state.Yaw; Health = state.Health;
+        _soundSeed=unchecked((uint)(Position.X*17+Position.Z*31)+(uint)Species*997+1);_idleSoundSeconds+=_soundSeed%9;
         Sheared=state.Sheared;WoolSeconds=state.WoolSeconds;
         BabySeconds=state.BabySeconds;LoveSeconds=state.LoveSeconds;BreedCooldown=state.BreedCooldown;Bred=state.Bred;
         _random = new Random(aiSeed);
@@ -96,6 +100,8 @@ public sealed class PassiveMob
     {
         if (IsDead || !float.IsFinite(elapsed) || elapsed <= 0) return;
         float dt = Math.Min(elapsed, 0.1f);
+        if(world.Sounds?.Nearby(Position,28)==true && (_idleSoundSeconds-=dt)<=0)
+        {_soundSeed=_soundSeed*1664525+1013904223;_idleSoundSeconds=6+_soundSeed%900/100f;world.Sounds.Mob(SoundKind.MobIdle,this);}
         if(life)TickLife(elapsed);
         _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
         if ((_decisionSeconds -= dt) <= 0)
@@ -149,6 +155,11 @@ public sealed class PassiveMob
         float distance = new Vector2(Position.X - before.X, Position.Z - before.Z).Length();
         Walking = distance > 0.00001f;
         if (Walking) WalkPhase = (WalkPhase + distance * 7) % MathHelper.TwoPi;
+        if(Grounded && Walking && world.Sounds?.Nearby(Position,16)==true)
+        {
+            _stepSoundDistance+=distance;float stride=Species==MobSpecies.Chicken?.65f:1.7f;
+            if(_stepSoundDistance>=stride){_stepSoundDistance%=stride;world.Sounds.Block(SoundKind.Step,BlockSounds.Surface(world,Position),Position,.35f);}
+        }
     }
 
     private bool MoveAxis(World world, float amount, int axis)

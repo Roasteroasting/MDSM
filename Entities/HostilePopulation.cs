@@ -6,6 +6,7 @@ using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Worlds;
 using MDSM.Core;
+using MDSM.Audio;
 
 namespace MDSM.Entities;
 
@@ -148,7 +149,8 @@ public sealed class HostilePopulation
                 if(_random.NextDouble()<.05)drops.TrySpawn(new(Items.Bow,1,1+(int)(_random.NextDouble()*_random.NextDouble()*383)),position,.35f);
             }
         }
-        mob.Damage(damage,mob.Position-attacker);if(mob.IsDead){_mobs.Remove(mob);_brains.Remove(mob);}return true;
+        mob.Damage(damage,mob.Position-attacker);_world.Sounds?.Mob(mob.IsDead?SoundKind.MobDeath:SoundKind.MobHurt,mob);
+        if(mob.IsDead){_mobs.Remove(mob);_brains.Remove(mob);}return true;
     }
     public MobState[] Capture(){var states=new MobState[_mobs.Count];for(int i=0;i<states.Length;i++)states[i]=_mobs[i].CaptureState();return states;}
     public static void Validate(MobState state,World world)

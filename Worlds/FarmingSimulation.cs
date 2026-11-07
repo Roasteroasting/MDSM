@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
 using MDSM.Inventories;
+using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -34,11 +35,6 @@ public sealed class FarmingSimulation(World world)
         if(Blocks.Crop(old) && !Blocks.Crop(next))
         {
             _crops.Remove(p);
-            if(!world.SuppressHarvest && world.LiveDrops!=null)
-            {
-                if(old==BlockType.Wheat7)world.LiveDrops.Spawn(Items.Wheat,1,new(p.X+.5f,p.Y+.3f,p.Z+.5f));
-                world.LiveDrops.Spawn(Items.WheatSeeds,old==BlockType.Wheat7?_random.Next(1,5):1,new(p.X+.5f,p.Y+.3f,p.Z+.5f));
-            }
         }
         if(Blocks.Crop(next) && !_crops.ContainsKey(p))
         {
@@ -58,13 +54,15 @@ public sealed class FarmingSimulation(World world)
     {
         if(Items.Get(inventory.Selected.Item).Tool!=ToolKind.Hoe || world.GetBlock(p.X,p.Y,p.Z) is not (BlockType.Dirt or BlockType.Grass)
             || world.GetBlock(p.X,p.Y+1,p.Z)!=BlockType.Air)return false;
-        if(!world.SetBlock(p.X,p.Y,p.Z,Hydrated(p)?BlockType.FarmlandWet:BlockType.FarmlandDry))return false;if(!creative)inventory.WearSelected();return true;
+        if(!world.SetBlock(p.X,p.Y,p.Z,Hydrated(p)?BlockType.FarmlandWet:BlockType.FarmlandDry))return false;
+        world.Sounds?.At(SoundKind.Till,BlockSounds.Center(p));if(!creative)inventory.WearSelected();return true;
     }
     public bool Plant(Point3 soil,Inventory inventory,bool creative=false)
     {
         if(inventory.Selected.Item!=Items.WheatSeeds || _crops.Count>=MaximumCrops || !Blocks.Soil(world.GetBlock(soil.X,soil.Y,soil.Z))
             || world.GetBlock(soil.X,soil.Y+1,soil.Z)!=BlockType.Air || !world.Contains(soil.X,soil.Y+1,soil.Z))return false;
-        if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,BlockType.Wheat1))return false;if(!creative)inventory.ConsumeSelected();return true;
+        if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,BlockType.Wheat1))return false;
+        world.Sounds?.At(SoundKind.Plant,BlockSounds.Center(soil));if(!creative)inventory.ConsumeSelected();return true;
     }
     public void Update(double elapsed)
     {

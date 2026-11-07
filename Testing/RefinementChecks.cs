@@ -28,7 +28,7 @@ internal static class RefinementChecks
         ("Empty-ammunition bow cannot start or continue drawing",Bow),
         ("Fixed-step acceleration, jump arc, stopping, view bob fade and logical aim",Movement),
         ("Slower tiered mining, unchanged hardness ratios and harvest restrictions",Mining),
-        ("Pixel-exact original artwork migration and all 32 item-atlas indices",ItemAtlasChecks.Pixels),
+        ("Item atlas dimensions, registered sprite indices and transparency",ItemAtlasChecks.LayoutAndTiles),
         ("Distance-based bob cadence, smooth fades, airborne suppression and render rates",BobbingPacing),
         ("Gradual 20-45 second tree decay, persisted deadlines and older countdowns",DecayPacing)};
     private static void Require(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using MDSM.Audio;
 
 namespace MDSM.Core;
 
@@ -14,6 +15,13 @@ public sealed class GameSettings
     public int FpsCap { get => _fpsCap; set => _fpsCap = Math.Clamp(value, MinimumFps, MaximumFps); }
     public bool UncappedFps { get; set; }
     public bool ViewBobbing { get; set; } = true;
+    private float _masterVolume=.8f,_effectsVolume=1,_mobVolume=1,_interfaceVolume=1;
+    private static float ValidVolume(float value,float fallback)=>float.IsFinite(value)?Math.Clamp(value,0,1):fallback;
+    public float MasterVolume { get=>_masterVolume;set=>_masterVolume=ValidVolume(value,.8f); }
+    public float EffectsVolume { get=>_effectsVolume;set=>_effectsVolume=ValidVolume(value,1); }
+    public float MobVolume { get=>_mobVolume;set=>_mobVolume=ValidVolume(value,1); }
+    public float InterfaceVolume { get=>_interfaceVolume;set=>_interfaceVolume=ValidVolume(value,1); }
+    public float Volume(SoundCategory category)=>category==SoundCategory.Mobs?MobVolume:category==SoundCategory.Interface?InterfaceVolume:EffectsVolume;
     private Difficulty _difficulty = Difficulty.Normal;
     private GameMode _gameMode;
     public Difficulty Difficulty { get => _difficulty; set => _difficulty = Enum.IsDefined(value) ? value : Difficulty.Normal; }
@@ -49,6 +57,10 @@ public sealed class SettingsStore
                 settings.Difficulty = (Difficulty)difficultyValue;
             if (root.TryGetProperty("GameMode", out var mode) && mode.TryGetInt32(out int modeValue))
                 settings.GameMode = (GameMode)modeValue;
+            ReadVolume("MasterVolume",v=>settings.MasterVolume=v);ReadVolume("EffectsVolume",v=>settings.EffectsVolume=v);
+            ReadVolume("MobVolume",v=>settings.MobVolume=v);ReadVolume("InterfaceVolume",v=>settings.InterfaceVolume=v);
+            void ReadVolume(string name,Action<float> assign)
+            {if(root.TryGetProperty(name,out var element) && element.ValueKind==JsonValueKind.Number && element.TryGetSingle(out float volume))assign(volume);}
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
@@ -66,7 +78,8 @@ public sealed class SettingsStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Difficulty, settings.GameMode }, new JsonSerializerOptions { WriteIndented = true });
+                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Difficulty, settings.GameMode,
+                    settings.MasterVolume,settings.EffectsVolume,settings.MobVolume,settings.InterfaceVolume }, new JsonSerializerOptions { WriteIndented = true });
                 file.Flush(true);
             }
             if (File.Exists(FilePath)) File.Replace(temporary, FilePath, null);

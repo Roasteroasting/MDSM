@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
+using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -98,11 +99,12 @@ public sealed class FallingBlockSimulation
                     BlockType block = _world.GetBlock(x, y, z);
                     if (!Blocks.Falls(block) || _world.IsSolid(x, y - 1, z)) continue;
                     if (_active.Count == MaximumActiveBlocks) { retry = true; break; }
-                    Add(new FallingBlockState(block, x, z, y, 0));
                     if (_world.SetBlock(x, y, z, BlockType.Air))
                     {
+                        Add(new FallingBlockState(block, x, z, y, 0));
                         LastMovedBlocks++;
                     }
+                    else { retry = true; break; } // A blocked loot reservation must not duplicate a falling block.
                 }
             }
             finally { _updating = -1; }
@@ -153,7 +155,7 @@ public sealed class FallingBlockSimulation
                     next = support;
                     if (!movingSupport)
                     {
-                        _world.SetBlock(block.X, (int)floor, block.Z, block.Block);
+                        if(_world.SetBlock(block.X, (int)floor, block.Z, block.Block))_world.Sounds?.Block(SoundKind.Land,block.Block,new(block.X+.5f,(float)floor,block.Z+.5f));
                         int last = _active.Count - 1;
                         _active[block.Index] = _active[last]; _active[block.Index].Index = block.Index; _active.RemoveAt(last);
                         stack.RemoveAt(i); continue;

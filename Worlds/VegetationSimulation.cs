@@ -4,6 +4,7 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using MDSM.Entities;
 using MDSM.Inventories;
+using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -86,7 +87,9 @@ public sealed class VegetationSimulation(World world)
                     // Reserve worst-case three independent drops before changing the block.
                     if(items==null || !items.CanSpawn(3)){Schedule(_decay,_leafQueue,key,5);continue;}
                     int count=LeafLoot.Roll(_random,loot);
-                    if(world.SetBlock(p.X,p.Y,p.Z,BlockType.Air))for(int i=0;i<count;i++)items.Spawn(loot[i],1,new Vector3(p.X+.5f,p.Y+.5f,p.Z+.5f));
+                    if(world.RemoveHarvestedBlock(p,items,count))
+                    {world.Sounds?.Block(SoundKind.Break,BlockType.Leaves,BlockSounds.Center(p));for(int i=0;i<count;i++)items.Spawn(loot[i],1,new Vector3(p.X+.5f,p.Y+.5f,p.Z+.5f));}
+                    else Schedule(_decay,_leafQueue,key,5);
                 }
             }
         }

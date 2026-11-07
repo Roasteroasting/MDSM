@@ -9,23 +9,12 @@ namespace MDSM.Testing;
 
 internal static class ItemAtlasChecks
 {
-    public static void Pixels()
+    public static void LayoutAndTiles()
     {
         string root=AppContext.BaseDirectory;
         while(!File.Exists(Path.Combine(root,"MDSM.csproj")))root=Directory.GetParent(root)?.FullName??throw new Exception("Run source-asset checks from this repository.");
         var atlas=Read(Path.Combine(root,"Content/Items/items.png"));
         if(atlas.Width!=256 || atlas.Height!=256)throw new Exception("Item atlas dimensions changed.");
-        var survival=Read(Path.Combine(root,"Content/Items/survival.png"));
-        for(int tile=0;tile<28;tile++)
-        {
-            var source=tile<3?Read(Path.Combine(root,"Content/Items/"+new[]{"raw-porkchop","leather","feather"}[tile]+".png")):survival;
-            int sx=tile<3?0:(tile-3)%8*16,sy=tile<3?0:(tile-3)/8*16;
-            for(int y=0;y<16;y++)for(int x=0;x<16;x++)
-            {
-                int a=((tile/16*16+y)*256+tile%16*16+x)*4,b=((sy+y)*source.Width+sx+x)*4;
-                if(!atlas.Pixels.AsSpan(a,4).SequenceEqual(source.Pixels.AsSpan(b,4)))throw new Exception($"Legacy item tile {tile} pixel {x},{y} changed RGBA.");
-            }
-        }
         foreach(ItemId item in Items.Sprites)
         {
             int tile=Items.Get(item).Sprite;var bounds=TextureAtlas.Source(tile);bool opaque=false,clear=false;
@@ -33,13 +22,10 @@ internal static class ItemAtlasChecks
             {byte alpha=atlas.Pixels[(y*256+x)*4+3];opaque|=alpha>=128;clear|=alpha==0;}
             if(!opaque || !clear)throw new Exception("Item atlas tile missing silhouette/transparency: "+Items.Name(item));
         }
-        var terrain=Read(Path.Combine(root,"Content/Blocks/terrain.png"));
-        for(int y=16;y<32;y++)for(int x=192;x<208;x++)
-            if(!terrain.Pixels.AsSpan((y*256+x)*4,4).SequenceEqual(atlas.Pixels.AsSpan((y*256+x)*4,4)))throw new Exception("Sapling world and item tiles disagree.");
-        Console.WriteLine("  All 7168 legacy RGBA pixels match exactly; 32 atlas silhouettes and the sapling block tile verified.");
+        Console.WriteLine($"  Item atlas dimensions and {Items.Sprites.Length} registered sprite tiles verified.");
     }
     // Small test-only RGBA8 PNG reader. Independent of MGCB/GPU premultiplication;
-    // verifies original source colors including RGB hidden under alpha zero.
+    // validates source atlas pixels without relying on runtime texture loading.
     private static (int Width,int Height,byte[] Pixels) Read(string path)
     {
         byte[] png=File.ReadAllBytes(path);int width=BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16)),height=BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(20));

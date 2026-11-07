@@ -6,6 +6,7 @@ using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Worlds;
 using MDSM.Core;
+using MDSM.Audio;
 
 namespace MDSM.Persistence;
 
@@ -30,6 +31,7 @@ public sealed class GameSession
     public Camera Camera { get; }
     public Inventory Inventory { get; }
     public InventoryInteraction InventoryInteraction { get; }
+    public SoundEvents Sounds { get; }=new();
     public CraftingGrid Crafting { get; private set; } = new(2);
     public DroppedItems Items { get; }
     public Projectiles Projectiles { get; }
@@ -50,6 +52,7 @@ public sealed class GameSession
     {
         bool modeChanged = Player.Settings.GameMode != settings.GameMode || _appliedMode != settings.GameMode;
         Player.Settings = settings;
+        World.SuppressSupportDrops=Player.Creative;
         if (modeChanged) { Player.StopMovement(); Player.Breath.Reset(); Mining.Reset(); Bow.Cancel(); Bobbing.Reset(); }
         _appliedMode = settings.GameMode;
         Hostiles.ApplySettings(settings);
@@ -63,14 +66,19 @@ public sealed class GameSession
         Name = save.Name;
         World = save.World;
         Inventory = save.Inventory?.Clone() ?? Inventory.CreateNewWorld();
-        Inventory.EquipmentBroken+=item=>_equipmentNotice=MDSM.Inventories.Items.Name(item)+" BROKE";
+        Inventory.EquipmentBroken+=item=>{_equipmentNotice=MDSM.Inventories.Items.Name(item)+" BROKE";Sounds.Local(SoundKind.ToolBreak);};
         InventoryInteraction = new InventoryInteraction(Inventory);
         Items = new DroppedItems(World, save.DroppedItems);
         World.LiveDrops=Items;
+        World.Sounds=Sounds;
         Projectiles=new Projectiles(World,save.Arrows);
         Mobs = new PassiveMobPopulation(World, save.Pigs, save.Mobs, save.Population);
         Hostiles=new HostilePopulation(World,save.Hostiles);
+        World.LiveMobs=Mobs;
+        World.LiveHostiles=Hostiles;
         Player = new Player(save.PlayerPosition, save.Health,Inventory);
+        Player.Sounds=Sounds;
+        World.SuppressSupportDrops=Player.Creative;
         if(save.ExactHealth>=0)Player.RestoreFraction(save.ExactHealth);
         if (Player.IsDead) Player.Respawn(World); // Saved drops already exist; never drop again on load.
         Camera = new Camera { Position = Player.EyePosition };
@@ -100,9 +108,11 @@ public sealed class GameSession
     {
         if(Player.IsDead || !float.IsFinite(hit.Distance) || hit.Distance<0 || hit.Distance>BlockRaycaster.Reach
             || !BlockEntities.HasState(World.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)) || !TryReturnInterfaceItems())return false;
-        ContainerCell=hit.Cell;World.Containers.Get(hit.Cell);return true;
+        ContainerCell=hit.Cell;World.Containers.Get(hit.Cell);
+        if(World.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)==BlockType.Chest)Sounds.At(SoundKind.ChestOpen,BlockSounds.Center(hit.Cell));return true;
     }
-    public void CloseInterface()=>ContainerCell=null;
+    public void CloseInterface()
+    {if(ActiveContainer?.Block==BlockType.Chest)Sounds.At(SoundKind.ChestClose,BlockSounds.Center(ContainerCell.Value));ContainerCell=null;}
     public void WearEquipment(Guid id)
     {
         if(id==Guid.Empty)return;

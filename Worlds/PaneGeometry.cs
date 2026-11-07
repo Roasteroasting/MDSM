@@ -7,13 +7,14 @@ public sealed partial class World
 {
     // Bits and box order are west, east, north, south. Only local neighbor queries;
     // SetBlock already invalidates both sides of every horizontal chunk boundary.
-    public int PaneConnections(Point3 cell)
+    public int PaneConnections(Point3 cell)=>PaneConnections(cell,null,BlockType.Air);
+    private int PaneConnections(Point3 cell,Point3? changedNeighbor,BlockType replacement)
     {
         int mask=0;
-        if(Blocks.ConnectsPane(GetBlock(cell.X-1,cell.Y,cell.Z)))mask|=1;
-        if(Blocks.ConnectsPane(GetBlock(cell.X+1,cell.Y,cell.Z)))mask|=2;
-        if(Blocks.ConnectsPane(GetBlock(cell.X,cell.Y,cell.Z-1)))mask|=4;
-        if(Blocks.ConnectsPane(GetBlock(cell.X,cell.Y,cell.Z+1)))mask|=8;
+        if(Blocks.ConnectsPane(PlacementNeighbor(new(cell.X-1,cell.Y,cell.Z),changedNeighbor,replacement)))mask|=1;
+        if(Blocks.ConnectsPane(PlacementNeighbor(new(cell.X+1,cell.Y,cell.Z),changedNeighbor,replacement)))mask|=2;
+        if(Blocks.ConnectsPane(PlacementNeighbor(new(cell.X,cell.Y,cell.Z-1),changedNeighbor,replacement)))mask|=4;
+        if(Blocks.ConnectsPane(PlacementNeighbor(new(cell.X,cell.Y,cell.Z+1),changedNeighbor,replacement)))mask|=8;
         return mask;
     }
     internal int PaneBoxes(Point3 cell,Span<BoundingBox> boxes)=>PaneBoxes(cell,PaneConnections(cell),boxes);

@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using MDSM.Entities;
 using MDSM.Worlds;
 using MDSM.Inventories;
+using MDSM.Audio;
 
 namespace MDSM.Gameplay;
 
@@ -46,7 +47,7 @@ public sealed class CombatController
         {
             ItemStack tool=inventory?.Selected??default;int damage=Items.Get(tool.Item).AttackDamage;
             bool hit=(int)Target.Species>=4?hostiles.Hit(Target,damage>0?damage:Random.Shared.Next(1,3),origin,items):damage>0?pigs.Hit(Target,damage,origin,items):pigs.Punch(Target,origin,items);
-            if(hit){_cooldown=AttackCooldown;if(!creative && inventory!=null && MiningRules.Wears(tool))inventory.WearSelected();}
+            if(hit){world.Sounds?.At(SoundKind.Swing,origin);_cooldown=AttackCooldown;if(!creative && inventory!=null && MiningRules.Wears(tool))inventory.WearSelected();}
         }
     }
 }

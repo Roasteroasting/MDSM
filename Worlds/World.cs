@@ -1,5 +1,6 @@
 using System;
 using Microsoft.Xna.Framework;
+using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -19,6 +20,7 @@ public sealed partial class World
     public ReadOnlySpan<Chunk> Chunks => _chunks;
     public int Seed { get; }
     public int Revision { get; private set; }
+    internal SoundEvents Sounds { get; set; }
     public FluidSimulation Fluids { get; }
     public FluidSimulation LavaFlow { get; }
     public FallingBlockSimulation Gravity { get; }
@@ -105,6 +107,9 @@ public sealed partial class World
     public bool IsSolid(int x, int y, int z) => Blocks.IsSolid(GetBlock(x, y, z));
 
     public bool SetBlock(int x, int y, int z, BlockType block)
+        => ChangeWithSupportDrops(new(x,y,z),block,LiveDrops,0,false,false);
+
+    private bool SetBlockCore(int x,int y,int z,BlockType block)
     {
         if (!Contains(x, y, z) || !Blocks.IsDefined(block)
             || !_plantEdit && block==BlockType.DoubleTallGrassLower && (!Contains(x,y+1,z) || GetBlock(x,y+1,z)!=BlockType.Air || GetBlock(x,y-1,z)!=BlockType.Grass)
@@ -119,6 +124,10 @@ public sealed partial class World
         Chunk chunk = GetChunk(chunkX, chunkZ);
         BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
+        Point3 changedCell=new(x,y,z);
+        if(block==BlockType.Air && Blocks.IsRenderable(previous) && !Lava.Fluid(previous)
+            && _blockChangeRoot!=changedCell && _doorPartnerEdit!=changedCell && !(_plantEdit && Blocks.DoubleGrass(previous)))
+            Sounds?.Block(SoundKind.Break,previous,BlockSounds.Center(changedCell));
         Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
         DetailChanged(new Point3(x,y,z),previous,block);
@@ -167,6 +176,9 @@ public sealed partial class World
     }
 
     public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds,Point3? support=null)
+        => TryPlaceBlock(cell,block,playerBounds,support,null);
+
+    private bool TryPlaceBlock(Point3 cell,BlockType block,BoundingBox playerBounds,Point3? support,StructureState? proposed)
     {
         BlockDefinition definition = Blocks.Get(block);
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
@@ -174,11 +186,13 @@ public sealed partial class World
             || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
             || (definition.Solid && PlacementOverlaps(cell,block,playerBounds))
+            || (definition.Solid && PlacementBlockedByMobs(cell,block,proposed))
             || (definition.Solid && Gravity.Intersects(Bounds(cell)))
             || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z),block)))
             return false;
 
-        return SetBlock(cell.X, cell.Y, cell.Z, block);
+        if(!SetBlock(cell.X, cell.Y, cell.Z, block))return false;
+        Sounds?.Block(SoundKind.Place,block,BlockSounds.Center(cell));return true;
     }
 
     public static BoundingBox Bounds(Point3 cell) =>

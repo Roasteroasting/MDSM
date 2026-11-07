@@ -7,6 +7,7 @@ using MDSM.Inventories;
 using MDSM.Persistence;
 using MDSM.Rendering;
 using MDSM.Worlds;
+using MDSM.Audio;
 
 namespace MDSM.UI;
 
@@ -134,6 +135,7 @@ internal sealed class InventoryScreen : IDisposable
                 int index=_creativeScroll*5+slot;if(index>=CatalogIcons.Length)break;
                 if(!InventoryLayout.BrowserSlot(viewport,slot).Contains(mouse.Position))continue;
                 int granted=CreativeCatalog.Grant(interaction.Inventory,CatalogIcons[index].Item,shift);
+                if(granted>0)session.Sounds.Local(SoundKind.InventoryMove);
                 Message=granted==0?"INVENTORY FULL.":$"GRANTED {granted} {Items.Name(CatalogIcons[index].Item)}";
                 return;
             }
@@ -144,28 +146,33 @@ internal sealed class InventoryScreen : IDisposable
         for (int slot = 0; slot < Inventory.SlotCount; slot++)
             if (InventoryLayout.Slot(viewport, slot, creative).Contains(mouse.Position))
             {
+                var before=interaction.Inventory[slot];var cursor=interaction.Cursor;
                 interaction.Click(slot, right && !left);
+                if(before!=interaction.Inventory[slot] || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.InventoryMove);
                 Message = "";
                 return;
             }
         CraftingGrid crafting = session.Crafting;BlockContainer container=session.ActiveContainer;
         if(container==null && crafting.Width==2)for(int slot=0;slot<4;slot++)if(InventoryLayout.Equipment(viewport,slot,creative).Contains(mouse.Position))
-        {interaction.Inventory.ClickEquipment(slot,interaction,right && !left);Message="";return;}
+        {var before=interaction.Inventory.Equipped(slot);var cursor=interaction.Cursor;interaction.Inventory.ClickEquipment(slot,interaction,right && !left);
+        if(before!=interaction.Inventory.Equipped(slot) || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.Equip);Message="";return;}
         if(container!=null)
         {
             for(int slot=0;slot<container.SlotCount;slot++)if(InventoryLayout.ContainerSlot(viewport,container.Block,slot,creative).Contains(mouse.Position))
-            {container.Click(slot,interaction,right && !left);Message="";return;}
+            {var before=container[slot];var cursor=interaction.Cursor;container.Click(slot,interaction,right && !left);
+            if(before!=container[slot] || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.InventoryMove);Message="";return;}
         }
         else
         {
         for (int slot = 0; slot < crafting.SlotCount; slot++)
             if (InventoryLayout.CraftingSlot(viewport, crafting.Width, slot, creative).Contains(mouse.Position))
-            { crafting.Click(slot, interaction, right && !left); Message = ""; return; }
+            { var before=crafting[slot];var cursor=interaction.Cursor;crafting.Click(slot, interaction, right && !left);
+            if(before!=crafting[slot] || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.InventoryMove);Message = ""; return; }
         if (InventoryLayout.Output(viewport, crafting.Width, creative).Contains(mouse.Position))
-        { crafting.TryCraft(interaction); Message = ""; return; }
+        { if(crafting.TryCraft(interaction))session.Sounds.Local(SoundKind.Craft); Message = ""; return; }
         }
         if (left && !interaction.Cursor.IsEmpty && !InventoryLayout.Panel(viewport, creative).Contains(mouse.Position))
-            Message = session.DropCursor() ? "" : "NO ROOM TO DROP ITEMS.";
+        {bool dropped=session.DropCursor();Message = dropped ? "" : "NO ROOM TO DROP ITEMS.";if(dropped)session.Sounds.Local(SoundKind.Drop);}
     }
     public void Draw(GameSession session, MouseState mouse, Viewport viewport)
     {

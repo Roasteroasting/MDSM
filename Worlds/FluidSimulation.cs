@@ -1,6 +1,8 @@
 using System;
 
 using System.Collections.Generic;
+using MDSM.Audio;
+using Microsoft.Xna.Framework;
 
 namespace MDSM.Worlds;
 
@@ -90,8 +92,17 @@ public sealed class FluidSimulation
             if (before != after) _changes.Add((cell, after));
         }
         // Snapshot evaluation prevents FIFO direction or remaining budget from accelerating a wave.
+        Point3? audible=null;float nearest=12*12;
         foreach (var change in _changes)
-            _world.SetBlock(change.Cell.X, change.Cell.Y, change.Cell.Z, change.Block);
+        {
+            bool changed=_world.SetBlock(change.Cell.X, change.Cell.Y, change.Cell.Z, change.Block);
+            if(changed && !_lava && _world.Sounds!=null)
+            {
+                float distance=Vector3.DistanceSquared(BlockSounds.Center(change.Cell),_world.Sounds.Listener);
+                if(distance<nearest){nearest=distance;audible=change.Cell;}
+            }
+        }
+        if(audible.HasValue)_world.Sounds?.At(SoundKind.WaterFlow,BlockSounds.Center(audible.Value),.4f);
     }
 
     private BlockType Source=>_lava?BlockType.LavaSource:BlockType.WaterSource;

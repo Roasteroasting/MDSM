@@ -4,6 +4,7 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using MDSM.Inventories;
 using MDSM.Worlds;
+using MDSM.Audio;
 
 namespace MDSM.Entities;
 
@@ -176,6 +177,7 @@ public sealed class PassiveMobPopulation
             while(count>0){int take=Math.Min(count,limit);items.TrySpawn(new ItemStack(mob.Definition.Drop,take),mob.Position+Vector3.Up*.25f,.35f);count-=take;}
         }
         mob.Damage(damage, mob.Position - attacker);
+        _world.Sounds?.Mob(mob.IsDead?SoundKind.MobDeath:SoundKind.MobHurt,mob);
         if (mob.IsDead && _mobs.Remove(mob))
         {
             if(!mob.Bred){_living[(int)mob.Species]--;
@@ -189,7 +191,7 @@ public sealed class PassiveMobPopulation
             || inventory.Selected.Item!=Items.Shears || !drops.CanSpawn(1))return false;
         int count=_random.Next(1,5);
         if(!drops.TrySpawn(new ItemStack(Items.FromBlock(BlockType.WhiteWool),count),mob.Position+Vector3.Up*.4f,.7f))return false;
-        mob.Shear();inventory.WearSelected();return true;
+        mob.Shear();inventory.WearSelected();_world.Sounds?.At(SoundKind.Shear,mob.Position);return true;
     }
     public MobState[] CaptureAll()
     {
@@ -248,6 +250,6 @@ public sealed class PassiveMobPopulation
     public bool Feed(PassiveMob mob,Inventory inventory)
     {
         if(mob==null||!_mobs.Contains(mob)||mob.Baby||mob.IsDead||mob.LoveSeconds>0||mob.BreedCooldown>0||inventory.Selected.Item!=Items.Wheat)return false;
-        mob.Feed();_breedingActive=true;inventory.ConsumeSelected();return true;
+        mob.Feed();_breedingActive=true;inventory.ConsumeSelected();_world.Sounds?.At(SoundKind.Feed,mob.Position);return true;
     }
 }

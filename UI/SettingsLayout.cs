@@ -24,8 +24,9 @@ internal static class SettingsLayout
         return new Rectangle(Slider(viewport).X + index * (width + 12),
             Choice(viewport, 0).Bottom + (viewport.Height<300?4:8), width, viewport.Height<300?24:viewport.Height < 400 ? 28 : 42);
     }
-    public static Rectangle Back(Viewport viewport) => new((viewport.Width - Math.Min(300, Width(viewport))) / 2,
-        Information(viewport, 0).Bottom + (viewport.Height<300?4:8), Math.Min(300, Width(viewport)), viewport.Height<300?28:viewport.Height < 400 ? 32 : 42);
+    public static Rectangle Back(Viewport viewport) => new(Slider(viewport).X,
+        Information(viewport, 0).Bottom + (viewport.Height<300?4:8), (Width(viewport)-12)/2, viewport.Height<300?28:viewport.Height < 400 ? 32 : 42);
+    public static Rectangle Sounds(Viewport viewport){var back=Back(viewport);return new(back.Right+12,back.Y,back.Width,back.Height);}
     private static int Width(Viewport viewport) => Math.Min(520, Math.Max(32, viewport.Width - 32));
     public static int ValueAt(Rectangle slider, int x) => Math.Clamp(GameSettings.MinimumFps + (int)Math.Round(
         (x - slider.Left - 8) / (double)Math.Max(1, slider.Width - 17) * (GameSettings.MaximumFps - GameSettings.MinimumFps)),
