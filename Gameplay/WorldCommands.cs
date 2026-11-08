@@ -21,6 +21,7 @@ internal sealed class WorldCommands
     public CommandResult Execute(string text, GameSession session, GameSettings settings)
     {
         if (session == null || session.Player.IsDead) return Error("Commands require a living player in a world.");
+        if (!session.World.AllowCheats) return Error("Commands are disabled for this world (Allow Cheats: OFF).");
         if (string.IsNullOrWhiteSpace(text) || text.Length > 256 || !text.TrimStart().StartsWith('/')) return Error("Commands begin with /. Use /help.");
         string[] args = text.Trim().Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
         string command = args[0].ToLowerInvariant();

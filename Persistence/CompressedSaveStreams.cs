@@ -54,13 +54,13 @@ public static partial class WorldSerializer
             if(_phase!=2)throw new InvalidDataException("Incomplete world payload.");
             if(_used>0)Emit(GameStateRecord,_stateFrames++,codec);
             BinaryPrimitives.WriteDoubleLittleEndian(_raw,world.Time.Seconds);
-            var mode=world.SavedGameMode;
-            if(mode.HasValue && !Enum.IsDefined(mode.Value))throw new InvalidDataException("Invalid saved game mode.");
-            // Retain an old world's inheritance policy when merely renamed/resaved
-            // outside gameplay. An active session always records its concrete mode.
-            _raw[8]=mode.HasValue?(byte)mode.Value:(byte)2;
+            var mode=world.SavedGameMode??MDSM.Core.GameMode.Survival;
+            if(!Enum.IsDefined(mode) || !Enum.IsDefined(world.SavedDifficulty))throw new InvalidDataException("Invalid world rules.");
+            _raw[8]=(byte)mode;
             _raw[9]=1; // Lighting rules version. Packed light is derived lazily, not duplicated on disk.
-            _used=10;Emit(EnvironmentRecord,0,codec);
+            _raw[10]=world.AllowCheats?(byte)1:(byte)0;
+            _raw[11]=(byte)world.SavedDifficulty;
+            _used=12;Emit(EnvironmentRecord,0,codec);
             Span<byte> end=stackalloc byte[RecordHeaderBytes];RecordHeader(end,EndRecord,0,ReadOnlySpan<byte>.Empty,0,SaveCodec.Stored);target.Write(end);_finished=true;
         }
         protected override void Dispose(bool disposing){if(disposing)_compression.Dispose();base.Dispose(disposing);}
@@ -121,11 +121,16 @@ public static partial class WorldSerializer
                 }
                 else if(tag==EnvironmentRecord)
                 {
-                    if(metadata.Version<12 || _phase!=2 || Environment!=null || raw!=10 || sequence!=0 || _raw[8]>2 || _raw[9]!=1)
+                    bool modern=metadata.Version>=13;
+                    if(metadata.Version<12 || _phase!=2 || Environment!=null || raw!=(modern?12:10) || sequence!=0 || _raw[8]>(modern?1:2) || _raw[9]!=1
+                        || modern && (_raw[10]>1 || _raw[11]>3))
                         throw new InvalidDataException("Invalid world environment section.");
                     double seconds=BinaryPrimitives.ReadDoubleLittleEndian(_raw);
                     if(!double.IsFinite(seconds) || seconds<0 || seconds>=WorldTime.DaySeconds)throw new InvalidDataException("Invalid world time.");
-                    Environment=new(seconds,_raw[8]==2?null:(MDSM.Core.GameMode)_raw[8]);continue;
+                    // Explicit migration: every pre-rule world starts with enabled
+                    // cheats, Normal and Survival, even if v12 recorded Creative.
+                    Environment=new(seconds,modern?(MDSM.Core.GameMode)_raw[8]:MDSM.Core.GameMode.Survival,
+                        !modern || _raw[10]==1,modern?(MDSM.Core.Difficulty)_raw[11]:MDSM.Core.Difficulty.Normal);continue;
                 }
                 else if(tag==ChunkGroupRecord)
                 {
@@ -143,5 +148,5 @@ public static partial class WorldSerializer
         }
         protected override void Dispose(bool disposing){if(disposing)_compression.Dispose();base.Dispose(disposing);}
     }
-    private readonly record struct WorldEnvironment(double Seconds,MDSM.Core.GameMode? Mode);
+    private readonly record struct WorldEnvironment(double Seconds,MDSM.Core.GameMode Mode,bool AllowCheats,MDSM.Core.Difficulty Difficulty);
 }

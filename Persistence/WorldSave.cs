@@ -51,9 +51,15 @@ public sealed class GameSession
     public string TakeEquipmentNotice(){string notice=_equipmentNotice;_equipmentNotice=null;return notice;}
     public void ApplySettings(GameSettings settings)
     {
+        if (!World.AllowCheats)
+        {
+            settings.GameMode = World.SavedGameMode ?? GameMode.Survival;
+            settings.Difficulty = World.SavedDifficulty;
+        }
         bool modeChanged = Player.Settings.GameMode != settings.GameMode || _appliedMode != settings.GameMode;
         Player.Settings = settings;
         World.SavedGameMode=settings.GameMode;
+        World.SavedDifficulty=settings.Difficulty;
         World.SuppressSupportDrops=Player.Creative;
         if (modeChanged) { Player.StopMovement(); Player.Breath.Reset(); Mining.Reset(); Bow.Cancel(); Bobbing.Reset(); }
         _appliedMode = settings.GameMode;
@@ -79,7 +85,7 @@ public sealed class GameSession
         World.LiveMobs=Mobs;
         World.LiveHostiles=Hostiles;
         Player = new Player(save.PlayerPosition, save.Health,Inventory);
-        if(World.SavedGameMode.HasValue)Player.Settings=new GameSettings{GameMode=World.SavedGameMode.Value};
+        Player.Settings=new GameSettings{GameMode=World.SavedGameMode??GameMode.Survival,Difficulty=World.SavedDifficulty};
         Player.Sounds=Sounds;
         World.SuppressSupportDrops=Player.Creative;
         if(save.ExactHealth>=0)Player.RestoreFraction(save.ExactHealth);

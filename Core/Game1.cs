@@ -163,8 +163,8 @@ public class Game1 : Game
                 Pause();
             else if (Pressed(keyboard, Keys.T))
             {
-                _commandBar.Open();
-                SetState(GameState.Command);
+                if (_session.World.AllowCheats) { _commandBar.Open(); SetState(GameState.Command); }
+                else { _notice = "COMMANDS ARE DISABLED FOR THIS WORLD."; _noticeSeconds = 3; }
             }
             else if (Pressed(keyboard, Keys.E))
             {
@@ -351,10 +351,14 @@ public class Game1 : Game
                         throw new ArgumentException("Seed must be a signed 32-bit integer, or blank for a random seed.");
                     if (_creation != null || _created.HasValue) break;
                     WorldSize selectedSize = _menu.SelectedSize;
+                    bool allowCheats = _menu.SelectedCheats;
+                    Difficulty difficulty = _menu.SelectedDifficulty;
+                    GameMode mode = _menu.SelectedMode;
                     _creationProgress = "ALLOCATING WORLD";
                     _creation = Task.Run(() =>
                     {
                         var world = World.CreateNew(seed, selectedSize, text => _creationProgress = text);
+                        world.AllowCheats = allowCheats; world.SavedDifficulty = difficulty; world.SavedGameMode = mode;
                         _creationProgress = "POPULATING PASSIVE MOBS";
                         var camera = new Camera();
                         var population = new PassiveMobPopulation(world, PassiveMobPopulation.Generate(world));
@@ -469,8 +473,8 @@ public class Game1 : Game
     private void BeginWorld(string id, WorldSave save)
     {
         if(_session!=null)_session.Sleep.Cancel(_session.Camera);
-        if(save.World.SavedGameMode is GameMode mode && _settings.GameMode!=mode)
-        {_settings.GameMode=mode;_settingsDirty=true;_settingsSaveDelay=.5;}
+        _settings.GameMode = save.World.SavedGameMode ?? GameMode.Survival;
+        _settings.Difficulty = save.World.SavedDifficulty;
         var session = new GameSession(id, save);
         session.ApplySettings(_settings);
         var renderer = _preparingRenderer ?? new WorldRenderer(GraphicsDevice, _atlas, session.World);
@@ -605,6 +609,8 @@ public class Game1 : Game
             _session.Camera.Position = _session.Player.EyePosition;
         }
         State = state;
+        _menu?.SetWorld(_session?.World);
+        if (_session == null) { _settings.GameMode = GameMode.Survival; _settings.Difficulty = Difficulty.Normal; }
         if (state == GameState.Playing)
         {
             MouseState mouse = Mouse.GetState();

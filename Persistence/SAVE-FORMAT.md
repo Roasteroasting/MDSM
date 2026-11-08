@@ -1,7 +1,7 @@
-# World save container, version 12
+# World save container, version 13
 
 The game writes `world.dat` in each existing GUID-based world directory. All
-integers and floats are little-endian. Versions 11-12 use **Zstandard level 3** through
+integers and floats are little-endian. Versions 11-13 use **Zstandard level 3** through
 [ZstdSharp.Port 0.8.8](https://github.com/oleg-st/ZstdSharp). Brotli quality 3 and
 uncompressed records are supported by the same container reader and benchmark
 writer. Normal gameplay always selects Zstandard; individual records fall back to
@@ -15,7 +15,7 @@ required by a Massive world.
 
 The initial metadata layout matches versions 1-10: MDSM magic, version, dimensions,
 seed, UTF-8 world name, player position/orientation and block count. The version is
-12. This is followed by four Int32 values:
+13. This is followed by four Int32 values:
 
 1. Container layout schema: 1.
 2. Chunks per block-data group: 32.
@@ -50,11 +50,12 @@ The current required sections are:
 | 1 | Canonical version-10 core header; must match outer metadata, except for version |
 | 2 | 32 complete 16x128x16 chunks (1 MiB), in existing chunk order; sequence identifies the first chunk |
 | 3 | Sequential bounded frames containing the existing version-10 gameplay/state tail and its checksum |
-| 4 | Version-12 environment: Float64 seconds since sunrise (0 inclusive, 1200 exclusive), Byte game mode (0 Survival, 1 Creative, 2 legacy inheritance), Byte lighting rules version (1) |
+| 4 | Version-13 environment (12 bytes): Float64 seconds since sunrise (0 inclusive, 1200 exclusive), Byte game mode (0 Survival, 1 Creative), Byte lighting rules version (1), Byte allow-cheats (0 off, 1 on), Byte difficulty (0 Peaceful, 1 Easy, 2 Normal, 3 Hard) |
 | 0 | End marker: zero lengths/sequence, stored codec, SHA-256 of empty data |
 
 There is one core header, all chunk groups in order, and at least one state frame.
-Version 12 then requires exactly one environment record before the end marker.
+Versions 12-13 then require exactly one environment record before the end marker.
+Version 12 uses its original 10-byte payload (seconds, mode 0/1/2, lighting rules).
 Version 11 has no environment record. A malformed, repeated, missing, or unsupported
 required environment section is rejected, including nonfinite/out-of-range time.
 Current sizes use 8/32/128/512 chunk groups for Small/Normal/Large/Massive. The core
@@ -93,13 +94,15 @@ codecs, flags, versions, sequences, group sizes, section counts and total decode
 encoded bytes are checked before using records. Zstandard's configured decoder
 window limit is 1 MiB. The existing semantic and ownership validation still runs.
 
-Legacy uncompressed versions 1-10 and compressed version 11 remain readable. Older
-worlds start at daytime and inherit the existing application game-mode preference
-once when opened (older formats did not store a per-world mode). Version-12 saves
-retain each world's mode independently. New worlds explicitly start Survival.
-Renaming/resaving an old world before playing it preserves the inheritance marker;
-the first active session records its concrete mode, rather than forcing Survival
-merely because a legacy save was renamed.
+Legacy uncompressed versions 1-10 and compressed versions 11-12 remain readable.
+All pre-13 worlds migrate to cheats enabled, Normal difficulty and Survival mode,
+including version-12 worlds previously recorded as Creative. Version-12 world time
+is preserved; older formats without time start at morning. Blocks, inventories,
+entities and other state remain unchanged. Subsequent version-13 saves retain each
+world's selected rules independently, so migration defaults are not reapplied.
+New worlds default to cheats off, Normal and Survival; creation selections override
+those defaults before the initial save. No world-rule values are stored in the
+application settings JSON; old global mode/difficulty fields are ignored.
 Bed block IDs 61/62 are foot/head; their paired orientations use the existing
 structure metadata layout, validated as one matching two-block structure.
 Existing 64-high 256/512-square

@@ -41,6 +41,12 @@ internal sealed class MenuController : IDisposable
     public string NameText { get; private set; } = "";
     public string SeedText { get; private set; } = "";
     public WorldSize SelectedSize { get; private set; } = WorldSize.Normal;
+    public bool SelectedCheats { get; private set; }
+    public Difficulty SelectedDifficulty { get; private set; } = Difficulty.Normal;
+    public GameMode SelectedMode { get; private set; } = GameMode.Survival;
+    private World _world;
+    internal bool WorldOptionsEnabled => _world?.AllowCheats == true;
+    public void SetWorld(World world) => _world = world;
     public WorldEntry SelectedWorld => _worlds.Count == 0 ? null : _worlds[_selected];
     public WorldEntry ManagedWorld { get; private set; }
 
@@ -84,7 +90,7 @@ internal sealed class MenuController : IDisposable
         GameState.WorldDeleteConfirmation => DeleteButtons,
         _ => MainButtons
     };
-    private int FocusOffset => _screen == GameState.WorldCreation ? 3
+    private int FocusOffset => _screen == GameState.WorldCreation ? 6
         : _screen == GameState.Settings ? 10 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
     public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
@@ -111,6 +117,7 @@ internal sealed class MenuController : IDisposable
             NameText = "";
             SeedText = "";
             SelectedSize = WorldSize.Normal;
+            SelectedCheats = false; SelectedDifficulty = Difficulty.Normal; SelectedMode = GameMode.Survival;
         }
         if (screen == GameState.WorldRename) NameText = ManagedWorld.Name;
     }
@@ -230,7 +237,7 @@ internal sealed class MenuController : IDisposable
                 if (clicked) _focus = option + 3;
                 int change = clicked || _focus == option + 3 && (Pressed(Keys.Enter) || Pressed(Keys.Space) || Pressed(Keys.Right)) ? 1
                     : _focus == option + 3 && Pressed(Keys.Left) ? -1 : 0;
-                if (change == 0) continue;
+                if (change == 0 || !WorldOptionsEnabled) continue;
                 if (option == 0) _settings.Difficulty = (Difficulty)(((int)_settings.Difficulty + change + 4) % 4);
                 else _settings.GameMode = (GameMode)(((int)_settings.GameMode + change + 2) % 2);
             }
@@ -275,6 +282,18 @@ internal sealed class MenuController : IDisposable
             if (Pressed(Keys.Left)) CycleSize(-1);
             if (Pressed(Keys.Right)) CycleSize(1);
         }
+        if (_screen == GameState.WorldCreation)
+        {
+            for (int option=0;option<3;option++)
+                if (click && WorldCreationLayout.Option(viewport,option).Contains(_mouse))
+                { _focus=option+3; CycleCreationOption(option,1); return MenuAction.None; }
+            if (_focus is >=3 and <6)
+            {
+                if (Pressed(Keys.Left)) CycleCreationOption(_focus-3,-1);
+                if (Pressed(Keys.Right)||Pressed(Keys.Space)||Pressed(Keys.Enter)) CycleCreationOption(_focus-3,1);
+                if (Pressed(Keys.Enter)) return MenuAction.None;
+            }
+        }
         if (_screen == GameState.WorldSelection)
         {
             Rectangle area = ListBounds(viewport);
@@ -310,6 +329,12 @@ internal sealed class MenuController : IDisposable
     private bool IsTextField => (_screen == GameState.WorldCreation && _focus < 2)
         || (_screen == GameState.WorldRename && _focus == 0);
     private void CycleSize(int direction) => SelectedSize = (WorldSize)(((int)SelectedSize + direction + 4) % 4);
+    private void CycleCreationOption(int option,int direction)
+    {
+        if(option==0)SelectedCheats=!SelectedCheats;
+        else if(option==1)SelectedDifficulty=(Difficulty)(((int)SelectedDifficulty+direction+4)%4);
+        else SelectedMode=(GameMode)(((int)SelectedMode+direction+2)%2);
+    }
     private bool CanActivate(MenuAction action) => action switch
     {
         MenuAction.LoadWorld or MenuAction.DeleteWorld => _worlds.Count > 0,
@@ -422,11 +447,11 @@ internal sealed class MenuController : IDisposable
             Rectangle toggle=SettingsLayout.Toggle(viewport),bobbing=SettingsLayout.Bobbing(viewport);
             Choice(toggle,"UNCAPPED FPS",1,_settings.UncappedFps);
             Choice(bobbing,"VIEW BOBBING",2,_settings.ViewBobbing);
-            Choice(SettingsLayout.Choice(viewport,0),$"DIFFICULTY: {_settings.Difficulty}",3);
-            Choice(SettingsLayout.Choice(viewport,1),$"MODE: {_settings.GameMode}",4);
-            void Choice(Rectangle bounds,string label,int focus,bool? checkedValue=null)
+            Choice(SettingsLayout.Choice(viewport,0),$"DIFFICULTY: {_settings.Difficulty}",3,enabled:WorldOptionsEnabled);
+            Choice(SettingsLayout.Choice(viewport,1),$"MODE: {_settings.GameMode}",4,enabled:WorldOptionsEnabled);
+            void Choice(Rectangle bounds,string label,int focus,bool? checkedValue=null,bool enabled=true)
             {
-                Fill(bounds,_focus==focus?new Color(84,91,94):new Color(38,44,52));
+                Fill(bounds,!enabled?new Color(38,38,38):_focus==focus?new Color(84,91,94):new Color(38,44,52));
                 int indent=checkedValue.HasValue?26:6;
                 int textScale=label.Length*6*scale<=bounds.Width-indent-6?scale:1;
                 if(checkedValue.HasValue)
@@ -434,7 +459,7 @@ internal sealed class MenuController : IDisposable
                     Fill(new(bounds.X+6,bounds.Center.Y-6,12,12),Color.LightGray);
                     Fill(new(bounds.X+8,bounds.Center.Y-4,8,8),checkedValue.Value?Color.LightGoldenrodYellow:new Color(24,29,35));
                 }
-                Text(label,bounds.X+indent,bounds.Center.Y-3*textScale,textScale,Color.White);
+                Text(label,bounds.X+indent,bounds.Center.Y-3*textScale,textScale,enabled?Color.White:Color.Gray);
             }
             void DrawSlider(Rectangle bounds,string label,float value,int focus)
             {
@@ -463,9 +488,20 @@ internal sealed class MenuController : IDisposable
         if (_screen == GameState.WorldCreation)
         {
             DrawField(viewport, 0, "WORLD NAME", NameText, "ENTER A NAME", scale);
-            DrawField(viewport, 1, "OPTIONAL INTEGER SEED", SeedText, "RANDOM", scale);
+            DrawField(viewport, 1, "SEED (OPTIONAL)", SeedText, "RANDOM", scale);
             DrawField(viewport, 2, "WORLD SIZE - CLICK OR LEFT/RIGHT",
                 $"{SelectedSize} / {SelectedSize.Width()} X {World.Height} X {SelectedSize.Width()}", "", scale);
+            for(int option=0;option<3;option++)
+            {
+                Rectangle bounds=WorldCreationLayout.Option(viewport,option);
+                string label=option==0?"ALLOW CHEATS":option==1?"DIFFICULTY":"GAMEMODE";
+                string value=option==0?(SelectedCheats?"ON":"OFF"):option==1?SelectedDifficulty.ToString():SelectedMode.ToString();
+                int textScale=label.Length*6*scale<=bounds.Width?scale:1;
+                Text(label,bounds.Center.X-label.Length*3*textScale,bounds.Top-9*textScale,textScale,Color.LightGray);
+                Fill(bounds,_focus==option+3?new Color(235,216,135):new Color(74,80,89));
+                Fill(new(bounds.X+2,bounds.Y+2,bounds.Width-4,bounds.Height-4),new Color(24,29,35));
+                Text(value,bounds.Center.X-value.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
+            }
             if (WorldCreationLayout.NoticeVisible(_screen, SelectedSize))
             {
                 var size = new Point(viewport.Width, viewport.Height);

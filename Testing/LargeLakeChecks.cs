@@ -27,7 +27,12 @@ internal static class LargeLakeChecks
             Require(string.Join(' ',lines)==WorldCreationLayout.NoticeText && lines.All(s=>s.Length*6*WorldCreationLayout.NoticeScale(v)<=panel.Width-16),"Notice text was truncated or overflows.");
             Require(panel.Top>WorldCreationLayout.Field(v,2).Bottom && panel.Bottom<WorldCreationLayout.Button(v,0).Top
                 && WorldCreationLayout.Button(v,0).Bottom<=size.Y && panel.Left>=0 && panel.Right<=size.X,"Notice overlaps controls or window bounds.");
-            for(int i=0;i<3;i++)Require(WorldCreationLayout.Field(v,i).Top>40 && (i==0 || WorldCreationLayout.Field(v,i).Top>WorldCreationLayout.Field(v,i-1).Bottom),"Compact fields overlap.");
+            for(int i=0;i<3;i++)
+            {
+                Rectangle field=WorldCreationLayout.Field(v,i);Require(field.Top>40,"Field overlaps title.");
+                for(int j=0;j<i;j++)Require(!field.Intersects(WorldCreationLayout.Field(v,j)),"Creation fields overlap.");
+                Require(WorldCreationLayout.Option(v,0).Top>field.Bottom,"Options overlap fields.");
+            }
         }
     }
     public static void WaterOrdering()

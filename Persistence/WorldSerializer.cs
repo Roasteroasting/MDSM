@@ -15,7 +15,7 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
-    public const int FormatVersion = 12;
+    public const int FormatVersion = 13;
     internal const int LegacyFormatVersion = 10;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.

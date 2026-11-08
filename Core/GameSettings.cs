@@ -55,10 +55,8 @@ public sealed class SettingsStore
                 settings.UncappedFps = uncapped.GetBoolean();
             if(root.TryGetProperty("ViewBobbing",out var bobbing) && bobbing.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 settings.ViewBobbing=bobbing.GetBoolean();
-            if (root.TryGetProperty("Difficulty", out var difficulty) && difficulty.TryGetInt32(out int difficultyValue))
-                settings.Difficulty = (Difficulty)difficultyValue;
-            if (root.TryGetProperty("GameMode", out var mode) && mode.TryGetInt32(out int modeValue))
-                settings.GameMode = (GameMode)modeValue;
+            // Mode/difficulty are active-world values, never application preferences.
+            // Ignore obsolete JSON fields so they cannot override a loaded world.
             ReadVolume("MasterVolume",v=>settings.MasterVolume=v);ReadVolume("EffectsVolume",v=>settings.EffectsVolume=v);
             ReadVolume("MobVolume",v=>settings.MobVolume=v);ReadVolume("InterfaceVolume",v=>settings.InterfaceVolume=v);
             ReadVolume("Brightness",v=>settings.Brightness=v);
@@ -81,7 +79,7 @@ public sealed class SettingsStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Brightness,settings.Difficulty, settings.GameMode,
+                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Brightness,
                     settings.MasterVolume,settings.EffectsVolume,settings.MobVolume,settings.InterfaceVolume }, new JsonSerializerOptions { WriteIndented = true });
                 file.Flush(true);
             }

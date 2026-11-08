@@ -55,7 +55,10 @@ public static partial class WorldSerializer
             using var frames=new CompressedReadStream(hashed,replay,hash,info.Header,info.Metadata);
             WorldSave save=ReadLegacy(frames);
             if(frames.Environment is WorldEnvironment state)
-            {save.World.Time.Restore(state.Seconds);save.World.SavedGameMode=state.Mode;}
+            {
+                save.World.Time.Restore(state.Seconds); save.World.SavedGameMode=state.Mode;
+                save.World.AllowCheats=state.AllowCheats; save.World.SavedDifficulty=state.Difficulty;
+            }
             return save;
         }
         catch(EndOfStreamException e){throw new InvalidDataException("Compressed save is truncated or incomplete.",e);}

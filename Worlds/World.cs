@@ -28,7 +28,9 @@ public sealed partial class World
     public VegetationSimulation Vegetation { get; }
     public WorldTime Time { get; } = new();
     public BlockLighting Lighting { get; }
-    public MDSM.Core.GameMode? SavedGameMode { get; internal set; }
+    public MDSM.Core.GameMode? SavedGameMode { get; internal set; } = MDSM.Core.GameMode.Survival;
+    public MDSM.Core.Difficulty SavedDifficulty { get; internal set; } = MDSM.Core.Difficulty.Normal;
+    public bool AllowCheats { get; internal set; } = true; // Legacy worlds/test fixtures retain command access.
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
     public OreGenerationStats GeneratedOres { get; private set; }
     public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
@@ -69,6 +71,7 @@ public sealed partial class World
         progress?.Invoke("ALLOCATING WORLD");
         var world = new World(seed, size, false);
         world.SavedGameMode=MDSM.Core.GameMode.Survival;
+        world.AllowCheats=false;
         progress?.Invoke("GENERATING TERRAIN");
         new TerrainGenerator(seed).Generate(world);
         progress?.Invoke("CARVING PONDS, RIVERS AND LAKES");

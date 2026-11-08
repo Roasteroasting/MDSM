@@ -24,7 +24,7 @@ internal static class LightingChecks
         ("Packed sunlight/block lighting, attenuation, opacity, sources, removal and seams",Propagation),
         ("Twenty-minute clock, sky/celestial alignment, sleep, visual-only brightness and no remeshing",TimeAndBrightness),
         ("Beds: four orientations, recipe, paired geometry/collision, support and exact drops",Beds),
-        ("V12 compressed environment, v11/v10 compatibility, Bed metadata and corruption",Persistence),
+        ("Versioned compressed environment, legacy compatibility, Bed metadata and corruption",Persistence),
         ("Exactly-zero hostile spawning on surfaces/structures, artificial light, Peaceful and settings",SpawningAndSettings),
         ("Bounded light-cache eviction, distant edits, local invalidation and allocation-free clocks",Budgets)
     };
@@ -136,16 +136,16 @@ internal static class LightingChecks
         void RejectEnvironment(Action<byte[]> corrupt)
         {
             var bad=(byte[])bytes.Clone();corrupt(bad);
-            SHA256.HashData(bad.AsSpan(at+56,10)).CopyTo(bad.AsSpan(at+24,32));SHA256.HashData(bad.AsSpan(0,bad.Length-32)).CopyTo(bad.AsSpan(bad.Length-32));
+            SHA256.HashData(bad.AsSpan(at+56,BitConverter.ToInt32(bad,at+16))).CopyTo(bad.AsSpan(at+24,32));SHA256.HashData(bad.AsSpan(0,bad.Length-32)).CopyTo(bad.AsSpan(bad.Length-32));
             bool invalid=false;try{WorldSerializer.Read(new MemoryStream(bad));}catch(InvalidDataException){invalid=true;}Check(invalid,"Invalid environment state was accepted after repaired checksums.");
         }
         RejectEnvironment(b=>BitConverter.GetBytes(double.NaN).CopyTo(b,at+56));
         RejectEnvironment(b=>b[at+56+8]=3);RejectEnvironment(b=>b[at+56+9]=2);
         int length=56+BitConverter.ToInt32(bytes,at+20);byte[] v11=bytes[..at].Concat(bytes[(at+length)..]).ToArray();BitConverter.GetBytes(11).CopyTo(v11,4);
         SHA256.HashData(v11.AsSpan(0,start-32)).CopyTo(v11.AsSpan(start-32,32));SHA256.HashData(v11.AsSpan(0,v11.Length-32)).CopyTo(v11.AsSpan(v11.Length-32));
-        var old=WorldSerializer.Read(new MemoryStream(v11));Check(old.World.Time.Seconds==WorldTime.Morning && old.World.SavedGameMode==null,"v11 default time/mode changed.");
+        var old=WorldSerializer.Read(new MemoryStream(v11));Check(old.World.Time.Seconds==WorldTime.Morning && old.World.SavedGameMode==GameMode.Survival && old.World.SavedDifficulty==Difficulty.Normal && old.World.AllowCheats,"v11 default world-rule migration failed.");
         using(var resaved=new MemoryStream())
-        {WorldSerializer.Write(resaved,old with{Name="Renamed legacy"});resaved.Position=0;Check(WorldSerializer.Read(resaved).World.SavedGameMode==null,"Renaming an unplayed old world forced a mode change.");}
+        {WorldSerializer.Write(resaved,old with{Name="Renamed legacy"});resaved.Position=0;Check(WorldSerializer.Read(resaved).World.SavedGameMode==GameMode.Survival,"Renaming an old world lost its migrated mode.");}
         var migratedSession=new GameSession("old",old);migratedSession.ApplySettings(new(){GameMode=GameMode.Creative});
         using(var played=new MemoryStream())
         {WorldSerializer.Write(played,migratedSession.Capture());played.Position=0;Check(WorldSerializer.Read(played).World.SavedGameMode==GameMode.Creative,"Migrated active mode failed to persist.");}

@@ -70,7 +70,7 @@ internal static class GameplayRefinementChecks
         try
         {
             var store=new SettingsStore(Path.Combine(root,"settings.json"));defaults.Difficulty=Difficulty.Hard;defaults.GameMode=GameMode.Creative;defaults.FpsCap=144;defaults.ViewBobbing=false;
-            store.Save(defaults);var loaded=store.Load();Check(loaded.Difficulty==Difficulty.Hard && loaded.GameMode==GameMode.Creative && loaded.FpsCap==144 && !loaded.ViewBobbing,"Settings did not roundtrip.");
+            store.Save(defaults);var loaded=store.Load();Check(loaded.Difficulty==Difficulty.Normal && loaded.GameMode==GameMode.Survival && loaded.FpsCap==144 && !loaded.ViewBobbing,"Presentation settings failed to roundtrip or world rules leaked into global settings.");
             File.WriteAllText(store.FilePath,"{\"Difficulty\":99,\"GameMode\":-1}");loaded=store.Load();Check(loaded.Difficulty==Difficulty.Normal && loaded.GameMode==GameMode.Survival,"Invalid enum values accepted.");
             File.WriteAllText(store.FilePath,"{\"FpsCap\":240}");loaded=store.Load();Check(loaded.Difficulty==Difficulty.Normal && loaded.GameMode==GameMode.Survival && loaded.FpsCap==240,"Old settings were not compatible.");
         }

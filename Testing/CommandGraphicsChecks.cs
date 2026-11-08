@@ -54,7 +54,8 @@ internal static class CommandGraphicsChecks
             Input(.1,keys:new[]{Keys.Enter});Input(.1,keys:new[]{Keys.Enter});CommandChecks.Check(Session.Inventory[0].Count==3,"Held Enter repeated a command.");
             Submit("/spawn sheep 2");CommandChecks.Check(Session.Mobs.Entities.Count==2,"Actual command routing did not spawn mobs.");
             Submit("/time set 18000");CommandChecks.Check(Session.World.Time.Seconds==900,"Actual command routing did not set time.");
-            Submit("/gamemode creative");Input(.6);CommandChecks.Check(Session.Player.Creative && new SettingsStore(Path.Combine(_root,"settings.json")).Load().GameMode==GameMode.Creative,"Command mode did not persist settings.");
+            Submit("/gamemode creative");Input(.6);CommandChecks.Check(Session.Player.Creative && Session.World.SavedGameMode==GameMode.Creative
+                && new SettingsStore(Path.Combine(_root,"settings.json")).Load().GameMode==GameMode.Survival,"Command mode failed to update world or leaked into global settings.");
             Submit("/help");
             foreach(Point size in new[]{new Point(320,240),new(800,600),new(1280,720)})
             {

@@ -52,7 +52,7 @@ internal static class CompressionChecks
         foreach(SaveCodec codec in Enum.GetValues<SaveCodec>())
         {
             byte[] bytes=Encode(save,codec);using var metadata=new MemoryStream(bytes);var info=WorldSerializer.ReadMetadata(metadata);
-            Check(info.Version==12 && info.Size==WorldSize.Small && metadata.Position<256,"Listing decompressed data or lost metadata.");
+            Check(info.Version==WorldSerializer.FormatVersion && info.Size==WorldSize.Small && metadata.Position<256,"Listing decompressed data or lost metadata.");
             Check(codec==SaveCodec.Stored || bytes.Length<save.World.BlockCount/10,"Save did not compress.");
             foreach(bool pipe in new[]{false,true})
             {
@@ -102,7 +102,7 @@ internal static class CompressionChecks
         {
             var store=new WorldSaveManager(root);string id=store.Create(save),path=Path.Combine(root,id,WorldSaveManager.FileName);
             File.WriteAllBytes(path,legacy.ToArray());store.Save(id,store.Load(id));
-            using(var listing=File.OpenRead(path))Check(WorldSerializer.ReadMetadata(listing).Version==12,"Subsequent save did not migrate storage.");
+            using(var listing=File.OpenRead(path))Check(WorldSerializer.ReadMetadata(listing).Version==WorldSerializer.FormatVersion,"Subsequent save did not migrate storage.");
             byte[] previous=File.ReadAllBytes(path);save.World.GetChunk(0,0).SetBlock(0,0,0,(BlockType)255);
             bool failed=false;try{store.Save(id,save);}catch(InvalidDataException){failed=true;}
             Check(failed && previous.AsSpan().SequenceEqual(File.ReadAllBytes(path)),"Failed compressed write replaced the valid save.");

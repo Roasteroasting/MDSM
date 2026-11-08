@@ -1,4 +1,12 @@
-if(System.Array.Exists(args,a=>a=="--drop-control-graphics-test"))
+if(System.Array.Exists(args,a=>a=="--world-rules-graphics-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.WorldRuleGraphicsChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--world-rules-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.WorldRuleChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--drop-control-graphics-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.DropControlGraphicsChecks.Run();
 }
