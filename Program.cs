@@ -1,4 +1,12 @@
-if(System.Array.Exists(args,a=>a=="--world-rules-graphics-test"))
+if(System.Array.Exists(args,a=>a=="--mob-movement-graphics-test"))
+{
+    System.Environment.ExitCode=System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(),MDSM.Testing.PigGraphicsChecks.Run());
+}
+else if(System.Array.Exists(args,a=>a=="--mob-movement-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.MobMovementChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--world-rules-graphics-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.WorldRuleGraphicsChecks.Run();
 }

@@ -7,6 +7,7 @@ namespace MDSM.Entities;
 
 public sealed class PassiveMob
 {
+    private const float Gravity = 18, JumpSpeed = 6.5f;
     public MobSpecies Species { get; }
     public MobDefinition Definition { get; }
     private float HalfWidth => !Baby?Definition.HalfWidth:Species switch{MobSpecies.Cow=>.32f,MobSpecies.Chicken=>.2f,_=>.3f};
@@ -40,6 +41,8 @@ public sealed class PassiveMob
     private float _decisionSeconds;
     private float _shoreHopSeconds;
     private bool _wandering;
+    private bool _wanderHopping;
+    private float _obstacleChoiceSeconds;
     private float _idleSoundSeconds=3,_stepSoundDistance;
     private uint _soundSeed;
     // Tiny local voxel cache, not a simulation throttle: all AI/physics still run at 120 Hz.
@@ -104,6 +107,7 @@ public sealed class PassiveMob
         {_soundSeed=_soundSeed*1664525+1013904223;_idleSoundSeconds=6+_soundSeed%900/100f;world.Sounds.Mob(SoundKind.MobIdle,this);}
         if(life)TickLife(elapsed);
         _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
+        _obstacleChoiceSeconds = Math.Max(0, _obstacleChoiceSeconds - dt);
         if ((_decisionSeconds -= dt) <= 0)
         {
             _wandering = !_wandering;
@@ -125,7 +129,7 @@ public sealed class PassiveMob
                 Position + new Vector3(0.1f, Height * 0.65f, 0.1f)));
             _velocity.Y = submerged ? Math.Max(1.5f, _velocity.Y - 4 * dt) : Math.Max(-2, _velocity.Y * MathF.Exp(-3 * dt) - 4 * dt);
         }
-        else _velocity.Y = Math.Max(-40, _velocity.Y - 18 * dt);
+        else _velocity.Y = Math.Max(-40, _velocity.Y - Gravity * dt);
         Vector3 displacement = (walking + _velocity) * dt;
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.15f));
         Vector3 step = displacement / steps;
@@ -141,12 +145,29 @@ public sealed class PassiveMob
                 step.Y = 0; _velocity.Y = 0;
             }
         }
-        if(blocked && steering.HasValue && Grounded)_velocity.Y=Species==MobSpecies.Spider?5:6.5f;
+        if (Grounded || steering.HasValue || swimming) _wanderHopping = false;
+        if(blocked && steering.HasValue && Grounded)_velocity.Y=Species==MobSpecies.Spider?5:JumpSpeed;
         if(blocked && Species==MobSpecies.Spider && steering.HasValue)_velocity.Y=3;
         if (blocked && _wandering && !steering.HasValue)
         {
             // A small swimming hop lets wandering pigs leave a one-block shore instead of getting trapped.
             if (swimming) { _velocity.Y = Math.Max(_velocity.Y, 4.5f); _shoreHopSeconds = 0.7f; }
+            else if (_shoreHopSeconds == 0 && Species < MobSpecies.Zombie)
+            {
+                // Decide once at a grounded encounter, not once per blocked frame.
+                // Keep the chosen heading throughout the airborne part of a hop.
+                if (Grounded && !_wanderHopping && _obstacleChoiceSeconds == 0)
+                {
+                    _obstacleChoiceSeconds = .5f; // Bounded retries if enclosed or caught at a corner.
+                    if (CanWanderHop(world, walking) && _random.Next(2) == 0)
+                    { _velocity.Y = JumpSpeed; _wanderHopping = true; _decisionSeconds = Math.Max(_decisionSeconds, .9f); }
+                    else
+                    {
+                        Yaw = MathHelper.WrapAngle(Yaw + MathHelper.Pi + (_random.NextSingle() - .5f) * MathHelper.PiOver2);
+                        _decisionSeconds = Math.Max(_decisionSeconds, 1);
+                    }
+                }
+            }
             else if (_shoreHopSeconds == 0) { _wandering = false; _decisionSeconds = 0.5f; }
         }
         float decay = MathF.Exp(-8 * dt);
@@ -160,6 +181,35 @@ public sealed class PassiveMob
             _stepSoundDistance+=distance;float stride=Species==MobSpecies.Chicken?.65f:1.7f;
             if(_stepSoundDistance>=stride){_stepSoundDistance%=stride;world.Sounds.Block(SoundKind.Step,BlockSounds.Surface(world,Position),Position,.35f);}
         }
+    }
+
+    private bool CanWanderHop(World world, Vector3 walking)
+    {
+        walking.Y = 0;
+        if (walking.LengthSquared() < .0001f) return false;
+        walking.Normalize();
+        Vector3 ahead = Position + walking * .25f;
+        BoundingBox probe = new(ahead + new Vector3(-HalfWidth,0,-HalfWidth), ahead + new Vector3(HalfWidth,Height,HalfWidth));
+        bool obstacleFound = false;
+        Span<BoundingBox> boxes = stackalloc BoundingBox[9];
+        for (int x=Math.Max(0,(int)MathF.Floor(probe.Min.X));x<=Math.Min(world.Width-1,(int)MathF.Floor(probe.Max.X));x++)
+        for (int y=Math.Max(0,(int)MathF.Floor(probe.Min.Y)-1);y<=Math.Min(World.Height-1,(int)MathF.Floor(probe.Max.Y));y++)
+        for (int z=Math.Max(0,(int)MathF.Floor(probe.Min.Z));z<=Math.Min(world.Depth-1,(int)MathF.Floor(probe.Max.Z));z++)
+        {
+            int count = world.BlockBoxes(new(x,y,z), boxes, true);
+            for (int i=0;i<count;i++)
+                if (World.Overlaps(probe,boxes[i]))
+                {
+                    obstacleFound = true;
+                    if (boxes[i].Max.Y > Position.Y + 1.001f) return false;
+                }
+        }
+        if (!obstacleFound) return false; // Finite boundaries are not jumpable obstacles.
+        float rise = JumpSpeed * JumpSpeed / (2 * Gravity);
+        BoundingBox overhead = Bounds; overhead.Max.Y += rise;
+        if (world.IntersectsSolid(overhead)) return false;
+        probe.Min.Y += rise; probe.Max.Y += rise;
+        return !world.IntersectsSolid(probe);
     }
 
     private bool MoveAxis(World world, float amount, int axis)

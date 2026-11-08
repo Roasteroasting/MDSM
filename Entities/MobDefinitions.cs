@@ -21,13 +21,13 @@ public static class MobDefinitions
     public const int SpeciesCount = 4;
     private static readonly MobDefinition[] Definitions =
     {
-        new(10, 0.45f, 1, 0.8f, Items.RawPorkchop, 2, "Mobs/pig"),
-        new(10, 0.45f, 1.8f, 0.7f, Items.Leather, 4, "Mobs/cow"),
-        new(10, 0.45f, 1.3f, 0.75f, Items.FromBlock(BlockType.WhiteWool), 4, "Mobs/sheep"),
-        new(6, 0.3f, 0.95f, 0.9f, Items.Feather, 4, "Mobs/chicken"),
-        new(20,.3f,1.8f,1.6f,Items.RottenFlesh,4,"Mobs/zombie"),
+        new(10, 0.45f, 1, 1.5f, Items.RawPorkchop, 2, "Mobs/pig"),
+        new(10, 0.45f, 1.8f, 1.5f, Items.Leather, 4, "Mobs/cow"),
+        new(10, 0.45f, 1.3f, 1.5f, Items.FromBlock(BlockType.WhiteWool), 4, "Mobs/sheep"),
+        new(6, 0.3f, 0.95f, 1.5f, Items.Feather, 4, "Mobs/chicken"),
+        new(20,.3f,1.8f,1.5f,Items.RottenFlesh,4,"Mobs/zombie"),
         new(20,.3f,1.8f,1.5f,Items.Bone,4,"Mobs/skeleton"),
-        new(16,.7f,.85f,2f,Items.String,4,"Mobs/spider")
+        new(16,.7f,.85f,1.5f,Items.String,4,"Mobs/spider")
     };
     public static bool IsDefined(MobSpecies species) => (uint)species < Definitions.Length;
     public static MobDefinition Get(MobSpecies species) => IsDefined(species) ? Definitions[(int)species]

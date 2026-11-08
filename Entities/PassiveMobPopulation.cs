@@ -124,7 +124,12 @@ public sealed class PassiveMobPopulation
             if(heldItem==Items.Wheat && playerDistanceSquared<=WheatFollowRange*WheatFollowRange)
             {
                 Vector3 toward=playerPosition.Value-mob.Position;toward.Y=0;
-                if(toward.LengthSquared()>WheatStopDistance*WheatStopDistance)toward.Normalize();else toward=Vector3.Zero;
+                if(toward.LengthSquared()>WheatStopDistance*WheatStopDistance)
+                {
+                    float distance=toward.Length(),step=mob.Definition.WalkSpeed*Math.Min(elapsed,.1f);
+                    toward*=Math.Min(1,(distance-WheatStopDistance)/step)/distance;
+                }
+                else toward=Vector3.Zero;
                 direction=toward; // Overrides wandering, including standing still near the player.
             }
             else if(mob.LoveSeconds>0)
