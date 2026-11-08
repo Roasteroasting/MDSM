@@ -30,7 +30,7 @@ public static class SurvivalInteractions
     {
         ItemStack held=session.Inventory.Selected;World world=session.World;
         if(hit is BlockHit bed && Blocks.Bed(world.GetBlock(bed.Cell.X,bed.Cell.Y,bed.Cell.Z)))
-        {world.UseBed(bed.Cell);return true;}
+        {session.Sleep.TryBegin(session,bed);return true;}
         if(hit is BlockHit structure && world.Toggle(structure.Cell))return true;
         if(held.Item==Items.Wheat)
         {session.Mobs.Feed(EntityRaycaster.Cast(world,session.Mobs,session.Camera.Position,session.Camera.Forward),session.Inventory);return true;}

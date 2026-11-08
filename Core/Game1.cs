@@ -40,6 +40,8 @@ public class Game1 : Game
     private Hud _hud;
     private MenuController _menu;
     private InventoryScreen _inventoryScreen;
+    private CommandBar _commandBar;
+    private readonly WorldCommands _commands = new();
     private FirstPersonRenderer _firstPerson;
     private PassiveMobRenderer _mobRenderer;
     private ProjectileRenderer _projectileRenderer;
@@ -87,9 +89,16 @@ public class Game1 : Game
         Window.ClientSizeChanged += (_, _) => _mouseLook?.DiscardMotion();
         Window.TextInput += (_, e) =>
         {
-            if (IsActive && (State is GameState.WorldCreation or GameState.WorldRename)) _menu?.TextInput(e.Character);
+            TextInput(e.Character);
         };
         Deactivated += (_, _) => Pause();
+    }
+
+    private void TextInput(char character)
+    {
+        if (!IsActive) return;
+        if (State is GameState.WorldCreation or GameState.WorldRename) _menu?.TextInput(character);
+        else if (State == GameState.Command) _commandBar?.Input.TextInput(character);
     }
 
     protected override void LoadContent()
@@ -99,6 +108,7 @@ public class Game1 : Game
         _hud = new Hud(GraphicsDevice, _atlas);
         _menu = new MenuController(GraphicsDevice, _atlas, _settings);
         _inventoryScreen = new InventoryScreen(GraphicsDevice, _atlas);
+        _commandBar = new CommandBar(GraphicsDevice);
         _firstPerson = new FirstPersonRenderer(GraphicsDevice, _atlas);
         _mobRenderer = new PassiveMobRenderer(GraphicsDevice, Content);
         _projectileRenderer=new ProjectileRenderer(GraphicsDevice);
@@ -151,6 +161,11 @@ public class Game1 : Game
         {
             if (Pressed(keyboard, Keys.Escape))
                 Pause();
+            else if (Pressed(keyboard, Keys.T))
+            {
+                _commandBar.Open();
+                SetState(GameState.Command);
+            }
             else if (Pressed(keyboard, Keys.E))
             {
                 bool opened = _session.TryOpenCrafting(2);
@@ -167,6 +182,29 @@ public class Game1 : Game
                 }
             }
         }
+        else if (State == GameState.Command)
+        {
+            _commandBar.Input.Update(keyboard, _previousKeyboard);
+            if (Pressed(keyboard, Keys.Escape)) SetState(GameState.Playing);
+            else if (Pressed(keyboard, Keys.Enter))
+            {
+                CommandResult result = _commands.Execute(_commandBar.Input.Submit(), _session, _settings);
+                _commandBar.Show(result);
+                if (result.SettingsChanged) { _settingsDirty = true; _settingsSaveDelay = .5; }
+                if (_session.Player.IsDead) EnterDeath();
+            }
+        }
+        else if(State==GameState.Sleeping)
+        {
+            MenuAction sleepAction=Pressed(keyboard,Keys.E)?MenuAction.LeaveBed:_menu.Update(keyboard,_previousKeyboard,mouse,_previousMouse,GraphicsDevice.Viewport);
+            if(sleepAction==MenuAction.LeaveBed)HandleMenuAction(sleepAction);
+            else
+            {
+                _session.Sleep.Update(_session,gameTime.ElapsedGameTime.TotalSeconds);
+                ShowSleepNotice();
+                if(!_session.Sleep.IsSleeping)SetState(GameState.Playing);
+            }
+        }
         else if (State == GameState.Inventory)
         {
             int processingSteps=_simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
@@ -176,7 +214,8 @@ public class Game1 : Game
                 if (_session.TryReturnInterfaceItems()) { _session.CloseInterface();SetState(GameState.Playing); }
                 else _inventoryScreen.CannotClose();
             }
-            else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport, keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift));
+            else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport,
+                keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift), Pressed(keyboard, Keys.Q));
         }
         else
             HandleMenuAction(_menu.Update(keyboard, _previousKeyboard, mouse, _previousMouse, GraphicsDevice.Viewport));
@@ -203,6 +242,11 @@ public class Game1 : Game
             if (keyboard.IsKeyDown((Keys)((int)Keys.D1 + i)) || keyboard.IsKeyDown((Keys)((int)Keys.NumPad1 + i)))
                 _session.Inventory.SelectedSlot = i;
         if(oldSlot!=_session.Inventory.SelectedSlot){_session.Mining.Reset();_session.Bow.Cancel();}
+        if (Pressed(keyboard, Keys.Q) && _session.DropSelected(keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift)))
+        {
+            _session.Mining.Reset(); _session.Bow.Cancel();
+            _session.Sounds.Local(SoundKind.Drop);
+        }
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         bool held = mouse.LeftButton == ButtonState.Pressed;
         if (_awaitMouseRelease)
@@ -230,7 +274,7 @@ public class Game1 : Game
             world.Gravity.Update(dt);
             world.Containers.Update(dt);
             world.Vegetation.Update(dt,_session.Items);
-            _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items);
+            _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items,_session.Inventory.Selected.Item);
             _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
                 camera.Position, camera.Forward, _selection, held, dt,_session.Inventory,_session.Hostiles,player.Creative);
             _session.Hostiles.Update(dt,player,_session.Projectiles,_session.Mobs);
@@ -262,7 +306,12 @@ public class Game1 : Game
         }
         if (!_awaitMouseRelease)
         {
-            if(mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released && SurvivalInteractions.Use(_session,_selection))return;
+            if(mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released && SurvivalInteractions.Use(_session,_selection))
+            {
+                ShowSleepNotice();
+                if(_session.Sleep.IsSleeping)SetState(GameState.Sleeping);
+                return;
+            }
             _session.Bow.Update(_session.Inventory,_session.Projectiles,camera.Position,camera.Forward,mouse.RightButton==ButtonState.Pressed,(float)gameTime.ElapsedGameTime.TotalSeconds);
             ItemUse.TryConsume(player, _session.Inventory, mouse.RightButton == ButtonState.Pressed,
                 _previousMouse.RightButton == ButtonState.Pressed);
@@ -285,6 +334,9 @@ public class Game1 : Game
         {
             switch (action)
             {
+                case MenuAction.LeaveBed when State==GameState.Sleeping:
+                    SetState(GameState.Playing);
+                    break;
                 case MenuAction.NewWorld:
                     SetState(GameState.WorldCreation);
                     break;
@@ -416,6 +468,7 @@ public class Game1 : Game
 
     private void BeginWorld(string id, WorldSave save)
     {
+        if(_session!=null)_session.Sleep.Cancel(_session.Camera);
         if(save.World.SavedGameMode is GameMode mode && _settings.GameMode!=mode)
         {_settings.GameMode=mode;_settingsDirty=true;_settingsSaveDelay=.5;}
         var session = new GameSession(id, save);
@@ -430,6 +483,7 @@ public class Game1 : Game
         _hud.InvalidateDebug();
         _selection = null;
         _notice = null;
+        _commandBar.Reset();
         _autosaveElapsed = 0;
         SetState(GameState.Playing);
     }
@@ -467,6 +521,7 @@ public class Game1 : Game
     private bool SaveCurrentWorld()
     {
         if (_session == null) return true;
+        if(State==GameState.Sleeping)SetState(GameState.Paused);
         if (_session.Player.IsDead) EnterDeath();
         if (!_session.TryReturnInterfaceItems())
         {
@@ -512,21 +567,26 @@ public class Game1 : Game
 
     private void Pause()
     {
-        if (State == GameState.Playing) SetState(GameState.Paused);
+        if (State is GameState.Playing or GameState.Sleeping or GameState.Command) SetState(GameState.Paused);
         else ReleaseMouse();
     }
 
     private void EnterDeath()
     {
+        _session.Sleep.Cancel(_session.Camera);
         bool first = _session.HandleDeath();
+        bool entering = State != GameState.Death;
         if (State != GameState.Death) SetState(GameState.Death);
         _selection = null;
-        if (first && _session.UndroppedDeathItems)
+        if ((first || entering) && _session.UndroppedDeathItems)
             _menu.Message("SOME ITEMS COULD NOT BE DROPPED AND WERE RETAINED. RESPAWN TO RECOVER THEM.", true);
     }
 
     private void SetState(GameState state)
     {
+        bool leavingBed=State==GameState.Sleeping && state!=GameState.Sleeping;
+        bool leavingCommand=State==GameState.Command && state!=GameState.Command;
+        if(state!=GameState.Sleeping && _session!=null)_session.Sleep.Cancel(_session.Camera);
         _playerAudio.Reset();
         if(_session!=null && state!=State)
         {
@@ -539,7 +599,7 @@ public class Game1 : Game
         _simulationClock.Reset();
         _pendingJump = false;
         _hotbarScroll.Reset();
-        if (state != GameState.Playing && _session != null)
+        if (state is not (GameState.Playing or GameState.Sleeping) && _session != null)
         {
             _session.Player.StopCrouching();
             _session.Camera.Position = _session.Player.EyePosition;
@@ -548,7 +608,7 @@ public class Game1 : Game
         if (state == GameState.Playing)
         {
             MouseState mouse = Mouse.GetState();
-            _awaitMouseRelease = mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed;
+            _awaitMouseRelease = leavingBed || leavingCommand || mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed;
             if (IsActive && !_mouseLook.Captured)
             {
                 _menuCursor = mouse.Position;
@@ -568,7 +628,7 @@ public class Game1 : Game
         {
             ReleaseMouse();
             if (state == GameState.Inventory) _inventoryScreen.Open();
-            else _menu?.Open(state);
+            else if (state != GameState.Command) _menu?.Open(state);
         }
     }
 
@@ -581,6 +641,12 @@ public class Game1 : Game
                 Math.Clamp(_menuCursor.Y, 0, Math.Max(0, GraphicsDevice.Viewport.Height - 1)));
         }
         IsMouseVisible = true;
+    }
+
+    private void ShowSleepNotice()
+    {
+        string notice=_session.Sleep.TakeNotice();
+        if(notice!=null){_notice=notice;_noticeSeconds=3;}
     }
 
     private bool Pressed(KeyboardState keyboard, Keys key) => keyboard.IsKeyDown(key) && _previousKeyboard.IsKeyUp(key);
@@ -629,10 +695,12 @@ public class Game1 : Game
                 BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness));
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
-                _session.Player.Health, _presentation.HudVisible, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
+                _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
+            if(State==GameState.Sleeping)_menu.Draw(GraphicsDevice.Viewport,_session.Name,_session.Sleep.Fade);
+            if(State==GameState.Command)_commandBar.Draw(GraphicsDevice.Viewport);
         }
         else
         {
@@ -667,6 +735,7 @@ public class Game1 : Game
         _saves.SetActiveWorld(null);
         _menu?.Dispose();
         _inventoryScreen?.Dispose();
+        _commandBar?.Dispose();
         _hud?.Dispose();
         _firstPerson?.Dispose();
         _mobRenderer?.Dispose();

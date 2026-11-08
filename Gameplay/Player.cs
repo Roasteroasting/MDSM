@@ -66,6 +66,16 @@ public sealed class Player
     }
     internal void RestoreFraction(double health)
     {if(!double.IsFinite(health)||health<0||health>20)throw new ArgumentException("Invalid fractional health.");_health=health;}
+    // An explicit command death bypasses damage, difficulty, armor and Creative
+    // immunity without changing those ordinary gameplay rules or wearing armor.
+    internal bool Kill()
+    {
+        if (IsDead) return false;
+        _health = 0;
+        StopMovement();
+        Sounds?.Local(SoundKind.PlayerDeath);
+        return true;
+    }
     public void RestoreHealth(int amount)
     {
         if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));

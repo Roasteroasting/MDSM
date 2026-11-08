@@ -13,7 +13,9 @@ public enum GameState
     Death,
     Settings,
     Controls,
-    About
+    About,
+    Sleeping,
+    Command
 }
 
 internal enum MenuAction
@@ -37,5 +39,6 @@ internal enum MenuAction
     OpenSettings,
     SettingsChanged,
     OpenControls,
-    OpenAbout
+    OpenAbout,
+    LeaveBed
 }

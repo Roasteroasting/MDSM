@@ -111,7 +111,9 @@ internal static class LightingChecks
         creative.World.PlaceBed(foot,0,creative.Player.Bounds);creative.Mining.Update(creative.World,creative.Items,new(foot,default,1),true,0,creative.Inventory,true);
         Check(creative.Items.Entities.Count==0 && creative.World.Structures.Count==0,"Creative Bed produced loot/orphan state.");
         creative.World.PlaceBed(foot,0,creative.Player.Bounds);creative.World.Time.Restore(900);
-        Check(SurvivalInteractions.Use(creative,new BlockHit(foot,default,1)) && creative.World.Time.Daylight==14,"Bed interaction did not sleep.");
+        Check(SurvivalInteractions.Use(creative,new BlockHit(foot,default,1)) && creative.Sleep.IsSleeping && creative.World.Time.Daylight==0,"Bed interaction skipped the sleep transition.");
+        creative.Sleep.Update(creative,BedSleepController.FadeSeconds);
+        Check(!creative.Sleep.IsSleeping && creative.World.Time.Daylight==14,"Completed Bed transition did not skip to morning.");
         double morning=creative.World.Time.Seconds;Check(SurvivalInteractions.Use(creative,new BlockHit(foot,default,1)) && creative.World.Time.Seconds==morning,"Daytime Bed interaction skipped time.");
     }
     public static void Persistence()

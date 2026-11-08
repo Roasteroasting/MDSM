@@ -56,6 +56,7 @@ internal sealed class MenuController : IDisposable
         new("SETTINGS", MenuAction.OpenSettings)
     };
     private static readonly Button[] DeathButtons = { new("RESPAWN", MenuAction.Respawn), new("MAIN MENU", MenuAction.SaveAndReturn) };
+    private static readonly Button[] SleepButtons = { new("Leave bed",MenuAction.LeaveBed) };
     private static readonly Button[] SettingsButtons =
     {
         new("CONTROLS", MenuAction.OpenControls), new("ABOUT", MenuAction.OpenAbout), new("BACK", MenuAction.Back)
@@ -74,6 +75,7 @@ internal sealed class MenuController : IDisposable
     {
         GameState.Paused => PauseButtons,
         GameState.Death => DeathButtons,
+        GameState.Sleeping => SleepButtons,
         GameState.Settings => SettingsButtons,
         GameState.Controls or GameState.About => InformationButtons,
         GameState.WorldCreation => CreateButtons,
@@ -168,7 +170,7 @@ internal sealed class MenuController : IDisposable
         bool Pressed(Keys key) => keyboard.IsKeyDown(key) && previousKeyboard.IsKeyUp(key);
         bool click = mouse.LeftButton == ButtonState.Pressed && previousMouse.LeftButton == ButtonState.Released;
         if (Pressed(Keys.Escape))
-            return _screen == GameState.Paused ? MenuAction.Resume
+            return _screen==GameState.Sleeping?MenuAction.LeaveBed:_screen == GameState.Paused ? MenuAction.Resume
                 : _screen is GameState.MainMenu or GameState.Death ? MenuAction.None : MenuAction.Back;
         if (IsTextField && Pressed(Keys.A)
             && (keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl)))
@@ -331,6 +333,7 @@ internal sealed class MenuController : IDisposable
 
     private Rectangle ButtonBounds(Viewport viewport, int index)
     {
+        if(_screen==GameState.Sleeping)return SleepButtonBounds(viewport);
         if (_screen == GameState.WorldCreation) return WorldCreationLayout.Button(viewport, index);
         if (_screen == GameState.Settings) return index < 2 ? SettingsLayout.Information(viewport, index) : SettingsLayout.Back(viewport);
         if (MenuInformation.IsInformation(_screen)) return MenuInformation.Back(viewport);
@@ -355,11 +358,22 @@ internal sealed class MenuController : IDisposable
         return new Rectangle(viewport.Width / 2 - width - 8 + index * (width + 16), y, width, 46);
     }
 
-    public void Draw(Viewport viewport, string worldName = null)
+    internal static Rectangle SleepButtonBounds(Viewport viewport)
+    {
+        int width=Math.Min(380,Math.Max(32,viewport.Width-32)),height=viewport.Height<400?32:46;
+        return new((viewport.Width-width)/2,viewport.Height-height-24,width,height);
+    }
+
+    public void Draw(Viewport viewport, string worldName = null,float sleepFade=0)
     {
         int scale = _screen == GameState.WorldCreation ? WorldCreationLayout.Scale(viewport) : viewport.Width >= 900 ? 2 : 1;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
+        if(_screen==GameState.Sleeping)
+        {
+            Fill(new(0,0,viewport.Width,viewport.Height),Color.Black*Math.Clamp(sleepFade,0,1));
+            DrawButtons(viewport,scale);_sprites.End();return;
+        }
         if (_screen is GameState.Paused or GameState.Death
             || ((_screen is GameState.Settings || MenuInformation.IsInformation(_screen)) && worldName != null))
             Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.7f);
@@ -491,16 +505,7 @@ internal sealed class MenuController : IDisposable
             }
         }
 
-        for (int i = 0; i < Buttons.Length; i++)
-        {
-            Rectangle bounds = ButtonBounds(viewport, i);
-            bool active = CanActivate(Buttons[i].Action);
-            bool highlighted = _focus == i + FocusOffset || bounds.Contains(_mouse);
-            Fill(bounds, highlighted && active ? new Color(235, 216, 135) : new Color(74, 80, 89));
-            Fill(new Rectangle(bounds.X + 3, bounds.Y + 3, bounds.Width - 6, bounds.Height - 6), new Color(38, 44, 52));
-            Text(Buttons[i].Text, bounds.Center.X - Buttons[i].Text.Length * 3 * scale,
-                bounds.Center.Y - 3 * scale, scale, active ? Color.White : Color.Gray);
-        }
+        DrawButtons(viewport,scale);
         if (_message.Length > 0)
         {
             int lines = 1;
@@ -510,6 +515,18 @@ internal sealed class MenuController : IDisposable
             Text(_message, x, y, scale, _messageIsError ? new Color(255, 170, 140) : new Color(190, 232, 181));
         }
         _sprites.End();
+    }
+
+    private void DrawButtons(Viewport viewport,int scale)
+    {
+        for(int i=0;i<Buttons.Length;i++)
+        {
+            Rectangle bounds=ButtonBounds(viewport,i);bool active=CanActivate(Buttons[i].Action);
+            bool highlighted=_focus==i+FocusOffset || bounds.Contains(_mouse);
+            Fill(bounds,highlighted && active?new Color(235,216,135):new Color(74,80,89));
+            Fill(new(bounds.X+3,bounds.Y+3,bounds.Width-6,bounds.Height-6),new Color(38,44,52));
+            Text(Buttons[i].Text,bounds.Center.X-Buttons[i].Text.Length*3*scale,bounds.Center.Y-3*scale,scale,active?Color.White:Color.Gray);
+        }
     }
 
     private void DrawField(Viewport viewport, int index, string label, string value, string placeholder, int scale)

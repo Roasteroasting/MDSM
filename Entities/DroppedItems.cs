@@ -77,6 +77,12 @@ public sealed class DroppedItems
     private float _mergeElapsed;
     public IReadOnlyList<DroppedItem> Entities => _items;
     public bool CanSpawn(int count = 1) => count >= 0 && count <= MaximumEntities - _items.Count;
+    internal int RemoveAll()
+    {
+        int count = _items.Count;
+        _items.Clear(); _mergeHeads.Clear(); _mergeElapsed = 0;
+        return count;
+    }
 
     public DroppedItems(World world, ReadOnlySpan<DroppedItemState> saved = default)
     {

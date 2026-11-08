@@ -43,5 +43,4 @@ public sealed partial class World
         if(Blocks.Bed(previous) && !Blocks.Bed(next))Structures.Remove(cell);
         if(!Blocks.IsSolid(next) && Blocks.Bed(GetBlock(cell.X,cell.Y+1,cell.Z)))SetBlock(cell.X,cell.Y+1,cell.Z,BlockType.Air);
     }
-    internal bool UseBed(Point3 cell)=>Blocks.Bed(GetBlock(cell.X,cell.Y,cell.Z)) && Time.Sleep();
 }

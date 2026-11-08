@@ -37,6 +37,7 @@ public sealed class GameSession
     public Projectiles Projectiles { get; }
     public BowController Bow { get; }=new();
     public ViewBobbing Bobbing { get; }=new();
+    public BedSleepController Sleep { get; }=new();
     internal Action<Guid> ProjectileWear { get; }
     public Point3? ContainerCell { get; private set; }
     public BlockContainer ActiveContainer=>ContainerCell.HasValue?World.Containers.Get(ContainerCell.Value):null;
@@ -91,7 +92,7 @@ public sealed class GameSession
     {
         if (!TryReturnInterfaceItems())
             throw new System.InvalidOperationException("Make room for held items and crafting ingredients before saving.");
-        return new(World, Name, Player.Position, Camera.Yaw, Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health,
+        return new(World, Name, Player.Position, Sleep.IsSleeping?Sleep.ReturnYaw:Camera.Yaw, Sleep.IsSleeping?Sleep.ReturnPitch:Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health,
             Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture(),Hostiles.Capture(),Player.HealthValue);
     }
 
@@ -145,6 +146,7 @@ public sealed class GameSession
     public bool HandleDeath()
     {
         if (!Player.IsDead || _deathHandled) return false;
+        Sleep.Cancel(Camera);
         _deathHandled = true;
         ContainerCell=null;Bow.Cancel();
         UndroppedDeathItems = false;
@@ -176,13 +178,29 @@ public sealed class GameSession
 
     public void Respawn()
     {
+        Sleep.Cancel(Camera);
         Player.Respawn(World); Mining.Reset(); _deathHandled = false;
         Camera.Position = Player.EyePosition; Camera.RestoreOrientation(0, 0);
     }
 
-    public bool DropCursor()
+    public bool DropCursor(bool wholeStack = true)
     {
         return !Player.IsDead && DropPlacement.TryFind(World, Player, Camera.HorizontalForward, true, out Vector3 position)
-            && InventoryInteraction.TryDropCursor(Items, position, DroppedItems.DeliberatePickupDelay);
+            && InventoryInteraction.TryDropCursor(Items, position, DroppedItems.DeliberatePickupDelay, wholeStack);
+    }
+    internal bool TryDropStack(ItemStack stack, bool wholeStack, out ItemStack remaining)
+    {
+        remaining = stack;
+        if (Player.IsDead || stack.IsEmpty || !DropPlacement.TryFind(World, Player, Camera.HorizontalForward, true, out Vector3 position)) return false;
+        int count = wholeStack ? stack.Count : 1;
+        if (!Items.TrySpawn(stack.WithCount(count), position, DroppedItems.DeliberatePickupDelay)) return false;
+        remaining = stack.WithCount(stack.Count - count);
+        return true;
+    }
+    public bool DropSelected(bool wholeStack = false)
+    {
+        if (!TryDropStack(Inventory.Selected, wholeStack, out ItemStack remaining)) return false;
+        Inventory.SetSlot(Inventory.SelectedSlot, remaining);
+        return true;
     }
 }

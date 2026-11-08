@@ -39,6 +39,12 @@ public sealed class HostilePopulation
         _world=world;_random=new(unchecked(world.Seed^0x484f5354));if(saved==null)return;if(saved.Length>Maximum)throw new InvalidDataException("Too many hostile mobs.");foreach(var state in saved){Validate(state,world);Add(state);}
     }
     private void Add(MobState state){var mob=new PassiveMob(state,_random.Next());_mobs.Add(mob);_brains[mob]=new(){LastSeen=mob.Position,OldAim=mob.Position,CurrentAim=mob.Position};}
+    internal bool TrySummon(MobSpecies species, Vector3 feet)
+    {
+        if (species is < MobSpecies.Zombie or > MobSpecies.Spider || _mobs.Count >= Maximum) return false;
+        Add(new(species, feet, 0, MobDefinitions.Get(species).MaximumHealth));
+        return true;
+    }
     public bool Suitable(MobSpecies species,Vector3 feet,Vector3 player)
         => Reject(species, feet, player) == SpawnRejection.None;
     private SpawnRejection Reject(MobSpecies species, Vector3 feet, Vector3 player)

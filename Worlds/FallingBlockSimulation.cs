@@ -26,6 +26,14 @@ public sealed class FallingBlockSimulation
     public int PendingCount => _columns.Count;
     public int LastProcessedColumns { get; private set; }
     public int LastMovedBlocks { get; private set; }
+    // Only active entities are selected by /kill. Queued terrain checks and
+    // ordinary placed blocks remain unchanged; removed cubes cannot settle later.
+    internal int RemoveActive()
+    {
+        int count = _active.Count;
+        _active.Clear(); _fallingColumns.Clear(); _emptyColumns.Clear();
+        return count;
+    }
     internal FallingBlockSimulation(World world) => _world = world;
 
     private void Enqueue(int column)

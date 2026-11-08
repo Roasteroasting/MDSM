@@ -13,6 +13,7 @@ public sealed class PassiveMobPopulation
     public const int MaximumMobs = 4096; // Shared safety bound; initial populations remain area-based.
     public const double MinimumRespawnSeconds = 30, MaximumRespawnSeconds = 60, RetrySeconds = 5;
     public const int MaximumSpawnAttemptsPerUpdate = 32;
+    public const float WheatFollowRange = 10, WheatStopDistance = 2;
     private readonly List<PassiveMob> _mobs = new();
     private readonly World _world;
     private readonly Random _random;
@@ -57,6 +58,14 @@ public sealed class PassiveMobPopulation
         }
     }
     public MobPopulationState CapturePopulation() => new((int[])_targets.Clone(), _pending.ToArray());
+    internal bool TrySummon(MobSpecies species, Vector3 feet)
+    {
+        if (species is < MobSpecies.Pig or > MobSpecies.Chicken || _mobs.Count + _pending.Count >= MaximumMobs) return false;
+        // Like bred animals, explicit additions do not change natural population targets
+        // or schedule replacements when killed. This flag already persists in saves.
+        AddSaved(new(species, feet, 0, MobDefinitions.Get(species).MaximumHealth, Bred: true));
+        return true;
+    }
     private void AddSaved(MobState state)
     {
         if (_mobs.Count >= MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
@@ -105,17 +114,24 @@ public sealed class PassiveMobPopulation
             if (world.GetBlock(x + dx, y, z + dz) != BlockType.Grass) return false;
         return true;
     }
-    public void Update(float elapsed, Vector3? playerPosition = null, BoundingBox? playerBounds = null, DroppedItems items = null)
+    public void Update(float elapsed, Vector3? playerPosition = null, BoundingBox? playerBounds = null, DroppedItems items = null, ItemId heldItem = default)
     {
         if (!float.IsFinite(elapsed) || elapsed <= 0) return;
         foreach (PassiveMob mob in _mobs)
         {
+            float playerDistanceSquared=playerPosition.HasValue?Vector3.DistanceSquared(mob.Position,playerPosition.Value):float.PositiveInfinity;
             Vector3? direction=null;
-            if(mob.LoveSeconds>0)
+            if(heldItem==Items.Wheat && playerDistanceSquared<=WheatFollowRange*WheatFollowRange)
+            {
+                Vector3 toward=playerPosition.Value-mob.Position;toward.Y=0;
+                if(toward.LengthSquared()>WheatStopDistance*WheatStopDistance)toward.Normalize();else toward=Vector3.Zero;
+                direction=toward; // Overrides wandering, including standing still near the player.
+            }
+            else if(mob.LoveSeconds>0)
             {
                 PassiveMob partner=Partner(mob);if(partner!=null)direction=partner.Position-mob.Position;
             }
-            if(!playerPosition.HasValue || Vector3.DistanceSquared(mob.Position,playerPosition.Value)<=32*32)mob.Update(_world,elapsed,direction);
+            if(!playerPosition.HasValue || playerDistanceSquared<=32*32)mob.Update(_world,elapsed,direction);
             else mob.TickLife(elapsed);
         }
         if(_breedingActive && (_breedTick+=elapsed)>=.5)

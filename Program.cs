@@ -1,4 +1,36 @@
-if(System.Array.Exists(args,a=>a=="--lighting-graphics-test"))
+if(System.Array.Exists(args,a=>a=="--drop-control-graphics-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.DropControlGraphicsChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--drop-control-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.DropControlChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--command-graphics-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.CommandGraphicsChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--command-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.CommandChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--bed-sleep-graphics-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.BedSleepGraphicsChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--bed-sleep-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.BedSleepChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--wheat-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.WheatFollowChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--wheat-input-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.WheatFollowChecks.RunInput();
+}
+else if(System.Array.Exists(args,a=>a=="--lighting-graphics-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.LightingGraphicsChecks.Run();
 }

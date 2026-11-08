@@ -18,6 +18,7 @@ public sealed class Projectiles
     private readonly World _world;
     private readonly List<ArrowState> _arrows=new();
     public IReadOnlyList<ArrowState> Arrows=>_arrows;
+    internal int RemoveAll() { int count = _arrows.Count; _arrows.Clear(); return count; }
     internal SoundEvents Sounds=>_world.Sounds;
     public Projectiles(World world,ArrowState[] states=null)
     {

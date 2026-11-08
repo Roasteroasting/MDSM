@@ -80,7 +80,16 @@ public sealed class Hud : IDisposable
         }
 
         if (!string.IsNullOrEmpty(notification))
-            Text(notification, 14, 18 + 38 * textScale, textScale, Color.White);
+        {
+            ReadOnlySpan<char> remaining=notification.AsSpan();int max=Math.Max(1,(width-28)/(6*textScale)),y=18+38*textScale;
+            while(!remaining.IsEmpty)
+            {
+                int count=Math.Min(max,remaining.Length);
+                if(count<remaining.Length){int space=remaining[..count].LastIndexOf(' ');if(space>0)count=space;}
+                PixelFont.Draw(_sprites,_pixel,remaining[..count],14,y,textScale,Color.White);
+                remaining=remaining[count..].TrimStart();y+=10*textScale;
+            }
+        }
 
         if (showDebug)
         {

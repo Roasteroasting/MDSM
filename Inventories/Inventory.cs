@@ -178,11 +178,13 @@ public sealed class InventoryInteraction(Inventory inventory)
         TryReceive(existing.WithCount(take));return existing.WithCount(existing.Count-take);
     }
 
-    public bool TryDropCursor(DroppedItems items, Microsoft.Xna.Framework.Vector3 position, float delay)
+    public bool TryDropCursor(DroppedItems items, Microsoft.Xna.Framework.Vector3 position, float delay, bool wholeStack = true)
     {
-        if (Cursor.IsEmpty || !items.TrySpawn(Cursor, position, delay)) return false;
-        Cursor = default;
-        _originalSlot = -1;
+        if (Cursor.IsEmpty) return false;
+        int count = wholeStack ? Cursor.Count : 1;
+        if (!items.TrySpawn(Cursor.WithCount(count), position, delay)) return false;
+        Cursor = Cursor.WithCount(Cursor.Count - count);
+        if (Cursor.IsEmpty) _originalSlot = -1;
         return true;
     }
 }

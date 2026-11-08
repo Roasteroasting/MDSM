@@ -10,6 +10,8 @@ public sealed class WorldTime
     public double Seconds { get; private set; } = Morning;
     public double Phase => Seconds / DaySeconds;
     public bool IsNight => Phase >= .55 && Phase < .95;
+    public int SunlightLevel=>Math.Clamp((int)MathF.Floor(Daylight+.00001f),0,BlockLighting.Maximum);
+    public bool CanSleep=>SunlightLevel<=BlockLighting.Maximum-3;
     public float Daylight
     {
         get
@@ -25,7 +27,7 @@ public sealed class WorldTime
         if (!double.IsFinite(seconds) || seconds < 0 || seconds >= DaySeconds) throw new ArgumentOutOfRangeException(nameof(seconds));
         Seconds = seconds;
     }
-    public bool Sleep() { if (!IsNight) return false; Seconds = Morning; return true; }
+    public bool Sleep() { if (!CanSleep) return false; Seconds = Morning; return true; }
     public Vector3 SunDirection => Direction(Phase);
     public Vector3 MoonDirection => -SunDirection;
     private static Vector3 Direction(double phase)

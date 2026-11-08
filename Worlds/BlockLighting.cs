@@ -51,7 +51,7 @@ public sealed class BlockLighting
         return GetPage(p.X/16,p.Z/16).At(p.X,p.Y,p.Z);
     }
     public int Effective(Point3 p)
-    { byte packed=Packed(p);return Math.Max(packed&15,Math.Max(0,(packed>>4)-(int)MathF.Ceiling(14-_world.Time.Daylight-.00001f))); }
+    { byte packed=Packed(p);return Math.Max(packed&15,Math.Max(0,(packed>>4)-(Maximum-_world.Time.SunlightLevel))); }
     public int Effective(Vector3 p)=>Effective(new Point3((int)MathF.Floor(p.X),(int)MathF.Floor(p.Y),(int)MathF.Floor(p.Z)));
     internal Page GetPage(int cx,int cz)
     {

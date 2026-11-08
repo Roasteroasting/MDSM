@@ -120,8 +120,18 @@ internal sealed class InventoryScreen : IDisposable
     }
     public void Open() => Message = "";
     public void CannotClose() => Message = "MAKE ROOM FOR HELD ITEMS AND INGREDIENTS.";
-    public void Update(GameSession session, MouseState mouse, MouseState previous, Viewport viewport, bool shift = false)
+    public void Update(GameSession session, MouseState mouse, MouseState previous, Viewport viewport, bool shift = false, bool dropPressed = false)
     {
+        if (dropPressed)
+        {
+            bool? dropped = TryDropHovered(session, mouse.Position, viewport, shift);
+            if (dropped.HasValue)
+            {
+                Message = dropped.Value ? "" : "NO ROOM TO DROP ITEMS.";
+                if (dropped.Value) session.Sounds.Local(SoundKind.Drop);
+            }
+            return; // One input action; simultaneous clicks must not transfer/drop twice.
+        }
         InventoryInteraction interaction = session.InventoryInteraction;
         bool left = mouse.LeftButton == ButtonState.Pressed && previous.LeftButton == ButtonState.Released;
         bool right = mouse.RightButton == ButtonState.Pressed && previous.RightButton == ButtonState.Released;
@@ -173,6 +183,53 @@ internal sealed class InventoryScreen : IDisposable
         }
         if (left && !interaction.Cursor.IsEmpty && !InventoryLayout.Panel(viewport, creative).Contains(mouse.Position))
         {bool dropped=session.DropCursor();Message = dropped ? "" : "NO ROOM TO DROP ITEMS.";if(dropped)session.Sounds.Local(SoundKind.Drop);}
+    }
+    // Hit-test the current mouse/layout, never the previous rendered tooltip.
+    // Null means there is no real stack here (including previews/catalog entries).
+    internal static bool? TryDropHovered(GameSession session, Point mouse, Viewport viewport, bool wholeStack)
+    {
+        if (!session.InventoryInteraction.Cursor.IsEmpty) return session.DropCursor(wholeStack);
+        bool creative = session.Player.Creative;
+        bool? Drop(ItemStack stack, out ItemStack remaining)
+        {
+            remaining = stack;
+            return stack.IsEmpty ? null : session.TryDropStack(stack, wholeStack, out remaining);
+        }
+        for (int slot = 0; slot < Inventory.SlotCount; slot++)
+            if (InventoryLayout.Slot(viewport, slot, creative).Contains(mouse))
+            {
+                bool? result = Drop(session.Inventory[slot], out var remaining);
+                if (result == true) session.Inventory.SetSlot(slot, remaining);
+                return result;
+            }
+        BlockContainer container = session.ActiveContainer;
+        if (container == null && session.Crafting.Width == 2)
+            for (int slot = 0; slot < 4; slot++)
+                if (InventoryLayout.Equipment(viewport, slot, creative).Contains(mouse))
+                {
+                    bool? result = Drop(session.Inventory.Equipped(slot), out var remaining);
+                    if (result == true) session.Inventory.SetEquipment(slot, remaining);
+                    return result;
+                }
+        if (container != null)
+        {
+            for (int slot = 0; slot < container.SlotCount; slot++)
+                if (InventoryLayout.ContainerSlot(viewport, container.Block, slot, creative).Contains(mouse))
+                {
+                    bool? result = Drop(container[slot], out var remaining);
+                    if (result == true) container.SetSlot(slot, remaining);
+                    return result;
+                }
+        }
+        else
+            for (int slot = 0; slot < session.Crafting.SlotCount; slot++)
+                if (InventoryLayout.CraftingSlot(viewport, session.Crafting.Width, slot, creative).Contains(mouse))
+                {
+                    bool? result = Drop(session.Crafting[slot], out var remaining);
+                    if (result == true) session.Crafting.SetSlot(slot, remaining);
+                    return result;
+                }
+        return null;
     }
     public void Draw(GameSession session, MouseState mouse, Viewport viewport)
     {
