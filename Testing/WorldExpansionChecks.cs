@@ -110,7 +110,7 @@ internal static class WorldExpansionChecks
         Require(size<WorldSize.Large ? features.Rivers==0 && features.Lakes==0 : features.Rivers>features.Lakes && features.Lakes>0,
             "River/lake size policy failed.");
         int trees=0,plants=0,sand=0,gravel=0,water=0;
-        var terrain=new TerrainGenerator(173);
+        var terrain=new TerrainGenerator(173,world.Climate.VariedGeneration,world.Width);
         for(int z=0;z<world.Depth;z++)for(int x=0;x<world.Width;x++)
         {
             int ground=terrain.SurfaceY(x,z);
@@ -179,7 +179,7 @@ internal static class WorldExpansionChecks
         Require(Hash(world).AsSpan().SequenceEqual(expected.NaturalHash) && world.GeneratedWaterFeatures==expected.Features,
             "Complete generation including rivers/lakes is not deterministic.");
     }
-    private static void CheckWaterShapes(World world)
+    internal static void CheckWaterShapes(World world)
     {
         var columns=new Dictionary<int,(int Top,int Depth)>();
         foreach(Chunk chunk in world.Chunks)
@@ -216,7 +216,7 @@ internal static class WorldExpansionChecks
                 if(!columns.ContainsKey((z+1)*world.Width+x))Require(Math.Abs(top-Ground(x,z+1))<=2,"Abrupt dry shoreline bank along Z.");
             }
         }
-        var queue=new Queue<int>();int ponds=0,rivers=0,lakes=0;var terrain=new TerrainGenerator(173);
+        var queue=new Queue<int>();int ponds=0,rivers=0,lakes=0;var terrain=new TerrainGenerator(173,world.Climate.VariedGeneration,world.Width);
         while(columns.Count>0)
         {
             int start=columns.Keys.First(),level=columns[start].Top;

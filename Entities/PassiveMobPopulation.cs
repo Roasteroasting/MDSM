@@ -138,6 +138,7 @@ public sealed class PassiveMobPopulation
             }
             if(!playerPosition.HasValue || playerDistanceSquared<=32*32)mob.Update(_world,elapsed,direction);
             else mob.TickLife(elapsed);
+            mob.LayEgg(elapsed,items);
         }
         if(_breedingActive && (_breedTick+=elapsed)>=.5)
         {
@@ -187,7 +188,7 @@ public sealed class PassiveMobPopulation
     }
     public bool Punch(PassiveMob mob, Vector3 attacker, DroppedItems items)
         =>Hit(mob,_random.Next(1,3),attacker,items);
-    public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems items)
+    public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems items,bool knockback=true)
     {
         if (mob == null || mob.IsDead || !_mobs.Contains(mob) || damage<=0) return false;
         if(damage>=mob.Health)
@@ -197,7 +198,7 @@ public sealed class PassiveMobPopulation
             if(!items.CanSpawn(entities))return false;
             while(count>0){int take=Math.Min(count,limit);items.TrySpawn(new ItemStack(mob.Definition.Drop,take),mob.Position+Vector3.Up*.25f,.35f);count-=take;}
         }
-        mob.Damage(damage, mob.Position - attacker);
+        mob.Damage(damage, mob.Position - attacker,knockback);
         _world.Sounds?.Mob(mob.IsDead?SoundKind.MobDeath:SoundKind.MobHurt,mob);
         if (mob.IsDead && _mobs.Remove(mob))
         {
@@ -222,7 +223,7 @@ public sealed class PassiveMobPopulation
     {
         int count = 0; foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) count++;
         var result = new PigState[count]; int i = 0;
-        foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) result[i++] = new PigState(mob.Position, mob.Yaw, mob.Health,mob.BabySeconds,mob.LoveSeconds,mob.BreedCooldown,mob.Bred);
+        foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) result[i++] = new PigState(mob.Position, mob.Yaw, mob.Health,mob.BabySeconds,mob.LoveSeconds,mob.BreedCooldown,mob.Bred,mob.Burning.Capture());
         return result;
     }
     public MobState[] CaptureOthers()
@@ -241,7 +242,8 @@ public sealed class PassiveMobPopulation
             || p.Y < -16 || p.Y > World.Height + 16 || !float.IsFinite(state.Yaw) || MathF.Abs(state.Yaw) > MathHelper.Pi
             || state.Health < 1 || state.Health > d.MaximumHealth
             || !double.IsFinite(state.WoolSeconds) || state.WoolSeconds<0 || state.WoolSeconds>360
-            || (state.Sheared ? state.Species!=MobSpecies.Sheep || state.WoolSeconds<=0 : state.WoolSeconds!=0)) throw new InvalidDataException("Save contains an invalid passive mob.");
+            || (state.Sheared ? state.Species!=MobSpecies.Sheep || state.WoolSeconds<=0 : state.WoolSeconds!=0)
+            || !double.IsFinite(state.EggSeconds) || state.EggSeconds<0 || state.EggSeconds>330) throw new InvalidDataException("Save contains an invalid passive mob.");
         if(!double.IsFinite(state.BabySeconds)||state.BabySeconds<0||state.BabySeconds>2700||!double.IsFinite(state.LoveSeconds)||state.LoveSeconds<0||state.LoveSeconds>60
             ||!double.IsFinite(state.BreedCooldown)||state.BreedCooldown<0||state.BreedCooldown>300 || state.BabySeconds>0 && (state.LoveSeconds>0||state.Sheared))throw new InvalidDataException("Invalid animal life state.");
     }

@@ -1,9 +1,11 @@
 using System;
+using System.Diagnostics;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 using MDSM.Entities;
 using MDSM.Worlds;
+using MDSM.UI;
 
 namespace MDSM.Rendering;
 
@@ -13,9 +15,14 @@ internal sealed class ChunkMeshBuilder
     private VertexPositionColorTexture[] _vertices = new VertexPositionColorTexture[4096];
     public VertexPositionColorTexture[] Vertices => _vertices;
     public int VertexCount { get; private set; }
+    private VertexPositionColorTexture[] _textVertices=new VertexPositionColorTexture[256];
+    public VertexPositionColorTexture[] TextVertices=>_textVertices;
+    public int TextVertexCount {get;private set;}
     private World _world;
     private BlockLighting.Page _lightPage;
-    public void Clear() { VertexCount = 0; _world=null; _lightPage=null; }
+    private Chunk _buildingChunk;
+    private int _buildY,_buildZ;
+    public void Clear() { VertexCount = TextVertexCount = 0; _world=null; _lightPage=null; }
 
     public void AppendCube(BlockType block, Vector3 origin)
     {
@@ -29,12 +36,18 @@ internal sealed class ChunkMeshBuilder
         float size = DroppedItem.Radius * 2;
         Vector3 origin = center - new Vector3(DroppedItem.Radius);
         BlockDefinition definition = Blocks.Get(block);
-        if (definition.Shape is BlockShape.Cross or BlockShape.Torch)
+        if(definition.Shape==BlockShape.Cactus)AppendCactus(origin,size,null);
+        else if (definition.Shape is BlockShape.Cross or BlockShape.Torch)
         {
             AddQuad(origin, origin + new Vector3(size, 0, size), origin + new Vector3(size, size, size),
                 origin + new Vector3(0, size, 0), definition.SideTile, Color.White, true);
             AddQuad(origin + new Vector3(size, 0, 0), origin + new Vector3(0, 0, size),
                 origin + new Vector3(0, size, size), origin + new Vector3(size, size, 0), definition.SideTile, Color.White, true);
+        }
+        else if(definition.Shape is BlockShape.Slab or BlockShape.Stairs or BlockShape.Sign)
+        {
+            if(definition.Shape==BlockShape.Sign){Box(new(0,.5f,.4375f),new(1,1,.5625f),7,true);Box(new(.4375f,0,.4375f),new(.5625f,.5f,.5625f),7,true);}
+            else {Box(Vector3.Zero,new(1,.5f,1),definition.SideTile,true);if(definition.Shape==BlockShape.Stairs)Box(new(0,.5f,0),new(1,1,.5f),definition.SideTile,true);}
         }
         else if(definition.Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door)
         {
@@ -55,8 +68,21 @@ internal sealed class ChunkMeshBuilder
             foreach (Face face in Faces)
                 AddQuad(origin + face.A * size, origin + face.B * size, origin + face.C * size, origin + face.D * size,
                     definition.Tile(face.Normal), new Color(new Vector3(face.Shade)), false);
-        void Box(Vector3 min,Vector3 max,int tile)
-        {foreach(Face face in Faces)AddQuad(origin+(min+face.A*(max-min))*size,origin+(min+face.B*(max-min))*size,origin+(min+face.C*(max-min))*size,origin+(min+face.D*(max-min))*size,tile,new Color(new Vector3(face.Shade)),false);}
+        void Box(Vector3 min,Vector3 max,int tile,bool cropped=false)
+        {
+            foreach(Face face in Faces)
+            {
+                Rectangle? region=null;
+                if(cropped)
+                {
+                    Vector3 extent=max-min;
+                    float u=face.Normal.X>0?1-max.Z:face.Normal.X<0?min.Z:face.Normal.Z<0?1-max.X:min.X;
+                    float v=face.Normal.Y==0?1-max.Y:face.Normal.Y>0?min.Z:1-max.Z;
+                    region=new((int)MathF.Round(u*16),(int)MathF.Round(v*16),Math.Max(1,(int)MathF.Round((face.Normal.X==0?extent.X:extent.Z)*16)),Math.Max(1,(int)MathF.Round((face.Normal.Y==0?extent.Y:extent.Z)*16)));
+                }
+                AddQuad(origin+(min+face.A*(max-min))*size,origin+(min+face.B*(max-min))*size,origin+(min+face.C*(max-min))*size,origin+(min+face.D*(max-min))*size,tile,new Color(new Vector3(face.Shade)),false,region);
+            }
+        }
     }
 
     // Corners follow the geometric normal; emitted triangles use XNA's clockwise front faces.
@@ -77,12 +103,20 @@ internal sealed class ChunkMeshBuilder
     };
 
     public void Build(World world, Chunk chunk)
+    {BeginBuild(world,chunk);AdvanceBuild(long.MaxValue);}
+    internal void BeginBuild(World world,Chunk chunk)
     {
-        VertexCount = 0;
+        VertexCount = TextVertexCount = 0;
         _world=world;_lightPage=world.Lighting.GetPage(chunk.X,chunk.Z);
+        _buildingChunk=chunk;_buildY=_buildZ=0;
+    }
+    internal bool AdvanceBuild(long deadline)
+    {
+        World world=_world;Chunk chunk=_buildingChunk;
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
-        for (int y = 0; y < World.Height; y++)
-        for (int z = 0; z < Chunk.Size; z++)
+        while(_buildY<World.Height)
+        {
+        int y=_buildY,z=_buildZ;
         for (int x = 0; x < Chunk.Size; x++)
         {
             BlockType block = chunk.GetBlock(x, y, z);
@@ -103,6 +137,9 @@ internal sealed class ChunkMeshBuilder
 
             int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = new(worldX, y, worldZ);
+            if(World.OrientedBuilding(block))
+            {AppendBuilding(world,new(worldX,y,worldZ),block,boxes);continue;}
+            if(definition.Shape==BlockShape.Cactus){AppendCactus(position,1,world);continue;}
             if(definition.Shape==BlockShape.Bed)
             {AppendBed(new(worldX,y,worldZ),world.Structure(new(worldX,y,worldZ)).Facing,block==BlockType.BedHead);continue;}
             if (definition.Shape == BlockShape.Torch)
@@ -127,7 +164,7 @@ internal sealed class ChunkMeshBuilder
                 }
                 continue;
             }
-            if(definition.Shape is BlockShape.Farmland or BlockShape.Fence or BlockShape.Gate or BlockShape.Door)
+            if(definition.Shape is BlockShape.Farmland or BlockShape.Snow or BlockShape.Fence or BlockShape.Gate or BlockShape.Door)
             {
                 int count=world.BlockBoxes(new(worldX,y,worldZ),boxes);
                 if(definition.Shape==BlockShape.Door)
@@ -141,8 +178,14 @@ internal sealed class ChunkMeshBuilder
                 }
                 for(int i=0;i<count;i++)foreach(Face face in Faces)
                 {
+                    if(definition.Shape==BlockShape.Snow)
+                    {
+                        BlockType adjacent=world.GetBlock(worldX+face.Offset.X,y+face.Offset.Y,worldZ+face.Offset.Z);
+                        if(Blocks.IsOpaque(adjacent) || face.Normal.Y==0 && adjacent==BlockType.Snow)continue;
+                    }
                     Vector3 size=boxes[i].Max-boxes[i].Min;
-                    AddQuad(boxes[i].Min+face.A*size,boxes[i].Min+face.B*size,boxes[i].Min+face.C*size,boxes[i].Min+face.D*size,definition.Tile(face.Normal),new Color(new Vector3(face.Shade)),false);
+                    AddQuad(boxes[i].Min+face.A*size,boxes[i].Min+face.B*size,boxes[i].Min+face.C*size,boxes[i].Min+face.D*size,definition.Tile(face.Normal),new Color(new Vector3(face.Shade)),false,
+                        definition.Shape==BlockShape.Snow && face.Normal.Y==0?new Rectangle(0,13,16,3):null);
                 }
                 continue;
             }
@@ -159,19 +202,21 @@ internal sealed class ChunkMeshBuilder
                 }
                 continue;
             }
+            if(definition.Shape==BlockShape.Fire){AppendFire(world,new(worldX,y,worldZ));continue;}
             if (definition.Shape == BlockShape.Cross)
             {
+                float height=block==BlockType.DeadBush?Blocks.PlantHeight(block):1;
                 AddQuad(position + new Vector3(0.1f, 0, 0.1f), position + new Vector3(0.9f, 0, 0.9f),
-                    position + new Vector3(0.9f, 1, 0.9f), position + new Vector3(0.1f, 1, 0.1f), definition.SideTile, Color.White, true);
+                    position + new Vector3(0.9f, height, 0.9f), position + new Vector3(0.1f, height, 0.1f), definition.SideTile, Color.White, true);
                 AddQuad(position + new Vector3(0.9f, 0, 0.1f), position + new Vector3(0.1f, 0, 0.9f),
-                    position + new Vector3(0.1f, 1, 0.9f), position + new Vector3(0.9f, 1, 0.1f), definition.SideTile, Color.White, true);
+                    position + new Vector3(0.1f, height, 0.9f), position + new Vector3(0.9f, height, 0.1f), definition.SideTile, Color.White, true);
                 continue;
             }
             foreach (Face face in Faces)
             {
                 // World queries include adjacent chunks and return air beyond finite edges.
                 BlockType neighbor=world.GetBlock(worldX + face.Offset.X,y + face.Offset.Y,worldZ + face.Offset.Z);
-                if (Blocks.IsOpaque(neighbor) || block==BlockType.Glass && neighbor==BlockType.Glass)
+                if (Blocks.IsOpaque(neighbor) || neighbor==BlockType.Snow && face.Normal.Y>0 || block==BlockType.Glass && neighbor==BlockType.Glass)
                     continue;
 
                 int tile = Blocks.Tile(block, face.Normal);
@@ -180,6 +225,10 @@ internal sealed class ChunkMeshBuilder
                 AddQuad(position + face.A, position + face.B, position + face.C, position + face.D, tile, color, false);
             }
         }
+        if(++_buildZ==Chunk.Size){_buildZ=0;_buildY++;}
+        if(Stopwatch.GetTimestamp()>=deadline)return false;
+        }
+        return true;
     }
 
     private void AppendTorch(World world, Point3 cell)
@@ -217,6 +266,76 @@ internal sealed class ChunkMeshBuilder
             if (VertexCount+6>_vertices.Length) Array.Resize(ref _vertices,_vertices.Length*2);
             _vertices[VertexCount++]=a;_vertices[VertexCount++]=c;_vertices[VertexCount++]=b;
             _vertices[VertexCount++]=a;_vertices[VertexCount++]=d;_vertices[VertexCount++]=c;
+        }
+    }
+
+    private void AppendCactus(Vector3 origin,float scale,World world)
+    {
+        Vector3 min=new(1f/16,0,1f/16),extent=new(14f/16,1,14f/16);
+        foreach(var face in Faces)
+        {
+            if(world!=null && face.Offset.Y!=0)
+            {BlockType neighbor=world.GetBlock((int)origin.X,(int)origin.Y+face.Offset.Y,(int)origin.Z);if(neighbor==BlockType.Cactus || Blocks.IsOpaque(neighbor))continue;}
+            Rectangle region=face.Normal.Y==0?new(1,0,14,16):new(1,1,14,14);
+            AddQuad(origin+(min+face.A*extent)*scale,origin+(min+face.B*extent)*scale,origin+(min+face.C*extent)*scale,origin+(min+face.D*extent)*scale,
+                Blocks.Get(BlockType.Cactus).Tile(face.Normal),new Color(new Vector3(face.Shade)),false,region);
+        }
+    }
+    private void AppendBuilding(World world,Point3 cell,BlockType block,Span<BoundingBox> boxes)
+    {
+        Vector3 origin=new(cell.X,cell.Y,cell.Z);int tile=Blocks.Get(block).SideTile;
+        if(block==BlockType.Sign)
+        {
+            var state=world.Structure(cell);Matrix transform=World.SignTransform(cell,state);bool wall=state.Support.Y==0;
+            SignBox(new(-.5f,wall?.25f:.5f,-.0625f),new(.5f,wall?.75f:1,.0625f));
+            if(!wall)SignBox(new(-.0625f,0,-.0625f),new(.0625f,.5f,.0625f));
+            if(world.Signs.TryGetValue(cell,out string text))
+            {
+                string[] lines=text.Split('\n');
+                for(int line=0;line<lines.Length;line++)for(int ch=0;ch<lines[line].Length;ch++)
+                {
+                    if(lines[line][ch]==' ')continue;
+                    float dot=SignTextPixelSize(lines[line].Length);
+                    float left=(ch*6-lines[line].Length*3)*dot,top=(wall?.725f:.975f)-line*.12f;
+                    for(int side=-1;side<=1;side+=2)
+                    {
+                        Vector3 a=Vector3.Transform(new(left*side,top-dot*7,.0635f*side),transform),b=Vector3.Transform(new((left+dot*5)*side,top-dot*7,.0635f*side),transform),
+                            c=Vector3.Transform(new((left+dot*5)*side,top,.0635f*side),transform),d=Vector3.Transform(new(left*side,top,.0635f*side),transform);
+                        AddQuad(a,b,c,d,PixelFont.SignTile(lines[line][ch]),Color.Black,false,new(0,0,5,7),text:true);
+                    }
+                }
+            }
+            void SignBox(Vector3 min,Vector3 max)
+            {
+                Vector3 size=max-min;
+                foreach(var face in Faces)
+                {
+                    int width=Math.Max(1,(int)MathF.Round((face.Normal.X==0?size.X:size.Z)*16)),height=Math.Max(1,(int)MathF.Round((face.Normal.Y==0?size.Y:size.Z)*16));
+                    AddQuad(Vector3.Transform(min+face.A*size,transform),Vector3.Transform(min+face.B*size,transform),Vector3.Transform(min+face.C*size,transform),Vector3.Transform(min+face.D*size,transform),tile,new Color(new Vector3(face.Shade)),false,new(0,0,width,height));
+                }
+            }
+            return;
+        }
+        int count=world.BlockBoxes(cell,boxes);int mask=0;
+        for(int y=0;y<2;y++)for(int z=0;z<2;z++)for(int x=0;x<2;x++)
+        {
+            Vector3 p=origin+new Vector3(x*.5f+.25f,y*.5f+.25f,z*.5f+.25f);
+            for(int i=0;i<count;i++)if(boxes[i].Contains(p)!=ContainmentType.Disjoint){mask|=1<<(x+2*z+4*y);break;}
+        }
+        for(int y=0;y<2;y++)for(int z=0;z<2;z++)for(int x=0;x<2;x++)
+        {
+            if((mask&(1<<(x+2*z+4*y)))==0)continue;
+            Vector3 min=new(x*.5f,y*.5f,z*.5f),max=min+new Vector3(.5f);
+            foreach(var face in Faces)
+            {
+                int nx=x+face.Offset.X,ny=y+face.Offset.Y,nz=z+face.Offset.Z;
+                if(nx>=0 && nx<2 && ny>=0 && ny<2 && nz>=0 && nz<2)
+                {if((mask&(1<<(nx+2*nz+4*ny)))!=0)continue;}
+                else if(Blocks.IsOpaque(world.GetBlock(cell.X+face.Offset.X,cell.Y+face.Offset.Y,cell.Z+face.Offset.Z)))continue;
+                float u=face.Normal.X>0?1-max.Z:face.Normal.X<0?min.Z:face.Normal.Z<0?1-max.X:min.X;
+                float v=face.Normal.Y==0?1-max.Y:face.Normal.Y>0?min.Z:1-max.Z;
+                AddQuad(origin+min+face.A*.5f,origin+min+face.B*.5f,origin+min+face.C*.5f,origin+min+face.D*.5f,tile,new Color(new Vector3(face.Shade)),false,new((int)(u*16),(int)(v*16),8,8));
+            }
         }
     }
 
@@ -259,7 +378,30 @@ internal sealed class ChunkMeshBuilder
         AddQuad(min+face.A*size,min+face.B*size,min+face.C*size,min+face.D*size,tile,new Color(new Vector3(face.Shade)),false,region,transpose);
     }
 
-    private void AddQuad(Vector3 aPosition, Vector3 bPosition, Vector3 cPosition, Vector3 dPosition, int tile, Color color, bool twoSided,Rectangle? region=null,bool transpose=false,bool flipU=false)
+    internal static float SignTextPixelSize(int characters)=>Math.Min(1f/64,.94f/Math.Max(1,characters*6));
+
+    private void AppendFire(World world,Point3 cell)
+    {
+        Vector3 origin=new(cell.X,cell.Y,cell.Z);FireAttachment attachment=world.Fire.Attachment(cell);
+        if(attachment==FireAttachment.Automatic)return;
+        if(attachment!=FireAttachment.Floor){Side(FireSimulation.Direction(attachment));return;}
+        for(int facing=0;facing<4;facing++)
+        {
+            Point3 d=World.FacingDirection(facing);Vector3 outward=new(d.X,0,d.Z),tangent=new(-d.Z,0,d.X);
+            Vector3 a=origin+new Vector3(.5f,.02f,.5f)+outward*.22f-tangent*.45f;
+            Vector3 b=a+tangent*.9f,c=b+Vector3.Up*.88f+outward*.25f,dv=c-tangent*.9f;
+            AddQuad(a,b,c,dv,62,Color.White,true);
+        }
+        void Side(Point3 direction)
+        {
+            Vector3 toward=new(direction.X,0,direction.Z),tangent=new(-direction.Z,0,direction.X);
+            Vector3 a=origin+new Vector3(.5f,.02f,.5f)+toward*.485f-tangent*.48f,b=a+tangent*.96f;
+            Vector3 c=b+Vector3.Up*.9f-toward*.32f,d=c-tangent*.96f;
+            AddQuad(a,b,c,d,62,Color.White,true);
+        }
+    }
+
+    private void AddQuad(Vector3 aPosition, Vector3 bPosition, Vector3 cPosition, Vector3 dPosition, int tile, Color color, bool twoSided,Rectangle? region=null,bool transpose=false,bool flipU=false,bool text=false)
     {
         if(_world!=null)
         {
@@ -268,8 +410,9 @@ internal sealed class ChunkMeshBuilder
             color=Lit(color,(aPosition+bPosition+cPosition+dPosition)*.25f+normal*.02f);
         }
         int needed = twoSided ? 12 : 6;
-        if (VertexCount + needed > _vertices.Length)
-            Array.Resize(ref _vertices, _vertices.Length * 2);
+        ref VertexPositionColorTexture[] vertices=ref (text?ref _textVertices:ref _vertices);
+        int at=text?TextVertexCount:VertexCount;
+        if (at + needed > vertices.Length)Array.Resize(ref vertices, vertices.Length * 2);
         Vector2 Uv(float u,float v)
         {
             if(region is not Rectangle r)return TextureAtlas.Uv(tile,u,v);
@@ -281,13 +424,14 @@ internal sealed class ChunkMeshBuilder
         var b = new VertexPositionColorTexture(bPosition, color, Uv(1,1));
         var c = new VertexPositionColorTexture(cPosition, color, Uv(1,0));
         var d = new VertexPositionColorTexture(dPosition, color, Uv(0,0));
-        _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = b;
-        _vertices[VertexCount++] = a; _vertices[VertexCount++] = d; _vertices[VertexCount++] = c;
+        vertices[at++] = a; vertices[at++] = c; vertices[at++] = b;
+        vertices[at++] = a; vertices[at++] = d; vertices[at++] = c;
         if (twoSided)
         {
-            _vertices[VertexCount++] = a; _vertices[VertexCount++] = b; _vertices[VertexCount++] = c;
-            _vertices[VertexCount++] = a; _vertices[VertexCount++] = c; _vertices[VertexCount++] = d;
+            vertices[at++] = a; vertices[at++] = b; vertices[at++] = c;
+            vertices[at++] = a; vertices[at++] = c; vertices[at++] = d;
         }
+        if(text)TextVertexCount=at;else VertexCount=at;
     }
     private Color Lit(Color color,Vector3 position)
     {

@@ -61,9 +61,11 @@ internal static class InventoryLayout
     }
     public static Rectangle Browser(Viewport viewport)
     { Rectangle panel = Panel(viewport,true); return new(panel.Right+8,panel.Y,SlotSize(viewport,true)*5+16,panel.Height); }
-    public static int BrowserRows(Viewport viewport) => Math.Max(1,(Browser(viewport).Height-56)/SlotSize(viewport,true));
+    public static Rectangle BrowserSearch(Viewport viewport)
+    {Rectangle p=Browser(viewport);return new(p.X+8,p.Y+23,p.Width-16,18);}
+    public static int BrowserRows(Viewport viewport) => Math.Max(1,(Browser(viewport).Height-78)/SlotSize(viewport,true));
     public static Rectangle BrowserSlot(Viewport viewport,int visibleSlot)
-    { Rectangle panel=Browser(viewport);int size=SlotSize(viewport,true);return new(panel.X+8+visibleSlot%5*size,panel.Y+28+visibleSlot/5*size,size-2,size-2); }
+    { Rectangle panel=Browser(viewport);int size=SlotSize(viewport,true);return new(panel.X+8+visibleSlot%5*size,panel.Y+46+visibleSlot/5*size,size-2,size-2); }
 }
 
 internal static class ItemIcons
@@ -79,8 +81,19 @@ internal static class ItemIcons
     {
         if (stack.IsEmpty || !Items.IsDefined(stack.Item)) return;
         int inset = Math.Max(3, bounds.Width / 6);
-        sprites.Draw(atlas.ItemTexture(stack.Item), new Rectangle(bounds.X + inset, bounds.Y + inset, bounds.Width - inset * 2, bounds.Height - inset * 2),
-            atlas.ItemSource(stack.Item), Color.White);
+        Rectangle icon=new(bounds.X+inset,bounds.Y+inset,bounds.Width-inset*2,bounds.Height-inset*2),source=atlas.ItemSource(stack.Item);
+        BlockShape shape=Items.TryGetBlock(stack.Item,out var block)?Blocks.Get(block).Shape:BlockShape.None;
+        if(shape is BlockShape.Slab or BlockShape.Stairs)
+        {
+            sprites.Draw(atlas.Texture,new Rectangle(icon.X,icon.Y+icon.Height/2,icon.Width,icon.Height-icon.Height/2),new Rectangle(source.X,source.Y+8,16,8),Color.White);
+            if(shape==BlockShape.Stairs)sprites.Draw(atlas.Texture,new Rectangle(icon.X,icon.Y,icon.Width/2,icon.Height/2),new Rectangle(source.X,source.Y,8,8),Color.White);
+        }
+        else if(shape==BlockShape.Sign)
+        {
+            sprites.Draw(atlas.Texture,new Rectangle(icon.X,icon.Y,icon.Width,icon.Height/2),new Rectangle(source.X,source.Y,16,8),Color.White);
+            sprites.Draw(atlas.Texture,new Rectangle(icon.X+icon.Width*7/16,icon.Y+icon.Height/2,Math.Max(1,icon.Width/8),icon.Height/2),new Rectangle(source.X+7,source.Y+8,2,8),Color.White);
+        }
+        else sprites.Draw(atlas.ItemTexture(stack.Item),icon,source,Color.White);
         string count = Counts[stack.Count];
         int scale = bounds.Width >= 42 ? 2 : 1;
         int x = bounds.Right - 3 - count.Length * 6 * scale, y = bounds.Bottom - 3 - 7 * scale;
@@ -108,17 +121,35 @@ internal sealed class InventoryScreen : IDisposable
     private ItemStack _hovered,_tooltipStack;
     private string _tooltip="";
     private int _creativeScroll;
+    private readonly int[] _filtered=new int[CreativeCatalog.All.Length];
+    private int _filteredCount;
+    public bool SearchFocused {get;private set;}
+    public string SearchText {get;private set;}="";
+    public void TextInput(char c)
+    {
+        if(!SearchFocused)return;
+        if(c=='\b'){if(SearchText.Length>0)SearchText=SearchText[..^1];}
+        else if(c>=' ' && c<='~' && SearchText.Length<32)SearchText+=c;
+        else return;
+        Filter();
+    }
+    private void Filter()
+    {
+        _filteredCount=0;_creativeScroll=0;
+        for(int i=0;i<CatalogIcons.Length;i++)if(CreativeCatalog.Matches(CatalogIcons[i].Item,SearchText))_filtered[_filteredCount++]=i;
+    }
     private static readonly ItemStack[] CatalogIcons = CreateCatalogIcons();
     private static ItemStack[] CreateCatalogIcons()
-    { var icons=new ItemStack[Items.Obtainable.Length]; for(int i=0;i<icons.Length;i++)icons[i]=new(Items.Obtainable[i],1);return icons; }
+    { var icons=new ItemStack[CreativeCatalog.All.Length]; for(int i=0;i<icons.Length;i++)icons[i]=new(CreativeCatalog.All[i],1);return icons; }
     public InventoryScreen(GraphicsDevice device, TextureAtlas atlas)
     {
         _atlas = atlas;
         _sprites = new SpriteBatch(device);
         _pixel = new Texture2D(device, 1, 1);
         _pixel.SetData(new[] { Color.White });
+        Filter();
     }
-    public void Open() => Message = "";
+    public void Open() {Message="";SearchFocused=false;SearchText="";Filter();}
     public void CannotClose() => Message = "MAKE ROOM FOR HELD ITEMS AND INGREDIENTS.";
     public void Update(GameSession session, MouseState mouse, MouseState previous, Viewport viewport, bool shift = false, bool dropPressed = false)
     {
@@ -136,13 +167,15 @@ internal sealed class InventoryScreen : IDisposable
         bool left = mouse.LeftButton == ButtonState.Pressed && previous.LeftButton == ButtonState.Released;
         bool right = mouse.RightButton == ButtonState.Pressed && previous.RightButton == ButtonState.Released;
         bool creative = session.Player.Creative;
+        if(left)SearchFocused=creative && InventoryLayout.BrowserSearch(viewport).Contains(mouse.Position);
+        if(creative && InventoryLayout.BrowserSearch(viewport).Contains(mouse.Position))return;
         if (creative && InventoryLayout.Browser(viewport).Contains(mouse.Position))
         {
             int rows = InventoryLayout.BrowserRows(viewport);
-            _creativeScroll = Math.Clamp(_creativeScroll - (mouse.ScrollWheelValue-previous.ScrollWheelValue)/120,0,Math.Max(0,(CatalogIcons.Length+4)/5-rows));
+            _creativeScroll = Math.Clamp(_creativeScroll - (mouse.ScrollWheelValue-previous.ScrollWheelValue)/120,0,Math.Max(0,(_filteredCount+4)/5-rows));
             if (left) for (int slot=0;slot<rows*5;slot++)
             {
-                int index=_creativeScroll*5+slot;if(index>=CatalogIcons.Length)break;
+                int visible=_creativeScroll*5+slot;if(visible>=_filteredCount)break;int index=_filtered[visible];
                 if(!InventoryLayout.BrowserSlot(viewport,slot).Contains(mouse.Position))continue;
                 int granted=CreativeCatalog.Grant(interaction.Inventory,CatalogIcons[index].Item,shift);
                 if(granted>0)session.Sounds.Local(SoundKind.InventoryMove);
@@ -282,11 +315,13 @@ internal sealed class InventoryScreen : IDisposable
             Rectangle browser=InventoryLayout.Browser(viewport);
             Fill(browser,new Color(150,141,125));Fill(new Rectangle(browser.X+3,browser.Y+3,browser.Width-6,browser.Height-6),new Color(51,48,43));
             Text("CREATIVE ITEMS",browser.X+8,browser.Y+9,1,Color.LightGoldenrodYellow);
+            Rectangle search=InventoryLayout.BrowserSearch(viewport);Fill(search,SearchFocused?new Color(81,80,70):new Color(24,25,23));
+            Text(PixelFont.Fit(SearchText.Length==0?"SEARCH...":SearchText.ToUpperInvariant(),Math.Max(1,(search.Width-6)/6)),search.X+3,search.Y+5,1,Color.White);
             int rows=InventoryLayout.BrowserRows(viewport);
-            _creativeScroll=Math.Clamp(_creativeScroll,0,Math.Max(0,(CatalogIcons.Length+4)/5-rows));
+            _creativeScroll=Math.Clamp(_creativeScroll,0,Math.Max(0,(_filteredCount+4)/5-rows));
             for(int slot=0;slot<rows*5;slot++)
             {
-                int index=_creativeScroll*5+slot;if(index>=CatalogIcons.Length)break;
+                int visible=_creativeScroll*5+slot;if(visible>=_filteredCount)break;int index=_filtered[visible];
                 DrawSlot(CatalogIcons[index],InventoryLayout.BrowserSlot(viewport,slot),mouse,false,true);
             }
             Text("WHEEL: SCROLL",browser.X+8,browser.Bottom-23,1,Color.LightGray);

@@ -57,6 +57,7 @@ internal static class CollisionGraphicsChecks
                 {
                     Field<GameSettings>("_settings").GameMode = GameMode.Creative;
                     var world = new World(173, WorldSize.Small, false);
+                    world.SavedGameMode=GameMode.Creative;
                     for (int z = 16; z < 25; z++) for (int x = 16; x < 25; x++) world.SetBlock(x, 0, z, BlockType.Stone);
                     Point3 door = new(20, 1, 20);
                     world.PlaceStructure(door, BlockType.Door, 0, new(0, -1, 0), new Player(new(24, 1, 24)).Bounds);
@@ -99,6 +100,7 @@ internal static class CollisionGraphicsChecks
         private void VerifyMobPlacement(MobSpecies species)
         {
             var world=new World(173,WorldSize.Small,false);
+            world.SavedGameMode=GameMode.Creative;
             for(int z=16;z<26;z++)for(int x=16;x<26;x++)world.SetBlock(x,0,z,BlockType.Grass);
             var inventory=new Inventory();inventory.SetSlot(0,new(Items.FromBlock(BlockType.Dirt),2));
             var state=new MobState(species,new(20.5f,1,20.3f),0,MobDefinitions.Get(species).MaximumHealth);

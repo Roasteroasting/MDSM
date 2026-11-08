@@ -73,6 +73,10 @@ internal static class PixelFont
 
     public static void Draw(SpriteBatch sprites, Texture2D pixel, string text, int x, int y, int scale, Color color)
         =>Draw(sprites,pixel,text.AsSpan(),x,y,scale,color);
+    internal static bool Ink(char character,int row,int column)
+    {if(character==' ')return false;return (Glyphs.TryGetValue(char.ToUpperInvariant(character),out string glyph)?glyph:Glyphs['?'])[row*6+column]=='1';}
+    internal static int SignTile(char character)
+    {char c=char.ToUpperInvariant(character);return 80+(Glyphs.ContainsKey(c)?c:'?')-32;}
 
     public static void Draw(SpriteBatch sprites, Texture2D pixel, ReadOnlySpan<char> text, int x, int y, int scale, Color color)
     {

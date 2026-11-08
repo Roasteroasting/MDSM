@@ -167,9 +167,11 @@ internal static class DecorationChecks
         world.SetBlock(16, 9, 15, BlockType.Grass); // Bed head also needs support.
         foreach (BlockType block in Blocks.Selection)
         {
+            world.SetBlock(16,9,16,block is BlockType.Cactus or BlockType.DeadBush?BlockType.Sand:BlockType.Grass);
             Require(world.TryPlace(cell, block, player.Bounds), $"Cannot place {block}.");
             Require(world.SetBlock(16, 10, 16, BlockType.Air), $"Cannot remove {block}.");
         }
+        world.SetBlock(16,9,16,BlockType.Grass);
         player = new Player(new Vector3(16.5f, 10, 16.5f));
         Require(world.TryPlace(cell, BlockType.TallGrass, player.Bounds), "Non-solid plant was rejected inside player's cell.");
         Require(!world.IntersectsSolid(player.Bounds), "Plant blocks player movement.");
@@ -206,7 +208,7 @@ internal static class DecorationChecks
         oldFile.Write(SHA256.HashData(oldFile.GetBuffer().AsSpan(0, (int)oldFile.Length)));
         oldFile.Position = 0;
         WorldSave restored = WorldSerializer.Read(oldFile);
-        Require(WorldSerializer.FormatVersion == 13 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
+        Require(WorldSerializer.FormatVersion == 14 && restored.Name == "Milestone 3" && restored.World.Seed == 173,
             "Legacy save version or metadata changed.");
         for (int i = 0; i < legacy.ChunkCount; i++)
             Require(restored.World.Chunks[i].Blocks.SequenceEqual(legacy.Chunks[i].Blocks), "Loading legacy data regenerated decorations.");

@@ -10,7 +10,7 @@ public static partial class WorldSerializer
 {
     internal const int ChunksPerGroup=32, RecordHeaderBytes=56;
     private const int ContainerSchema=1, ContainerOptionsBytes=16;
-    internal const uint EndRecord=0, CoreHeaderRecord=1, ChunkGroupRecord=2, GameStateRecord=3, EnvironmentRecord=4;
+    internal const uint EndRecord=0, CoreHeaderRecord=1, ChunkGroupRecord=2, GameStateRecord=3, EnvironmentRecord=4,FeaturesRecord=5;
     internal const ushort RequiredRecord=1;
     private const long MaximumContainerSize=MaximumFileSize+4*1024*1024;
 
@@ -29,7 +29,7 @@ public static partial class WorldSerializer
         using(var checksum=IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
         {checksum.AppendData(header);checksum.AppendData(options);target.Write(checksum.GetHashAndReset());}
         using var frames=new CompressedWriteStream(target,header.Length,save.World.BlockCount,codec);
-        WriteLegacy(frames,save);frames.Finish(save.World);
+        WriteLegacy(frames,save);frames.Finish(save);
         destination.Write(whole.GetHashAndReset());
     }
     private static byte[] ContainerHeader(WorldSave save,int version)
@@ -59,6 +59,7 @@ public static partial class WorldSerializer
                 save.World.Time.Restore(state.Seconds); save.World.SavedGameMode=state.Mode;
                 save.World.AllowCheats=state.AllowCheats; save.World.SavedDifficulty=state.Difficulty;
             }
+            byte[] features=frames.Features;if(features!=null)save=ReadFeatures(save,features);
             return save;
         }
         catch(EndOfStreamException e){throw new InvalidDataException("Compressed save is truncated or incomplete.",e);}

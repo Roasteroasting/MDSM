@@ -18,6 +18,7 @@ public sealed class TextureAtlas
     public Texture2D Texture { get; }
     public Texture2D Water { get; }
     public Texture2D ItemAtlas { get; }
+    public Texture2D Text { get; }
     internal Effect LightingEffect { get; }
 
     public Texture2D ItemTexture(ItemId item) => Items.IsSprite(item)?ItemAtlas:Texture;
@@ -29,8 +30,10 @@ public sealed class TextureAtlas
         Texture = content.Load<Texture2D>("Blocks/terrain");
         Water = content.Load<Texture2D>("Blocks/water");
         ItemAtlas=content.Load<Texture2D>("Items/items");
+        Text=content.Load<Texture2D>("UI/text");
         LightingEffect=content.Load<Effect>("Effects/BlockLighting");
         if(ItemAtlas.Width!=AtlasSize || ItemAtlas.Height!=AtlasSize)throw new ContentLoadException("items.png must be 256x256.");
+        if(Text.Width!=AtlasSize || Text.Height!=AtlasSize)throw new ContentLoadException("text.png must be 256x256.");
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");
         if (Texture.Width != AtlasSize || Texture.Height != AtlasSize)
             throw new ContentLoadException($"terrain.png must be {AtlasSize}x{AtlasSize} pixels with {TileSize}x{TileSize} tiles.");

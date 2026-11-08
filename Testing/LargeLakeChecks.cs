@@ -114,7 +114,7 @@ internal static class LargeLakeChecks
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void Regenerate(WorldSize size,int seed,NaturalLake[] expected)
     {
-        World world=new World(seed,size,false);new TerrainGenerator(seed).Generate(world);
+        World world=new World(seed,size,false);world.Climate.VariedGeneration=true;new TerrainGenerator(seed,true,world.Width).Generate(world);
         var generator=new LakeGenerator(seed);generator.Generate(world);
         Require(expected.AsSpan().SequenceEqual(generator.Lakes.ToArray()),"Lake plans are not deterministic.");
         foreach(NaturalLake lake in generator.Lakes)Measure(world,lake,false);

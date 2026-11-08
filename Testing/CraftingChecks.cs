@@ -32,14 +32,14 @@ internal static class CraftingChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length == 81, "Survival recipe registry is incomplete.");
+        Require(CraftingRecipes.All.Length == 89, "Survival recipe registry is incomplete.");
         foreach (int width in new[] { 2, 3 }) for (int y = 0; y <= width - 2; y++) for (int x = 0; x <= width - 2; x++)
         {
             var grid = Fill(width, 3, x, y);
             for (int i = 0; i < 100; i++) Require(grid.Preview == new ItemStack(Table, 1), "Valid offset failed or preview changed ingredients.");
             Require(Enumerable.Range(0, grid.SlotCount).Sum(i => grid[i].Count) == 12, "Preview manufactured/consumed items.");
             int first = y * width + x;
-            grid.SetSlot(first, default); Require(grid.Preview.IsEmpty, "Missing ingredient matched.");
+            grid.SetSlot(first, default); Require(grid.Preview.Item==Items.FromBlock(BlockType.WoodenStairs) && grid.Preview.Count==4, "Three-plank L must produce stairs rather than a crafting table.");
             grid.SetSlot(first, new ItemStack(Dirt, 3)); Require(grid.Preview.IsEmpty, "Wrong ingredient matched.");
             grid.SetSlot(first, new ItemStack(Planks, 3));
             if (width == 3) { int empty = Enumerable.Range(0, 9).First(i => grid[i].IsEmpty); grid.SetSlot(empty, new ItemStack(Planks, 1)); Require(grid.Preview.IsEmpty, "Extra ingredients were ignored."); }

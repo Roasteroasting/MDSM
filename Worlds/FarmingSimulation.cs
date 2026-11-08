@@ -48,7 +48,7 @@ public sealed class FarmingSimulation(World world)
         if(crop.Wet==wet)return;
         if(crop.Wet)crop.Remaining=Math.Max(0,crop.Due-_time);
         crop.Wet=wet;crop.Version++;
-        if(wet && world.GetBlock(p.X,p.Y,p.Z)!=BlockType.Wheat7){crop.Due=_time+crop.Remaining;_growth.Enqueue((p,crop.Version),crop.Due);}
+        if(wet && !Blocks.MatureCrop(world.GetBlock(p.X,p.Y,p.Z))){crop.Due=_time+crop.Remaining;_growth.Enqueue((p,crop.Version),crop.Due);}
     }
     public bool Till(Point3 p,Inventory inventory,bool creative=false)
     {
@@ -59,9 +59,10 @@ public sealed class FarmingSimulation(World world)
     }
     public bool Plant(Point3 soil,Inventory inventory,bool creative=false)
     {
-        if(inventory.Selected.Item!=Items.WheatSeeds || _crops.Count>=MaximumCrops || !Blocks.Soil(world.GetBlock(soil.X,soil.Y,soil.Z))
+        ItemId item=inventory.Selected.Item;BlockType crop=item==Items.WheatSeeds?BlockType.Wheat1:item==Items.Carrot?BlockType.Carrot1:item==Items.Potato?BlockType.Potato1:BlockType.Air;
+        if(crop==BlockType.Air || _crops.Count>=MaximumCrops || !Blocks.Soil(world.GetBlock(soil.X,soil.Y,soil.Z))
             || world.GetBlock(soil.X,soil.Y+1,soil.Z)!=BlockType.Air || !world.Contains(soil.X,soil.Y+1,soil.Z))return false;
-        if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,BlockType.Wheat1))return false;
+        if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,crop))return false;
         world.Sounds?.At(SoundKind.Plant,BlockSounds.Center(soil));if(!creative)inventory.ConsumeSelected();return true;
     }
     public void Update(double elapsed)
@@ -78,7 +79,7 @@ public sealed class FarmingSimulation(World world)
             _growth.Dequeue();LastProcessed++;
             if(!_crops.TryGetValue(entry.Cell,out var crop) || !crop.Wet || crop.Version!=entry.Version)continue;
             Point3 p=entry.Cell;BlockType stage=world.GetBlock(p.X,p.Y,p.Z);
-            if(!Blocks.Crop(stage)||stage==BlockType.Wheat7)continue;
+            if(!Blocks.Crop(stage)||Blocks.MatureCrop(stage))continue;
             world.SetBlock(p.X,p.Y,p.Z,stage+1);crop.Remaining=crop.Interval;crop.Due=due+crop.Interval;_growth.Enqueue((p,crop.Version),crop.Due);
         }
     }

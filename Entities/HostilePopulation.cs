@@ -141,7 +141,7 @@ public sealed class HostilePopulation
         }
         return last;
     }
-    public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems drops)
+    public bool Hit(PassiveMob mob,int damage,Vector3 attacker,DroppedItems drops,bool knockback=true)
     {
         if(mob==null||!_mobs.Contains(mob)||mob.IsDead||damage<=0)return false;
         if(damage>=mob.Health)
@@ -154,7 +154,7 @@ public sealed class HostilePopulation
                 if(_random.NextDouble()<.05)drops.TrySpawn(new(Items.Bow,1,1+(int)(_random.NextDouble()*_random.NextDouble()*383)),position,.35f);
             }
         }
-        mob.Damage(damage,mob.Position-attacker);_world.Sounds?.Mob(mob.IsDead?SoundKind.MobDeath:SoundKind.MobHurt,mob);
+        mob.Damage(damage,mob.Position-attacker,knockback);_world.Sounds?.Mob(mob.IsDead?SoundKind.MobDeath:SoundKind.MobHurt,mob);
         if(mob.IsDead){_mobs.Remove(mob);_brains.Remove(mob);}return true;
     }
     public MobState[] Capture(){var states=new MobState[_mobs.Count];for(int i=0;i<states.Length;i++)states[i]=_mobs[i].CaptureState();return states;}

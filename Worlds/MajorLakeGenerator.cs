@@ -18,7 +18,7 @@ internal sealed class MajorLakeGenerator
     public List<NaturalLake> Lakes { get; } = new();
     public MajorLakeGenerator(World world)
     {
-        _world = world; _terrain = new TerrainGenerator(world.Seed);
+        _world = world; _terrain = new TerrainGenerator(world.Seed,world.Climate.VariedGeneration,world.Width);
         _random = new Random(unchecked(world.Seed ^ 0x42415349));
     }
     public void Generate()
@@ -35,6 +35,7 @@ internal sealed class MajorLakeGenerator
             for (int trial = 0; trial < 256; trial++)
             {
                 int x = _random.Next(margin, _world.Width - margin), z = _random.Next(margin, _world.Depth - margin);
+                if(!_world.Climate.WaterCandidate(x,z))continue;
                 var bounds = new Rectangle(x - plan.Extent, z - plan.Extent, plan.Width, plan.Width);
                 if (bounds.Intersects(new Rectangle(_world.Width / 2 - 30, _world.Depth / 2 - 30, 60, 60))) continue;
                 bool spaced = true;
@@ -89,6 +90,8 @@ internal sealed class MajorLakeGenerator
     private bool TryPlace(Plan plan, Point center)
     {
         plan.X = center.X; plan.Z = center.Y;
+        Rectangle wetFootprint=plan.WetBounds;wetFootprint.Offset(plan.Bounds.Location);
+        if(_terrain.MountainIntersects(wetFootprint,32))return false;
         int low = 128, high = 0, count = 0; long sum = 0;
         for (int z = 0; z < plan.Width; z++) for (int x = 0; x < plan.Width; x++)
         {

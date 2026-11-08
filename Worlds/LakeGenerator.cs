@@ -10,7 +10,7 @@ public readonly record struct WaterFeatureCounts(int Ponds, int Rivers, int Lake
 public sealed class LakeGenerator
 {
     private readonly int _seed;
-    private readonly TerrainGenerator _terrain;
+    private TerrainGenerator _terrain;
     private MajorLakeGenerator _major;
     public IReadOnlyList<NaturalLake> Lakes => _major?.Lakes ?? (IReadOnlyList<NaturalLake>)Array.Empty<NaturalLake>();
     public WaterFeatureCounts Counts { get; private set; }
@@ -23,6 +23,7 @@ public sealed class LakeGenerator
 
     public int Generate(World world)
     {
+        _terrain=new TerrainGenerator(_seed,world.Climate.VariedGeneration,world.Width);
         var random = new Random(unchecked(_seed ^ 0x4C414B45));
         var occupied = new List<Rectangle>();
         int lakes = 0, rivers = 0, ponds = 0;
@@ -42,6 +43,7 @@ public sealed class LakeGenerator
 
     private bool TryPond(World world, Random random, List<Rectangle> occupied, int cx, int cz, int radius)
     {
+        if(!world.Climate.WaterCandidate(cx,cz))return false;
         int extent = radius + 8;
         var bounds = new Rectangle(cx - extent, cz - extent, extent * 2 + 1, extent * 2 + 1);
         if (!Available(world, bounds, occupied)) return false;
@@ -62,6 +64,7 @@ public sealed class LakeGenerator
         int margin = length + 12;
         float x = random.Next(margin, world.Width-margin), z = random.Next(margin, world.Depth-margin);
         float startX = x, startZ = z, heading = random.NextSingle() * MathHelper.TwoPi;
+        if(!world.Climate.WaterCandidate((int)x,(int)z))return false;
         float phase = random.NextSingle() * MathHelper.TwoPi;
         int elevation = _terrain.SurfaceY((int)x, (int)z);
         var points = new List<Vector3>();
@@ -114,6 +117,7 @@ public sealed class LakeGenerator
 
     private bool Carve(World world, Rectangle bounds, bool[] wet, int maximumDepth, int maximumSlope, List<Rectangle> occupied)
     {
+        if(_terrain.MountainIntersects(bounds,12))return false;
         int width = bounds.Width, height = bounds.Height;
         bool Wet(int x, int z) => (uint)x < width && (uint)z < height && wet[z*width+x];
         int minimum = World.Height, maximum = 0, count = 0;

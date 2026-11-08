@@ -1,4 +1,36 @@
-if(System.Array.Exists(args,a=>a=="--mob-movement-graphics-test"))
+if(System.Array.Exists(args,a=>a=="--landscape-update-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.LandscapeUpdateChecks.Run();
+}
+else if(args.Length==2 && args[0]=="--traversal-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var traverseSize))
+{
+    System.Environment.ExitCode=MDSM.Testing.GameplayPerformanceChecks.Run(traverseSize,traverse:true);
+}
+else if(System.Array.Exists(args,a=>a=="--sign-fire-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.SignFireChecks.Run();
+}
+else if(args.Length==2 && args[0]=="--overnight-generation-probe" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var overnightSize))
+{
+    System.Environment.ExitCode=MDSM.Testing.OvernightGameplayChecks.GenerationProbe(overnightSize);
+}
+else if(System.Array.Exists(args,a=>a=="--overnight-graphics-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.OvernightGraphicsChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--overnight-gameplay-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.OvernightGameplayChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--overnight-test"))
+{
+    System.Environment.ExitCode=MDSM.Testing.OvernightChecks.Run();
+}
+else if(System.Array.Exists(args,a=>a=="--lighting-edit-benchmark"))
+{
+    System.Environment.ExitCode=MDSM.Testing.OvernightChecks.LightingEdits();
+}
+else if(System.Array.Exists(args,a=>a=="--mob-movement-graphics-test"))
 {
     System.Environment.ExitCode=System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(),MDSM.Testing.PigGraphicsChecks.Run());
 }

@@ -2,6 +2,7 @@ using System;
 using Microsoft.Xna.Framework;
 using MDSM.Worlds;
 using MDSM.Audio;
+using MDSM.Gameplay;
 
 namespace MDSM.Entities;
 
@@ -26,6 +27,10 @@ public sealed class PassiveMob
     public double LoveSeconds { get; private set; }
     public double BreedCooldown { get; private set; }
     public bool Bred { get; }
+    public BurningStatus Burning {get;}=new();
+    public double EggSeconds {get;private set;}
+    private bool _eggReady;
+    private double _eggRetry;
     public bool Baby=>BabySeconds>0;
     public BoundingBox Bounds => new(Position+new Vector3(-HalfWidth,0,-HalfWidth),Position+new Vector3(HalfWidth,Height,HalfWidth));
     public BoundingBox RenderBounds
@@ -58,11 +63,27 @@ public sealed class PassiveMob
         _soundSeed=unchecked((uint)(Position.X*17+Position.Z*31)+(uint)Species*997+1);_idleSoundSeconds+=_soundSeed%9;
         Sheared=state.Sheared;WoolSeconds=state.WoolSeconds;
         BabySeconds=state.BabySeconds;LoveSeconds=state.LoveSeconds;BreedCooldown=state.BreedCooldown;Bred=state.Bred;
+        EggSeconds=state.EggSeconds;_eggReady=EggSeconds==0;
+        Burning.Restore(state.Burning);
         _random = new Random(aiSeed);
         _decisionSeconds = 0.5f + _random.NextSingle() * 2;
     }
 
-    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds,BabySeconds,LoveSeconds,BreedCooldown,Bred);
+    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds,BabySeconds,LoveSeconds,BreedCooldown,Bred,EggSeconds,Burning.Capture());
+    internal void LayEgg(float elapsed,DroppedItems items)
+    {
+        if(Species!=MobSpecies.Chicken || Baby || IsDead || !float.IsFinite(elapsed)||elapsed<=0)return;
+        EggSeconds=Math.Max(0,EggSeconds-elapsed);
+        if(EggSeconds>0)return;
+        if(!_eggReady)
+        {
+            if(_random.NextDouble()>=.5){EggSeconds=270+_random.NextDouble()*60;return;}
+            _eggReady=true;
+        }
+        _eggRetry-=elapsed;if(_eggRetry>0)return;_eggRetry=5;
+        if(items?.TrySpawn(new(MDSM.Inventories.Items.Egg,1),Position+Vector3.Up*.25f,.5f)==true)
+        {EggSeconds=270+_random.NextDouble()*60;_eggReady=false;}
+    }
     internal void Feed(){LoveSeconds=60;}
     internal void Parent(){LoveSeconds=0;BreedCooldown=300;}
     internal void Lunge(Vector3 direction)
@@ -87,7 +108,7 @@ public sealed class PassiveMob
             feet + new Vector3(definition.HalfWidth, definition.Height, definition.HalfWidth));
     }
 
-    internal void Damage(int amount, Vector3 away)
+    internal void Damage(int amount, Vector3 away,bool knockback=true)
     {
         if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
         if (IsDead || amount == 0) return;
@@ -95,8 +116,13 @@ public sealed class PassiveMob
         HurtSeconds = 0.25f;
         away.Y = 0;
         if (away.LengthSquared() > 0.000001f) away.Normalize();
-        _velocity = away * 2.5f + Vector3.Up * 4;
+        if(knockback)_velocity = away * 2.5f + Vector3.Up * 4;
         // Neither the idle/wander decision nor facing changes in response to damage.
+    }
+    internal void Knockback(Vector3 attacker)
+    {
+        if(IsDead)return;Vector3 away=Position-attacker;away.Y=0;
+        if(away.LengthSquared()>.00001f)away.Normalize();_velocity=away*2.5f+Vector3.Up*4;
     }
 
     internal void Update(World world, float elapsed,Vector3? steering=null,bool life=true)

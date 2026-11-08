@@ -7,7 +7,7 @@ namespace MDSM.Inventories;
 // Inventory deals in item IDs. Only the current item registry maps them to blocks;
 // future non-block items can extend this registry without changing stack operations.
 public readonly record struct ItemId(ushort Value);
-public enum ToolKind { None, Pickaxe, Axe, Sword, Shovel, Bow, Shears, Hoe }
+public enum ToolKind { None, Pickaxe, Axe, Sword, Shovel, Bow, Shears, Hoe, FlintAndSteel }
 public enum ToolTier { None, Wood, Stone, Iron, Diamond, Obsidian }
 public enum ArmorSlot { None=-1, Helmet, Chestplate, Leggings, Boots }
 public enum ArmorMaterial { Leather, Wood, Stone, Iron, Diamond, Obsidian }
@@ -28,6 +28,7 @@ public static class Items
     public static readonly ItemId Sapling = new((byte)BlockType.Sapling), Apple = new(284), Shears = new(285), CookedPorkchop = new(286);
     public static readonly ItemId WheatSeeds=new(287),Wheat=new(288),Bread=new(289),RottenFlesh=new(290),Bone=new(291),
         Bucket=new(292),WaterBucket=new(293),LavaBucket=new(294);
+    public static readonly ItemId Egg=new(328),Carrot=new(329),Potato=new(330),BakedPotato=new(331),FlintAndSteel=new(332),Snowball=new(333);
     private static readonly ItemDefinition[] Definitions = CreateDefinitions();
     private static readonly ItemId[] SpriteItems = CreateSprites();
     private static readonly ItemId[] Catalog = CreateCatalog();
@@ -41,7 +42,7 @@ public static class Items
     }
     private static ItemDefinition[] CreateDefinitions()
     {
-        var definitions = new ItemDefinition[72];
+        var definitions = new ItemDefinition[78];
         string[] names = { "RAW PORKCHOP", "LEATHER", "FEATHER", "IRON INGOT", "COAL", "FLINT", "DIAMOND", "STICK", "ARROW", "STRING", "CHARCOAL" };
         for (int i=0;i<names.Length;i++) definitions[i] = new(names[i], i==0?1:64, Sprite: i);
         int[] uses = {59,131,250,1561};
@@ -59,9 +60,13 @@ public static class Items
         int[,] durability={{55,80,75,50},{80,120,110,75},{150,220,200,140},{180,250,225,165},{380,550,500,350},{2800,4000,3600,2500}};
         for(int material=0;material<6;material++)for(int slot=0;slot<4;slot++)
             definitions[48+material*4+slot]=new($"{(ArmorMaterial)material} {(ArmorSlot)slot}".ToUpperInvariant(),1,Durability:durability[material,slot],Sprite:49+material*4+slot,Armor:(ArmorSlot)slot,ArmorPoints:points[material,slot]);
+        definitions[72]=new("EGG",Sprite:74);definitions[73]=new("CARROT",Sprite:75);
+        definitions[74]=new("POTATO",Sprite:76);definitions[75]=new("BAKED POTATO",Sprite:77);
+        definitions[76]=new("FLINT AND STEEL",1,ToolKind.FlintAndSteel,Durability:64,Sprite:78);
+        definitions[77]=new("SNOWBALL",16,Sprite:79);
         return definitions;
     }
-    private static ItemId[] CreateSprites() { var all=new ItemId[74];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;all[73]=new((byte)BlockType.Bed);return all; }
+    private static ItemId[] CreateSprites() { var all=new ItemId[80];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;all[73]=new((byte)BlockType.Bed);for(int i=0;i<6;i++)all[74+i]=new((ushort)(328+i));return all; }
     public static ItemId Armor(ArmorMaterial material,ArmorSlot slot)=>material is >=ArmorMaterial.Leather and <=ArmorMaterial.Obsidian && slot is >=ArmorSlot.Helmet and <=ArmorSlot.Boots
         ?new((ushort)(304+(int)material*4+(int)slot)):throw new ArgumentException("Invalid armor.");
     public static bool LavaResistant(ItemId item)=>item.Value==(byte)BlockType.Obsidian || Get(item).Tier==ToolTier.Obsidian || item.Value is >=324 and <=327;
@@ -70,11 +75,11 @@ public static class Items
         :tier==ToolTier.Obsidian && kind is >=ToolKind.Pickaxe and <=ToolKind.Shovel?new((ushort)(298+(int)kind))
         :tier is >= ToolTier.Wood and <= ToolTier.Diamond && kind is >= ToolKind.Pickaxe and <= ToolKind.Shovel
         ? new ItemId((ushort)(267+((int)tier-1)*4+(int)kind-1)) : throw new ArgumentException("Invalid tiered tool.");
-    public static ItemDefinition Get(ItemId item) => item.Value >=256 && item.Value <328 ? Definitions[item.Value-256]
+    public static ItemDefinition Get(ItemId item) => item.Value >=256 && item.Value <256+Definitions.Length ? Definitions[item.Value-256]
         : TryGetBlock(item,out BlockType block) ? new(Blocks.Get(block).Name,StackLimit:block==BlockType.Bed?1:64,Sprite:block==BlockType.Sapling?28:block==BlockType.Bed?73:-1) : default;
     public static int StackLimit(ItemId item) => Get(item).StackLimit;
     public static ReadOnlySpan<ItemId> Sprites => SpriteItems;
-    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <328 || item==Sapling || item.Value==(byte)BlockType.Bed;
+    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <256+Definitions.Length || item==Sapling || item.Value==(byte)BlockType.Bed;
     public static bool IsDefined(ItemId item) => IsSprite(item) || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
         ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));

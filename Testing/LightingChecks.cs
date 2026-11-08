@@ -142,7 +142,7 @@ internal static class LightingChecks
         RejectEnvironment(b=>BitConverter.GetBytes(double.NaN).CopyTo(b,at+56));
         RejectEnvironment(b=>b[at+56+8]=3);RejectEnvironment(b=>b[at+56+9]=2);
         int length=56+BitConverter.ToInt32(bytes,at+20);byte[] v11=bytes[..at].Concat(bytes[(at+length)..]).ToArray();BitConverter.GetBytes(11).CopyTo(v11,4);
-        SHA256.HashData(v11.AsSpan(0,start-32)).CopyTo(v11.AsSpan(start-32,32));SHA256.HashData(v11.AsSpan(0,v11.Length-32)).CopyTo(v11.AsSpan(v11.Length-32));
+        v11=OvernightChecks.WithoutFeatures(v11);SHA256.HashData(v11.AsSpan(0,start-32)).CopyTo(v11.AsSpan(start-32,32));SHA256.HashData(v11.AsSpan(0,v11.Length-32)).CopyTo(v11.AsSpan(v11.Length-32));
         var old=WorldSerializer.Read(new MemoryStream(v11));Check(old.World.Time.Seconds==WorldTime.Morning && old.World.SavedGameMode==GameMode.Survival && old.World.SavedDifficulty==Difficulty.Normal && old.World.AllowCheats,"v11 default world-rule migration failed.");
         using(var resaved=new MemoryStream())
         {WorldSerializer.Write(resaved,old with{Name="Renamed legacy"});resaved.Position=0;Check(WorldSerializer.Read(resaved).World.SavedGameMode==GameMode.Survival,"Renaming an old world lost its migrated mode.");}
@@ -182,7 +182,9 @@ internal static class LightingChecks
     {
         var w=new World(173,WorldSize.Large,false);w.Time.Restore(900);w.SetBlock(1,5,1,BlockType.Torch);
         Check(Block(w,2,5,1)==13,"Cache fixture failed.");
+        var original=w.Lighting.GetPage(0,0);
         for(int i=1;i<BlockLighting.MaximumCachedChunks+32;i++)w.Lighting.GetPage(i%w.ChunksX,i/w.ChunksX);
+        Check(ReferenceEquals(original,w.Lighting.GetPage(BlockLighting.MaximumCachedChunks%w.ChunksX,BlockLighting.MaximumCachedChunks/w.ChunksX)),"Evicted light-page storage was allocated again rather than recycled.");
         Check(w.Lighting.CachedChunks==BlockLighting.MaximumCachedChunks && w.Lighting.CachedBytes<64*1048576L,"Light cache scales with world dimensions.");
         w.SetBlock(1,5,1,BlockType.Air);Check(Block(w,2,5,1)==0,"Evicted page reconstructed stale source.");
         int[] revisions=w.Chunks.ToArray().Select(c=>c.Revision).ToArray();w.SetBlock(31,50,31,BlockType.Stone);

@@ -38,13 +38,18 @@ public sealed class MiningController
             || !world.Contains(hit.Cell.X, hit.Cell.Y, hit.Cell.Z)) { Reset(); return false; }
         BlockType block = world.GetBlock(hit.Cell.X, hit.Cell.Y, hit.Cell.Z);
         ItemStack tool=inventory?.Selected??default;
+        if(block==BlockType.Fire)
+        {
+            bool extinguished=world.RemoveHarvestedBlock(hit.Cell,items,0,true);
+            Reset();if(extinguished)CooldownRemaining=BreakCooldownSeconds;return extinguished;
+        }
         if (creative && Blocks.IsRenderable(block) && !Lava.Fluid(block))
         {
             BlockContainer contents = world.Containers.Get(hit.Cell);
             world.Containers.Detach(hit.Cell);
             bool changed = world.RemoveHarvestedBlock(hit.Cell,items,0,creative:true);
             if (!changed) world.Containers.Reattach(contents);
-            if(changed)world.Sounds?.Block(SoundKind.Break,block,BlockSounds.Center(hit.Cell));
+            if(changed){world.Sounds?.Block(SoundKind.Break,block,BlockSounds.Center(hit.Cell));world.Particles.Burst(block,BlockSounds.Center(hit.Cell));}
             Reset();if(changed)CooldownRemaining=BreakCooldownSeconds;return changed;
         }
         float seconds = MiningRules.Seconds(block,tool);
@@ -74,10 +79,11 @@ public sealed class MiningController
         bool removed=world.RemoveHarvestedBlock(hit.Cell,items,drops);
         if (!removed) { world.Containers.Reattach(container);Reset(); return false; }
         world.Sounds?.Block(SoundKind.Break,block,BlockSounds.Center(hit.Cell));
+        world.Particles.Burst(block,BlockSounds.Center(hit.Cell));
         Vector3 center = new(hit.Cell.X + 0.5f, hit.Cell.Y + 0.5f, hit.Cell.Z + 0.5f);
         for(int i=0;i<lootCount;i++)items.Spawn(loot[i],1,center);
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)items.TrySpawn(container[i],center,.35f);
-        if(inventory!=null && (MiningRules.Wears(tool) || block==BlockType.Leaves && tool.Item==Items.Shears))inventory.WearSelected();
+        if(inventory!=null && (MiningRules.Wears(tool) || block is BlockType.Leaves or BlockType.DeadBush && tool.Item==Items.Shears))inventory.WearSelected();
         Reset();
         CooldownRemaining=BreakCooldownSeconds;
         return true;
@@ -86,8 +92,25 @@ public sealed class MiningController
 
 public static class BlockPlacement
 {
-    public static bool TryPlace(World world, Inventory inventory, BlockHit hit, BoundingBox playerBounds,bool creative=false)
-        =>hit.HasPlacementFace && TryPlace(world,inventory,hit.PlacementCell,playerBounds,creative,new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z));
+    public static bool TryPlace(World world, Inventory inventory, BlockHit hit, BoundingBox playerBounds,bool creative=false,float yaw=0)
+    {
+        if(!hit.HasPlacementFace)return false;
+        if(Items.TryGetBlock(inventory.Selected.Item,out var block) && World.OrientedBuilding(block))
+        {
+            Point3 cell=hit.PlacementCell;bool upper=hit.Normal.Y<0 || hit.Normal.Y==0 && hit.Position is Vector3 p && p.Y-MathF.Floor(p.Y)>.5f;
+            if(Blocks.Get(block).Shape==BlockShape.Slab && world.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)==block
+                && (hit.Normal.Y>0 && (world.Structure(hit.Cell).Facing&4)==0 || hit.Normal.Y<0 && (world.Structure(hit.Cell).Facing&4)!=0))
+            {cell=hit.Cell;upper=(world.Structure(cell).Facing&4)==0;}
+            byte facing=(byte)(((int)MathF.Round(yaw/MathHelper.PiOver2)+4)%4);
+            Point3 support=new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z);
+            if(block==BlockType.Sign && support.Y==0)facing=(byte)(support.X<0?1:support.X>0?3:support.Z<0?2:0);
+            else if(block==BlockType.Sign)
+            {int octant=((int)MathF.Round(yaw/MathHelper.PiOver4)%8+8)%8;facing=(byte)(octant/2+((octant&1)<<3));}
+            if(!world.PlaceBuilding(cell,block,facing,upper,playerBounds,support))return false;
+            if(!creative)inventory.ConsumeSelected();return true;
+        }
+        return TryPlace(world,inventory,hit.PlacementCell,playerBounds,creative,new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z));
+    }
     public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false,Point3? support=null)
     {
         ItemStack stack = inventory.Selected;

@@ -29,10 +29,13 @@ public enum BlockType : byte
     Obsidian=32,FarmlandDry=33,FarmlandWet=34,Wheat1=35,Wheat2=36,Wheat3=37,Wheat4=38,Wheat5=39,Wheat6=40,Wheat7=41,
     Fence=42,FenceGate=43,Door=44,DoorUpper=45,Torch=46,Smoker=47,BlastFurnace=48,
     LavaSource=49,LavaFlow1=50,LavaFlow2=51,LavaFlow3=52,LavaFlow4=53,LavaFlow5=54,LavaFlow6=55,LavaFlow7=56,LavaFalling=57,
-    DoubleTallGrassLower=58,DoubleTallGrassUpper=59,GlassPane=60,Bed=61,BedHead=62
+    DoubleTallGrassLower=58,DoubleTallGrassUpper=59,GlassPane=60,Bed=61,BedHead=62,
+    WoodenSlab=63,CobblestoneSlab=64,WoodenStairs=65,CobblestoneStairs=66,Sign=67,DoubleWoodenSlab=68,DoubleCobblestoneSlab=69,
+    MossyCobblestone=70,Carrot1=71,Carrot2=72,Carrot3=73,Carrot4=74,Carrot5=75,Carrot6=76,Carrot7=77,
+    Potato1=78,Potato2=79,Potato3=80,Potato4=81,Potato5=82,Potato6=83,Potato7=84,Snow=85,Fire=86,Cactus=87,DeadBush=88
 }
 
-public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed }
+public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
@@ -109,7 +112,33 @@ public static class Blocks
         new("DOUBLE TALL GRASS",false,false,BlockShape.Cross,52,Placeable:false,MiningSeconds:0),
         new("GLASS PANE",true,false,BlockShape.Pane,18,MiningSeconds:.45f),
         new("BED",true,false,BlockShape.Bed,56,54,59,MiningSeconds:.4f),
-        new("BED",true,false,BlockShape.Bed,55,53,59,Placeable:false,MiningSeconds:.4f)
+        new("BED",true,false,BlockShape.Bed,55,53,59,Placeable:false,MiningSeconds:.4f),
+        new("WOODEN SLAB",true,false,BlockShape.Slab,7,MiningSeconds:1.5f),
+        new("COBBLESTONE SLAB",true,false,BlockShape.Slab,8,MiningSeconds:3),
+        new("WOODEN STAIRS",true,false,BlockShape.Stairs,7,MiningSeconds:1.5f),
+        new("COBBLESTONE STAIRS",true,false,BlockShape.Stairs,8,MiningSeconds:3),
+        new("SIGN",false,false,BlockShape.Sign,7,MiningSeconds:1.5f),
+        new("DOUBLE WOODEN SLAB",true,true,BlockShape.Cube,7,Placeable:false,MiningSeconds:1.5f),
+        new("DOUBLE COBBLESTONE SLAB",true,true,BlockShape.Cube,8,Placeable:false,MiningSeconds:3),
+        new("MOSSY COBBLESTONE",true,true,BlockShape.Cube,60,MiningSeconds:3),
+        new("CARROTS",false,false,BlockShape.Crop,63,Placeable:false,MiningSeconds:0),
+        new("CARROTS",false,false,BlockShape.Crop,64,Placeable:false,MiningSeconds:0),
+        new("CARROTS",false,false,BlockShape.Crop,65,Placeable:false,MiningSeconds:0),
+        new("CARROTS",false,false,BlockShape.Crop,66,Placeable:false,MiningSeconds:0),
+        new("CARROTS",false,false,BlockShape.Crop,67,Placeable:false,MiningSeconds:0),
+        new("CARROTS",false,false,BlockShape.Crop,68,Placeable:false,MiningSeconds:0),
+        new("CARROTS",false,false,BlockShape.Crop,69,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,70,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,71,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,72,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,73,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,74,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,75,Placeable:false,MiningSeconds:0),
+        new("POTATOES",false,false,BlockShape.Crop,76,Placeable:false,MiningSeconds:0),
+        new("SNOW",false,false,BlockShape.Snow,61,Placeable:false,MiningSeconds:.2f),
+        new("FIRE",false,false,BlockShape.Fire,62,Placeable:false,MiningSeconds:0),
+        new("CACTUS",true,false,BlockShape.Cactus,77,78,79,MiningSeconds:.6f),
+        new("DEAD BUSH",false,false,BlockShape.Cross,80,MiningSeconds:0)
     };
     private static readonly BlockType[] Palette =
     {
@@ -117,9 +146,11 @@ public static class Blocks
         BlockType.WoodenPlanks, BlockType.Cobblestone, BlockType.Sand, BlockType.Gravel,
         BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable,
         BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest,BlockType.Sapling,
-        BlockType.Obsidian,BlockType.Fence,BlockType.FenceGate,BlockType.Door,BlockType.Torch,BlockType.Smoker,BlockType.BlastFurnace,BlockType.GlassPane,BlockType.Bed
+        BlockType.Obsidian,BlockType.Fence,BlockType.FenceGate,BlockType.Door,BlockType.Torch,BlockType.Smoker,BlockType.BlastFurnace,BlockType.GlassPane,BlockType.Bed,
+        BlockType.WoodenSlab,BlockType.CobblestoneSlab,BlockType.WoodenStairs,BlockType.CobblestoneStairs,BlockType.Sign,BlockType.MossyCobblestone,BlockType.Cactus,BlockType.DeadBush
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
+    public static byte MaximumId=>(byte)(Definitions.Length-1);
     public static bool IsDefined(BlockType block) => (int)block < Definitions.Length;
     public static BlockDefinition Get(BlockType block) => IsDefined(block) ? Definitions[(int)block] : Definitions[0];
     public static bool IsSolid(BlockType block) => Get(block).Solid;
@@ -129,12 +160,14 @@ public static class Blocks
     public static int Tile(BlockType block, Vector3 normal) => Get(block).Tile(normal);
     public static bool SupportsPlant(BlockType block) => block == BlockType.Grass;
     public static bool SupportsPlant(BlockType ground,BlockType plant) => plant==BlockType.DoubleTallGrassUpper?ground==BlockType.DoubleTallGrassLower
-        :Crop(plant)?Soil(ground):SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
+        :plant==BlockType.DeadBush?ground is BlockType.Sand or BlockType.Dirt:Crop(plant)?Soil(ground):SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;
     public static bool Soil(BlockType block)=>block is BlockType.FarmlandDry or BlockType.FarmlandWet;
-    public static bool Crop(BlockType block)=>block is >=BlockType.Wheat1 and <=BlockType.Wheat7;
+    public static bool Crop(BlockType block)=>block is >=BlockType.Wheat1 and <=BlockType.Wheat7 or >=BlockType.Carrot1 and <=BlockType.Potato7;
+    public static bool MatureCrop(BlockType block)=>block is BlockType.Wheat7 or BlockType.Carrot7 or BlockType.Potato7;
+    public static int CropStage(BlockType block)=>block>=BlockType.Potato1?(int)block-(int)BlockType.Potato1:block>=BlockType.Carrot1?(int)block-(int)BlockType.Carrot1:(int)block-(int)BlockType.Wheat1;
     public static bool DoubleGrass(BlockType block)=>block is BlockType.DoubleTallGrassLower or BlockType.DoubleTallGrassUpper;
-    public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + ((int)block-(int)BlockType.Wheat1)*.125f)
-        :block==BlockType.Sapling?.8f:block is BlockType.RedFlower or BlockType.YellowFlower?.7f:.9f;
+    public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + CropStage(block)*.125f)
+        :block==BlockType.Sapling?.8f:block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.DeadBush?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
     public static bool Bed(BlockType block)=>block is BlockType.Bed or BlockType.BedHead;
     public static bool RejectsUnderside(BlockType block)=>block is BlockType.Torch or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower;

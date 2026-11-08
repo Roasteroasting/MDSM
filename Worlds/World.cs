@@ -28,11 +28,16 @@ public sealed partial class World
     public VegetationSimulation Vegetation { get; }
     public WorldTime Time { get; } = new();
     public BlockLighting Lighting { get; }
+    public BlockParticles Particles { get; }=new();
+    public Climate Climate {get;}
+    public Weather Weather {get;}
+    public FireSimulation Fire {get;}
     public MDSM.Core.GameMode? SavedGameMode { get; internal set; } = MDSM.Core.GameMode.Survival;
     public MDSM.Core.Difficulty SavedDifficulty { get; internal set; } = MDSM.Core.Difficulty.Normal;
     public bool AllowCheats { get; internal set; } = true; // Legacy worlds/test fixtures retain command access.
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
     public OreGenerationStats GeneratedOres { get; private set; }
+    public System.Collections.Generic.IReadOnlyList<Point3> GeneratedDungeons {get;private set;}=Array.Empty<Point3>();
     public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
     public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
@@ -44,6 +49,7 @@ public sealed partial class World
     internal World(int seed, WorldSize size, bool generateTerrain)
     {
         Seed = seed;
+        Climate=new(seed);Weather=new(this);Fire=new(this);
         Lighting = new BlockLighting(this);
         Farming=new FarmingSimulation(this);
         Vegetation=new VegetationSimulation(this);
@@ -70,17 +76,22 @@ public sealed partial class World
     {
         progress?.Invoke("ALLOCATING WORLD");
         var world = new World(seed, size, false);
+        world.Climate.VariedGeneration=true;
         world.SavedGameMode=MDSM.Core.GameMode.Survival;
         world.AllowCheats=false;
         progress?.Invoke("GENERATING TERRAIN");
-        new TerrainGenerator(seed).Generate(world);
+        new TerrainGenerator(seed,true,world.Width).Generate(world);
         progress?.Invoke("CARVING PONDS, RIVERS AND LAKES");
         var water = new LakeGenerator(seed); water.Generate(world); world.GeneratedWaterFeatures = water.Counts;
         world.GeneratedLakes = new System.Collections.Generic.List<NaturalLake>(water.Lakes);
         progress?.Invoke("CARVING CAVES AND LAVA POOLS");
         world.GeneratedCaves=CaveGenerator.Generate(world,water.Footprints);
+        progress?.Invoke("BUILDING CAVE DUNGEONS");
+        world.GeneratedDungeons=DungeonGenerator.Generate(world);
         progress?.Invoke("PLACING TREES AND VEGETATION");
         new WorldDecorator(seed).Decorate(world);
+        DesertVegetation.Generate(world);
+        world.Climate.SnowCover(world);
         progress?.Invoke("PLACING COAL, IRON AND DIAMONDS");
         UndergroundDeposits.Generate(world);
         world.GeneratedOres=OreGenerator.Generate(world);
@@ -123,6 +134,8 @@ public sealed partial class World
             || !_plantEdit && block==BlockType.DoubleTallGrassLower && (!Contains(x,y+1,z) || GetBlock(x,y+1,z)!=BlockType.Air || GetBlock(x,y-1,z)!=BlockType.Grass)
             || !_plantEdit && block==BlockType.DoubleTallGrassUpper && GetBlock(x,y-1,z)!=BlockType.DoubleTallGrassLower
             || block==BlockType.Sapling && !Vegetation.CanPlant
+            || block==BlockType.Fire && !Fire.CanAdd
+            || block==BlockType.Cactus && !CanCactus(new(x,y,z))
             || !CanDetailChange(new(x,y,z),GetBlock(x,y,z),block)
             || GetBlock(x, y, z) == block || !Containers.CanChange(new Point3(x,y,z),block))
             return false;
@@ -140,6 +153,7 @@ public sealed partial class World
         Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
         DetailChanged(new Point3(x,y,z),previous,block);
+        Fire.Changed(new(x,y,z),previous,block);
         PairedPlantChanged(new Point3(x,y,z),previous,block);
         // Air/fluid both expose terrain faces; changing a flow level only invalidates water.
         bool terrainChanged = !(previous == BlockType.Air || Water.IsWater(previous))
@@ -195,7 +209,7 @@ public sealed partial class World
             || support.HasValue && support.Value.Y>0 && Blocks.RejectsUnderside(block)
             || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
-            || (definition.Solid && PlacementOverlaps(cell,block,playerBounds))
+            || (definition.Solid && PlacementOverlaps(cell,block,playerBounds,proposed))
             || (definition.Solid && PlacementBlockedByMobs(cell,block,proposed))
             || (definition.Solid && Gravity.Intersects(Bounds(cell)))
             || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z),block)))

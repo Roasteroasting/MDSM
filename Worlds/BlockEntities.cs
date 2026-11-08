@@ -12,12 +12,12 @@ public static class Smelting
     public const double Seconds=10;
     public const double MaximumBurnSeconds=1000;
     public static readonly SmeltingRecipe[] Recipes={new(Items.FromBlock(BlockType.Sand),Items.FromBlock(BlockType.Glass)),
-        new(Items.FromBlock(BlockType.IronOre),Items.IronIngot),new(Items.FromBlock(BlockType.WoodLog),Items.Charcoal),new(Items.RawPorkchop,Items.CookedPorkchop)};
+        new(Items.FromBlock(BlockType.IronOre),Items.IronIngot),new(Items.FromBlock(BlockType.WoodLog),Items.Charcoal),new(Items.RawPorkchop,Items.CookedPorkchop),new(Items.Potato,Items.BakedPotato)};
     public static ItemId Result(ItemId input){foreach(var recipe in Recipes)if(recipe.Input==input)return recipe.Output;return default;}
     public static bool CoalLike(ItemId item)=>item==Items.Coal || item==Items.Charcoal;
     public static bool Machine(BlockType block)=>block is BlockType.Furnace or BlockType.Smoker or BlockType.BlastFurnace;
     public static double Speed(BlockType block)=>block==BlockType.Furnace?1:2;
-    public static ItemId Result(ItemId input,BlockType block) => block==BlockType.Smoker && input!=Items.RawPorkchop || block==BlockType.BlastFurnace && input!=Items.FromBlock(BlockType.IronOre)?default:Result(input);
+    public static ItemId Result(ItemId input,BlockType block) => block==BlockType.Smoker && input!=Items.RawPorkchop && input!=Items.Potato || block==BlockType.BlastFurnace && input!=Items.FromBlock(BlockType.IronOre)?default:Result(input);
     public static bool Output(ItemId item,BlockType block){foreach(var recipe in Recipes)if(recipe.Output==item && Result(recipe.Input,block)==item)return true;return false;}
     public static double Fuel(ItemId item)=>item==Items.LavaBucket?1000:CoalLike(item)?80:Items.TryGetBlock(item,out var block)&&block is BlockType.WoodLog or BlockType.WoodenPlanks?15:0;
 }

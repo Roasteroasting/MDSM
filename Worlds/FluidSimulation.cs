@@ -109,7 +109,7 @@ public sealed class FluidSimulation
     private BlockType Falling=>_lava?BlockType.LavaFalling:BlockType.WaterFalling;
     private bool IsFluid(BlockType block)=>_lava?Lava.IsLava(block):Water.IsWater(block);
     private bool IsSource(BlockType block)=>block==Source;
-    private bool Replaceable(BlockType block)=>block==BlockType.Air || IsFluid(block) || Blocks.Get(block).Shape==BlockShape.Cross;
+    private bool Replaceable(BlockType block)=>block==BlockType.Air || IsFluid(block) || Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Fire or BlockShape.Snow;
     private int Level(BlockType block)=>IsSource(block)||block==Falling?0:IsFluid(block)?(int)block-(int)Source:8;
     private BlockType Flow(int level)=>(BlockType)((int)Source+level);
     private bool HorizontalSupply(Point3 cell)

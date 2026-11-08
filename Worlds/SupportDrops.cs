@@ -44,9 +44,10 @@ public sealed partial class World
     {
         BlockType above=GetBlock(cell.X,cell.Y+1,cell.Z);
         bool cropRemoved=Blocks.Crop(previous) && !Blocks.Crop(next);
+        bool cactus=above==BlockType.Cactus;for(int i=0;i<4 && !cactus;i++){Point3 d=FacingDirection(i);cactus=GetBlock(cell.X+d.X,cell.Y,cell.Z+d.Z)==BlockType.Cactus;}
         // Most fluid-level/terrain changes cannot remove dependents. No allocation
         // or world scan is needed in that common path.
-        if(!cropRemoved && previous is not (BlockType.Door or BlockType.DoorUpper) && !Blocks.DoubleGrass(previous) && !Blocks.Bed(previous)
+        if(!cactus && !cropRemoved && previous is not (BlockType.Door or BlockType.DoorUpper) && !Blocks.DoubleGrass(previous) && !Blocks.Bed(previous)
             && !(Blocks.IsSolid(previous) && !Blocks.IsSolid(next))
             && !(Blocks.Get(above).NeedsGrass && !Blocks.SupportsPlant(next,above)))return null;
         var changes=new List<SupportChange>{new(cell,previous,next,cropRemoved && !rootHarvested)};
@@ -82,7 +83,7 @@ public sealed partial class World
             if(!Blocks.IsSolid(change.Next))foreach(Point3 direction in Adjacent)
             {
                 Point3 neighbor=p+direction;BlockType block=GetBlock(neighbor.X,neighbor.Y,neighbor.Z);
-                if(block==BlockType.Torch && neighbor+Structure(neighbor).Support==p
+                if(block is BlockType.Torch or BlockType.Sign && neighbor+Structure(neighbor).Support==p
                     || direction.Y==1 && block==BlockType.Door || direction.Y==1 && Blocks.Bed(block))
                 {
                     bool partnerPlanned=Blocks.Bed(block) && seen.Contains(BedPartner(neighbor,block));
@@ -91,6 +92,7 @@ public sealed partial class World
             }
             Point3 upper=p+new Point3(0,1,0);BlockType plant=GetBlock(upper.X,upper.Y,upper.Z);
             if(Blocks.Get(plant).NeedsGrass && !Blocks.SupportsPlant(change.Next,plant))Remove(upper,true);
+            foreach(Point3 d in Adjacent){Point3 candidate=p+d;if(GetBlock(candidate.X,candidate.Y,candidate.Z)==BlockType.Cactus && !CanCactus(candidate,p,change.Next))Remove(candidate,true);}
         }
         return drops;
 

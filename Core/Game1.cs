@@ -41,6 +41,7 @@ public class Game1 : Game
     private MenuController _menu;
     private InventoryScreen _inventoryScreen;
     private CommandBar _commandBar;
+    private SignEditor _signEditor;
     private readonly WorldCommands _commands = new();
     private FirstPersonRenderer _firstPerson;
     private PassiveMobRenderer _mobRenderer;
@@ -99,6 +100,8 @@ public class Game1 : Game
         if (!IsActive) return;
         if (State is GameState.WorldCreation or GameState.WorldRename) _menu?.TextInput(character);
         else if (State == GameState.Command) _commandBar?.Input.TextInput(character);
+        else if(State==GameState.Inventory && _session?.Player.Creative==true)_inventoryScreen?.TextInput(character);
+        else if(State==GameState.SignEditing)_signEditor?.TextInput(character);
     }
 
     protected override void LoadContent()
@@ -109,9 +112,10 @@ public class Game1 : Game
         _menu = new MenuController(GraphicsDevice, _atlas, _settings);
         _inventoryScreen = new InventoryScreen(GraphicsDevice, _atlas);
         _commandBar = new CommandBar(GraphicsDevice);
+        _signEditor=new SignEditor(GraphicsDevice);
         _firstPerson = new FirstPersonRenderer(GraphicsDevice, _atlas);
         _mobRenderer = new PassiveMobRenderer(GraphicsDevice, Content);
-        _projectileRenderer=new ProjectileRenderer(GraphicsDevice);
+        _projectileRenderer=new ProjectileRenderer(GraphicsDevice,_atlas);
         _mouseLook = new MouseLookInput();
         _previousKeyboard = Keyboard.GetState();
         _previousMouse = Mouse.GetState();
@@ -182,6 +186,10 @@ public class Game1 : Game
                 }
             }
         }
+        else if(State==GameState.SignEditing)
+        {
+            if(_signEditor.Update(keyboard,_previousKeyboard,mouse,_previousMouse,GraphicsDevice.Viewport))SetState(GameState.Playing);
+        }
         else if (State == GameState.Command)
         {
             _commandBar.Input.Update(keyboard, _previousKeyboard);
@@ -209,13 +217,13 @@ public class Game1 : Game
         {
             int processingSteps=_simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
             for(int i=0;i<processingSteps;i++)_session.World.Containers.Update(SimulationClock.StepSeconds);
-            if (Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
+            if (!_inventoryScreen.SearchFocused && Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
             {
                 if (_session.TryReturnInterfaceItems()) { _session.CloseInterface();SetState(GameState.Playing); }
                 else _inventoryScreen.CannotClose();
             }
             else _inventoryScreen.Update(_session, mouse, _previousMouse, GraphicsDevice.Viewport,
-                keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift), Pressed(keyboard, Keys.Q));
+                keyboard.IsKeyDown(Keys.LeftShift) || keyboard.IsKeyDown(Keys.RightShift), !_inventoryScreen.SearchFocused && Pressed(keyboard, Keys.Q));
         }
         else
             HandleMenuAction(_menu.Update(keyboard, _previousKeyboard, mouse, _previousMouse, GraphicsDevice.Viewport));
@@ -260,7 +268,11 @@ public class Game1 : Game
         for (int i = 0; i < steps; i++)
         {
             const float dt = (float)SimulationClock.StepSeconds;
+            _session.Swing.Update(dt,held);
             world.Time.Advance(dt);
+            world.Weather.Update(dt,player.Position);
+            world.Particles.Update(world,dt);
+            world.Fire.Update(dt);
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
                 keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt);
@@ -280,6 +292,7 @@ public class Game1 : Game
             _session.Hostiles.Update(dt,player,_session.Projectiles,_session.Mobs);
             _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear,_session.Hostiles,player);
             _session.Items.Update(player, _session.Inventory, dt);
+            _session.Hazards.Update(_session,dt);
             if(player.IsDead){EnterDeath();return;}
         }
         _fallingInterpolation = _simulationClock.Fraction;
@@ -287,6 +300,9 @@ public class Game1 : Game
         if(equipmentNotice!=null){_notice=equipmentNotice;_noticeSeconds=3;}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         // Entity interaction takes priority; holding shears never falls through to placement/food.
+        if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released
+            && _selection is BlockHit sign && world.GetBlock(sign.Cell.X,sign.Cell.Y,sign.Cell.Z)==BlockType.Sign)
+        {_signEditor.Open(world,sign.Cell);SetState(GameState.SignEditing);return;}
         if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released && SurvivalInteractions.BeforeBlocks(_session))return;
         if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released
             && _session.Inventory.Selected.Item==Items.Shears)
@@ -321,7 +337,12 @@ public class Game1 : Game
         {
             if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
                 && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
-                BlockPlacement.TryPlace(world, _session.Inventory, hit, player.Bounds,player.Creative);
+                if(BlockPlacement.TryPlace(world, _session.Inventory, hit, player.Bounds,player.Creative,camera.Yaw))
+                {
+                    _session.Swing.Trigger();
+                    if(world.GetBlock(hit.PlacementCell.X,hit.PlacementCell.Y,hit.PlacementCell.Z)==BlockType.Sign)
+                    {_signEditor.Open(world,hit.PlacementCell);SetState(GameState.SignEditing);return;}
+                }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
         if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward,hostiles:_session.Hostiles) != null) _selection = null;
@@ -571,7 +592,7 @@ public class Game1 : Game
 
     private void Pause()
     {
-        if (State is GameState.Playing or GameState.Sleeping or GameState.Command) SetState(GameState.Paused);
+        if (State is GameState.Playing or GameState.Sleeping or GameState.Command or GameState.SignEditing) SetState(GameState.Paused);
         else ReleaseMouse();
     }
 
@@ -590,6 +611,8 @@ public class Game1 : Game
     {
         bool leavingBed=State==GameState.Sleeping && state!=GameState.Sleeping;
         bool leavingCommand=State==GameState.Command && state!=GameState.Command;
+        bool leavingSign=State==GameState.SignEditing && state!=GameState.SignEditing;
+        if(leavingSign)_signEditor?.Close();
         if(state!=GameState.Sleeping && _session!=null)_session.Sleep.Cancel(_session.Camera);
         _playerAudio.Reset();
         if(_session!=null && state!=State)
@@ -600,6 +623,7 @@ public class Game1 : Game
         _session?.Mining.Reset();
         _session?.Bow.Cancel();
         _session?.Bobbing.Reset();
+        _session?.Swing.Reset();
         _simulationClock.Reset();
         _pendingJump = false;
         _hotbarScroll.Reset();
@@ -614,7 +638,7 @@ public class Game1 : Game
         if (state == GameState.Playing)
         {
             MouseState mouse = Mouse.GetState();
-            _awaitMouseRelease = leavingBed || leavingCommand || mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed;
+            _awaitMouseRelease = leavingBed || leavingCommand || leavingSign || mouse.LeftButton == ButtonState.Pressed || mouse.RightButton == ButtonState.Pressed;
             if (IsActive && !_mouseLook.Captured)
             {
                 _menuCursor = mouse.Position;
@@ -634,7 +658,7 @@ public class Game1 : Game
         {
             ReleaseMouse();
             if (state == GameState.Inventory) _inventoryScreen.Open();
-            else if (state != GameState.Command) _menu?.Open(state);
+            else if (state is not (GameState.Command or GameState.SignEditing)) _menu?.Open(state);
         }
     }
 
@@ -698,7 +722,7 @@ public class Game1 : Game
             _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
             _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
             if (_presentation.HudVisible && State==GameState.Playing) _firstPerson.Draw(State, _session.Inventory,
-                BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness));
+                BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
                 _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
@@ -707,6 +731,7 @@ public class Game1 : Game
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
             if(State==GameState.Sleeping)_menu.Draw(GraphicsDevice.Viewport,_session.Name,_session.Sleep.Fade);
             if(State==GameState.Command)_commandBar.Draw(GraphicsDevice.Viewport);
+            if(State==GameState.SignEditing)_signEditor.Draw(GraphicsDevice.Viewport);
         }
         else
         {
@@ -742,6 +767,7 @@ public class Game1 : Game
         _menu?.Dispose();
         _inventoryScreen?.Dispose();
         _commandBar?.Dispose();
+        _signEditor?.Dispose();
         _hud?.Dispose();
         _firstPerson?.Dispose();
         _mobRenderer?.Dispose();

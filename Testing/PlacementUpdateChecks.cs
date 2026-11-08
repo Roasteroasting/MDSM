@@ -125,8 +125,13 @@ internal static class PlacementUpdateChecks
         foreach(MobSpecies species in new[]{MobSpecies.Pig,MobSpecies.Cow,MobSpecies.Sheep,MobSpecies.Chicken})
         {
             var mob=new PassiveMob(new(species,new(15.5f,1,13),0,MobDefinitions.Get(species).MaximumHealth),1);
-            for(int i=0;i<300;i++)mob.Update(world,1f/120,Vector3.Backward);
-            Check(mob.Position.Z<15.5f,"Mob passed through pane: "+species);
+            bool crossed=false;
+            for(int i=0;i<300;i++)
+            {
+                mob.Update(world,1f/120,Vector3.Backward);
+                Check(!world.IntersectsSolid(mob.Bounds),"Mob penetrated pane geometry: "+species);
+                if(!crossed && mob.Position.Z>=15.5f){Check(mob.Position.Y>=2-.001f,"Mob crossed pane without jumping above it: "+species);crossed=true;}
+            }
         }
     }
     public static void DoorUvs()

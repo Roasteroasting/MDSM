@@ -25,6 +25,7 @@ public sealed class Player
     internal SoundEvents Sounds { get; set; }
     public bool Creative => Settings.GameMode == GameMode.Creative;
     public BreathMeter Breath { get; } = new();
+    public BurningStatus Burning {get;}=new();
     private bool _wasCreative, _canStep;
     private float _verticalSpeed;
     private Vector3 _horizontalSpeed;
@@ -309,6 +310,7 @@ public sealed class Player
 
     public void Respawn(World world)
     {
+        Burning.Reset();
         _health = MaximumHealth;_invulnerable=_lavaSeconds=0; Breath.Reset();
         MoveToSpawn(world);
     }

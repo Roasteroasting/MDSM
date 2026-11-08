@@ -57,7 +57,7 @@ public sealed partial class World
         if(block==BlockType.Door)
         {
             if(!Contains(cell.X,cell.Y+1,cell.Z) || GetBlock(cell.X,cell.Y,cell.Z)!=BlockType.Air || GetBlock(cell.X,cell.Y+1,cell.Z)!=BlockType.Air
-                || !IsSolid(cell.X,cell.Y-1,cell.Z) || Overlaps(new(new(cell.X,cell.Y,cell.Z),new(cell.X+1,cell.Y+2,cell.Z+1)),player)
+                || !SupportsVoxelTop(new(cell.X,cell.Y-1,cell.Z)) || Overlaps(new(new(cell.X,cell.Y,cell.Z),new(cell.X+1,cell.Y+2,cell.Z+1)),player)
                 || PlacementBlockedByMobs(cell,block,proposed)
                 || PlacementBlockedByMobs(cell+new Point3(0,1,0),BlockType.DoorUpper,proposed))return false;
             _structureEdit=true;SetBlock(cell.X,cell.Y,cell.Z,block);SetBlock(cell.X,cell.Y+1,cell.Z,BlockType.DoorUpper);_structureEdit=false;
@@ -65,6 +65,7 @@ public sealed partial class World
         else
         {
             if(block==BlockType.Torch && !IsSolid(cell.X+support.X,cell.Y+support.Y,cell.Z+support.Z))return false;
+            if(block==BlockType.Torch && (support.Y<0?!SupportsVoxelTop(cell+support):Blocks.Get(GetBlock(cell.X+support.X,cell.Y,cell.Z+support.Z)).Shape is BlockShape.Slab or BlockShape.Stairs))return false;
             if(!TryPlaceBlock(cell,block,player,support,proposed))return false;
         }
         Structures[cell]=proposed;if(block==BlockType.Torch)Torches.Add(cell);DirtyDetail(cell);
@@ -74,7 +75,7 @@ public sealed partial class World
     {
         if(Blocks.Bed(next) && !_bedEdit)return false;
         if(Blocks.Crop(next) && !Blocks.Crop(previous) && !Farming.CanPlant)return false;
-        if(next is BlockType.Torch or BlockType.Door or BlockType.FenceGate && !Structures.ContainsKey(cell) && Structures.Count>=65536)return false;
+        if((next is BlockType.Torch or BlockType.Door or BlockType.FenceGate || OrientedBuilding(next)) && !Structures.ContainsKey(cell) && Structures.Count>=65536)return false;
         return true; // The outer block-change context reserves the complete cascade's loot.
     }
     private void DetailChanged(Point3 cell,BlockType previous,BlockType next)
@@ -84,7 +85,10 @@ public sealed partial class World
         if(previous==BlockType.Torch)Torches.Remove(cell);
         if(next==BlockType.Torch){Torches.Add(cell);Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));}
         if(next is BlockType.FenceGate or BlockType.Door)Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));
-        if(previous!=next && next is not (BlockType.Torch or BlockType.FenceGate or BlockType.Door) && !Blocks.Bed(next))Structures.Remove(cell);
+        if(OrientedBuilding(next))Structures.TryAdd(cell,new(cell,0,false,new(0,-1,0)));
+        if(previous==BlockType.Sign && next!=previous)Signs.Remove(cell);
+        if(next==BlockType.Sign)Signs.TryAdd(cell,"");
+        if(previous!=next && next is not (BlockType.Torch or BlockType.FenceGate or BlockType.Door) && !Blocks.Bed(next) && !OrientedBuilding(next))Structures.Remove(cell);
         if(!_structureEdit && _doorPartnerEdit!=cell && previous is BlockType.Door or BlockType.DoorUpper)
         {
             Point3 other=cell+new Point3(0,previous==BlockType.Door?1:-1,0);
@@ -100,10 +104,13 @@ public sealed partial class World
         foreach(Point3 direction in Adjacent)
         {
             Point3 p=cell+direction;BlockType b=GetBlock(p.X,p.Y,p.Z);
-            if(b==BlockType.Torch && !IsSolid(cell.X,cell.Y,cell.Z) && p+Structure(p).Support==cell)
+            if(b is BlockType.Torch or BlockType.Sign && !IsSolid(cell.X,cell.Y,cell.Z) && p+Structure(p).Support==cell)
                 SetBlock(p.X,p.Y,p.Z,BlockType.Air);
             if(direction.Y==1 && b==BlockType.Door && !IsSolid(cell.X,cell.Y,cell.Z))
                 SetBlock(p.X,p.Y,p.Z,BlockType.Air);
+            if(direction.Y==1 && b==BlockType.Snow && !IsSolid(cell.X,cell.Y,cell.Z))
+                SetBlock(p.X,p.Y,p.Z,BlockType.Air);
+            if(b==BlockType.Cactus && !CanCactus(p))SetBlock(p.X,p.Y,p.Z,BlockType.Air);
         }
     }
     // Shared geometry for voxel meshes, collision and accurate ray hitboxes. World-space boxes.
@@ -111,16 +118,20 @@ public sealed partial class World
         => ShapeBoxes(cell,GetBlock(cell.X,cell.Y,cell.Z),boxes,collision);
 
     private int ShapeBoxes(Point3 cell,BlockType block,Span<BoundingBox> boxes,bool collision,
-        StructureState? proposed=null,Point3? changedNeighbor=null,BlockType replacement=BlockType.Air)
+        StructureState? proposed=null,Point3? changedNeighbor=null,BlockType replacement=BlockType.Air,StructureState? neighborState=null)
     {
         BlockShape shape=Blocks.Get(block).Shape;
         if(collision && !Blocks.IsSolid(block))return 0;
+        if(shape==BlockShape.Fire)return Fire.SelectionBoxes(cell,boxes);
+        if(OrientedBuilding(block))return BuildingBoxes(cell,block,boxes,proposed,changedNeighbor,replacement,neighborState);
         if(shape==BlockShape.Pane)return PaneBoxes(cell,PaneConnections(cell,changedNeighbor,replacement),boxes);
         int count=0;Vector3 origin=new(cell.X,cell.Y,cell.Z);
         count=1;boxes[0]=new(origin,origin+Vector3.One);
+        if(shape==BlockShape.Cactus){boxes[0]=new(origin+new Vector3(1f/16,0,1f/16),origin+new Vector3(15f/16,1,15f/16));return 1;}
         if(shape==BlockShape.Fluid)
         {float height=Lava.IsLava(block)?Lava.Height(block):Water.Height(block);boxes[0]=new(origin,origin+new Vector3(1,height,1));return 1;}
         if(shape is BlockShape.Farmland){boxes[0]=new(origin,origin+new Vector3(1,15f/16,1));return 1;}
+        if(shape==BlockShape.Snow){boxes[0]=new(origin,origin+new Vector3(1,3f/16,1));return 1;}
         if(shape==BlockShape.Bed){boxes[0]=new(origin,origin+new Vector3(1,9f/16,1));return 1;}
         if (shape is BlockShape.Cross or BlockShape.Crop)
         {

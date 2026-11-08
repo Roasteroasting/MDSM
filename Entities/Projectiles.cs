@@ -9,7 +9,8 @@ using MDSM.Audio;
 
 namespace MDSM.Entities;
 
-public readonly record struct ArrowState(Vector3 Position,Vector3 Velocity,float Age,int Damage,Guid Bow,bool Hostile=false);
+public enum ProjectileKind:byte { Arrow, Snowball }
+public readonly record struct ArrowState(Vector3 Position,Vector3 Velocity,float Age,int Damage,Guid Bow,bool Hostile=false,ProjectileKind Kind=ProjectileKind.Arrow);
 public sealed class Projectiles
 {
     public const int Maximum=256;
@@ -18,13 +19,24 @@ public sealed class Projectiles
     private readonly World _world;
     private readonly List<ArrowState> _arrows=new();
     public IReadOnlyList<ArrowState> Arrows=>_arrows;
-    internal int RemoveAll() { int count = _arrows.Count; _arrows.Clear(); return count; }
-    internal SoundEvents Sounds=>_world.Sounds;
-    public Projectiles(World world,ArrowState[] states=null)
+    internal int RemoveAll(ProjectileKind? kind=null)
     {
-        _world=world;if(states==null)return;
-        if(states.Length>Maximum)throw new InvalidDataException("Too many arrows.");
+        if(!kind.HasValue){int count=_arrows.Count;_arrows.Clear();return count;}
+        int removed=0;for(int i=_arrows.Count-1;i>=0;i--)if(_arrows[i].Kind==kind.Value){_arrows.RemoveAt(i);removed++;}return removed;
+    }
+    internal SoundEvents Sounds=>_world.Sounds;
+    public Projectiles(World world,ArrowState[] states=null,ArrowState[] snowballs=null)
+    {
+        if((states?.Length??0)+(snowballs?.Length??0)>Maximum)throw new InvalidDataException("Too many projectiles.");
+        _world=world;if(snowballs!=null)foreach(var snowball in snowballs){Validate(snowball,world);_arrows.Add(snowball);}
+        if(states==null)return;
         foreach(var state in states){Validate(state,world);_arrows.Add(state);}
+    }
+    public bool ThrowSnowball(Inventory inventory,Vector3 origin,Vector3 direction,bool creative=false)
+    {
+        if(inventory.Selected.Item!=Items.Snowball || _arrows.Count>=Maximum || !float.IsFinite(origin.LengthSquared()) || !float.IsFinite(direction.LengthSquared()) || direction.LengthSquared()<.001f)return false;
+        var ball=new ArrowState(origin,Vector3.Normalize(direction)*18,0,0,Guid.NewGuid(),Kind:ProjectileKind.Snowball);
+        Validate(ball,_world);_arrows.Add(ball);if(!creative)inventory.ConsumeSelected();return true;
     }
     public bool Shoot(Inventory inventory,Vector3 origin,Vector3 direction,float power,Guid bow)
     {
@@ -60,7 +72,11 @@ public sealed class Projectiles
                 float? playerHit=arrow.Hostile && player!=null?ray.Intersects(player.Bounds):null;
                 if(playerHit.HasValue && playerHit.Value<limit && playerHit.Value<=length){player.TakeDamage(arrow.Damage);removed=true;}
                 if(target!=null)
-                {if((int)target.Species>=4?hostiles.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops):mobs.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops))wear(arrow.Bow);removed=true;}
+                {
+                    if(arrow.Kind==ProjectileKind.Snowball)target.Knockback(arrow.Position-arrow.Velocity);
+                    else if((int)target.Species>=4?hostiles.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops):mobs.Hit(target,arrow.Damage,arrow.Position-arrow.Velocity,drops))wear(arrow.Bow);
+                    removed=true;
+                }
                 else if(limit<=length || arrow.Age+dt>=Lifetime || next.X<0 || next.X>=_world.Width || next.Z<0 || next.Z>=_world.Depth || next.Y<0 || next.Y>MaximumAltitude)removed=true;
                 if(removed && (target!=null || playerHit.HasValue && playerHit.Value<=length || limit<=length))Sounds?.At(SoundKind.ArrowHit,arrow.Position+ray.Direction*Math.Min(length,limit));
                 arrow=arrow with {Position=next,Velocity=arrow.Velocity-Vector3.Up*Gravity*dt,Age=arrow.Age+dt};
@@ -68,13 +84,16 @@ public sealed class Projectiles
             if(removed){_arrows[i]=_arrows[^1];_arrows.RemoveAt(_arrows.Count-1);}else _arrows[i]=arrow;
         }
     }
-    public ArrowState[] Capture()=>_arrows.ToArray();
+    public ArrowState[] Capture()=>CaptureKind(ProjectileKind.Arrow);
+    public ArrowState[] CaptureSnowballs()=>CaptureKind(ProjectileKind.Snowball);
+    private ArrowState[] CaptureKind(ProjectileKind kind)
+    {int count=0;foreach(var arrow in _arrows)if(arrow.Kind==kind)count++;var result=new ArrowState[count];int index=0;foreach(var arrow in _arrows)if(arrow.Kind==kind)result[index++]=arrow;return result;}
     public static void Validate(ArrowState state,World world)
     {
         Vector3 p=state.Position,v=state.Velocity;
         if(!float.IsFinite(p.LengthSquared()) || !float.IsFinite(v.LengthSquared()) || p.X<0 || p.X>=world.Width || p.Z<0 || p.Z>=world.Depth
             || p.Y<0 || p.Y>MaximumAltitude || v.LengthSquared()>100000 || !float.IsFinite(state.Age) || state.Age<0 || state.Age>=Lifetime
-            || state.Damage<1 || state.Damage>5 || state.Bow==Guid.Empty)throw new InvalidDataException("Invalid arrow state.");
+            || (state.Kind==ProjectileKind.Arrow?state.Damage<1 || state.Damage>5:state.Kind!=ProjectileKind.Snowball || state.Damage!=0 || state.Hostile) || state.Bow==Guid.Empty)throw new InvalidDataException("Invalid projectile state.");
     }
 }
 

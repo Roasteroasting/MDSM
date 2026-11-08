@@ -26,7 +26,7 @@ internal static class ItemAtlasChecks
     }
     // Small test-only RGBA8 PNG reader. Independent of MGCB/GPU premultiplication;
     // validates source atlas pixels without relying on runtime texture loading.
-    private static (int Width,int Height,byte[] Pixels) Read(string path)
+    internal static (int Width,int Height,byte[] Pixels) Read(string path)
     {
         byte[] png=File.ReadAllBytes(path);int width=BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16)),height=BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(20));
         if(width<1 || height<1 || width*height>1024*1024 || png[24]!=8 || png[25]!=6 || png[28]!=0)throw new Exception("Expected bounded non-interlaced RGBA8 PNG.");

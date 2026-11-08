@@ -15,7 +15,7 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
-    public const int FormatVersion = 13;
+    public const int FormatVersion = 14;
     internal const int LegacyFormatVersion = 10;
     public const int MaxNameLength = 48;
     private const uint Magic = 0x4d53444d; // ASCII MDSM in little-endian order.
@@ -380,7 +380,7 @@ public static partial class WorldSerializer
 
     private static void ValidateBlocks(ReadOnlySpan<byte> blocks)
     {
-        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,(byte)BlockType.BedHead);
+        int invalid=blocks.IndexOfAnyExceptInRange((byte)0,Blocks.MaximumId);
         if(invalid>=0)throw new InvalidDataException($"Save contains unknown block ID {blocks[invalid]}.");
     }
 

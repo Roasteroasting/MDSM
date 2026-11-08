@@ -113,7 +113,10 @@ internal static class RenderingPerformanceChecks
         {
             camera.Position = position; renderer.Prepare(camera);
             Require(renderer.RebuiltChunks <= 4 && renderer.ResidentChunks <= renderer.ResidentLimit, "Rapid movement escaped work/residency budget.");
+            Require(renderer.RetiringChunks <= renderer.ResidentLimit && ChunkMesh.LiveBufferBytes-originalBytes==renderer.BufferBytes,
+                "Deferred retirement exceeded the region bound or concealed live GPU buffers.");
             Warm(renderer, camera); renderer.Draw(camera, null); renderer.DrawWater(camera);
+            Require(renderer.RetiringChunks==0,"Deferred GPU retirement did not drain after movement.");
             Require(renderer.Water.CachedChunks <= renderer.ResidentChunks && renderer.BufferBytes < 450L * 1048576, "Distant water/terrain retained.");
             Require(ChunkMesh.LiveBufferBytes - originalBytes == renderer.BufferBytes, "Residency diagnostics omitted live GPU resources.");
         }

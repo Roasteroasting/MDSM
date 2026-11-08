@@ -5,7 +5,7 @@ using MDSM.Worlds;
 
 namespace MDSM.Gameplay;
 
-public readonly record struct BlockHit(Point3 Cell, Point3 Normal, float Distance)
+public readonly record struct BlockHit(Point3 Cell, Point3 Normal, float Distance,Vector3? Position=null)
 {
     public Point3 PlacementCell => Cell + Normal;
     public bool HasPlacementFace => Normal != new Point3(0, 0, 0);
@@ -45,7 +45,7 @@ public static class BlockRaycaster
                     Vector3 p=origin+direction*closest;Point3 face=normal;
                     if(closest>distance+.0001f)
                         face=Math.Abs(p.X-chosen.Min.X)<.001f?new(-1,0,0):Math.Abs(p.X-chosen.Max.X)<.001f?new(1,0,0):Math.Abs(p.Y-chosen.Min.Y)<.001f?new(0,-1,0):Math.Abs(p.Y-chosen.Max.Y)<.001f?new(0,1,0):Math.Abs(p.Z-chosen.Min.Z)<.001f?new(0,0,-1):new(0,0,1);
-                    return new BlockHit(cell,face,closest);
+                    return new BlockHit(cell,face,closest,origin+direction*closest);
                 }
             }
 

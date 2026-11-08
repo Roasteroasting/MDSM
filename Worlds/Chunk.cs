@@ -18,10 +18,11 @@ public sealed class Chunk
     public int WaterRevision { get; private set; }
     public int WaterCount { get; private set; }
     public int LavaCount { get; private set; }
+    public int FireCount {get;private set;}
     public int StructureCount { get; private set; }
     public int CropCount { get; private set; }
     public int DoubleGrassCount { get; private set; }
-    private static bool Special(BlockType block)=>block is BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.Torch or BlockType.Bed or BlockType.BedHead;
+    private static bool Special(BlockType block)=>block is BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.Torch or BlockType.Bed or BlockType.BedHead || World.OrientedBuilding(block);
     public BoundingBox Bounds { get; }
     internal System.ReadOnlySpan<byte> Blocks => _blocks;
 
@@ -43,11 +44,13 @@ public sealed class Chunk
         if (MDSM.Worlds.Blocks.DoubleGrass(block)) DoubleGrassCount++;
         if (Water.IsWater((BlockType)_blocks[index])) WaterCount--;
         if (Lava.IsLava((BlockType)_blocks[index])) LavaCount--;
+        if((BlockType)_blocks[index]==BlockType.Fire)FireCount--;
         if(Special((BlockType)_blocks[index]))StructureCount--;
         if(MDSM.Worlds.Blocks.Crop((BlockType)_blocks[index]))CropCount--;
         _blocks[index] = (byte)block;
         if (Water.IsWater(block)) WaterCount++;
         if (Lava.IsLava(block)) LavaCount++;
+        if(block==BlockType.Fire)FireCount++;
         if(Special(block))StructureCount++;
         if(MDSM.Worlds.Blocks.Crop(block))CropCount++;
         int column = z * Size + x;
@@ -70,17 +73,21 @@ public sealed class Chunk
         _blocks.AsSpan(blocks.Length).Clear();
         WaterCount = 0;
         LavaCount=0;
+        FireCount=0;
         StructureCount=0;
         CropCount=0;
         DoubleGrassCount=0;
         Array.Clear(_solidTops);
         Span<int> counts=stackalloc int[256];counts.Clear();
         foreach(byte block in blocks)counts[block]++;
+        FireCount=counts[(int)BlockType.Fire];
         DoubleGrassCount=counts[(int)BlockType.DoubleTallGrassLower]+counts[(int)BlockType.DoubleTallGrassUpper];
         for(int i=(int)BlockType.WaterSource;i<=(int)BlockType.WaterFalling;i++)WaterCount+=counts[i];
         for(int i=(int)BlockType.LavaSource;i<=(int)BlockType.LavaFalling;i++)LavaCount+=counts[i];
         for(int i=(int)BlockType.Wheat1;i<=(int)BlockType.Wheat7;i++)CropCount+=counts[i];
+        for(int i=(int)BlockType.Carrot1;i<=(int)BlockType.Potato7;i++)CropCount+=counts[i];
         StructureCount=counts[(int)BlockType.FenceGate]+counts[(int)BlockType.Door]+counts[(int)BlockType.DoorUpper]+counts[(int)BlockType.Torch]+counts[(int)BlockType.Bed]+counts[(int)BlockType.BedHead];
+        for(int i=(int)BlockType.WoodenSlab;i<=(int)BlockType.Sign;i++)StructureCount+=counts[i];
         for (int z = 0; z < Size; z++) for (int x = 0; x < Size; x++)
         {
             int y=storedHeight-1;while(y>=0 && !MDSM.Worlds.Blocks.IsSolid(GetBlock(x,y,z)))y--;

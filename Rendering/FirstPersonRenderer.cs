@@ -9,13 +9,14 @@ using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
-internal enum ViewModelKind { Hidden, Cube, Plant, Sprite }
+internal enum ViewModelKind { Hidden, Arm, Cube, Plant, Sprite }
 internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId Item)
 {
     public static ViewModelSelection Select(GameState state, Inventory inventory)
     {
         if (state != GameState.Playing) return new(ViewModelKind.Hidden, default);
         ItemStack stack = inventory.Selected;
+        if(stack.IsEmpty)return new(ViewModelKind.Arm,default);
         if (!stack.IsEmpty && Items.IsSprite(stack.Item) && (!Items.TryGetBlock(stack.Item,out var spriteBlock) || spriteBlock==BlockType.Bed)) return new(ViewModelKind.Sprite, stack.Item);
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)) return new(ViewModelKind.Hidden, default);
         return new(Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch ? ViewModelKind.Plant : ViewModelKind.Cube, stack.Item);
@@ -25,14 +26,16 @@ internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId It
 internal static class ViewModelLayout
 {
     // Leave the centered crosshair, hearts, and entire hotbar clear even in small windows.
-    public static Rectangle Bounds(Viewport viewport)
+    public static Rectangle Bounds(Viewport viewport,bool arm=false)
     {
         int width = Math.Max(1, (int)Math.Min(viewport.Width * 0.23f, viewport.Height * 0.32f));
         int left = viewport.Width - width - Math.Max(4, viewport.Width / 30);
         bool besideHotbar = left > InventoryLayout.HotbarSlot(viewport, 8).Right + 8;
         int bottom = besideHotbar ? viewport.Height : InventoryLayout.HotbarSlot(viewport, 0).Top - 28;
         int height = Math.Max(1, (int)Math.Min(viewport.Height * 0.42f, bottom - viewport.Height * 0.4f));
-        return new Rectangle(viewport.X + left,
+        // The empty arm reaches the right edge, while retaining the existing
+        // vertical anchor. Held items keep their original inset and framing.
+        return new Rectangle(viewport.X + (arm?viewport.Width-width:left),
             viewport.Y + bottom - height, width, height);
     }
 }
@@ -42,11 +45,23 @@ internal sealed class ViewModelGeometry
     private readonly ChunkMeshBuilder _builder = new();
     private readonly VertexPositionColorTexture[] _sprite = new VertexPositionColorTexture[ItemSpriteGeometry.VertexCount];
     private bool _isSprite;
-    public VertexPositionColorTexture[] Vertices => _isSprite ? _sprite : _builder.Vertices;
-    public int VertexCount => _isSprite ? _sprite.Length : _builder.VertexCount;
+    private readonly CuboidModelBuilder _arm=new(1,1);
+    private bool _isArm;
+    public VertexPositionColorTexture[] Vertices => _isArm?_arm.Vertices:_isSprite ? _sprite : _builder.Vertices;
+    public int VertexCount => _isArm?_arm.Count:_isSprite ? _sprite.Length : _builder.VertexCount;
     public void Build(ViewModelSelection selection)
     {
         _builder.Clear();
+        _isArm=selection.Kind==ViewModelKind.Arm;
+        if(_isArm)
+        {
+            _arm.Clear();
+            // A single 4x12x4-pixel rectangular arm, with a short sleeve at its
+            // shoulder end. Shared dimensions avoid seams or cube-shaped hands.
+            _arm.Cuboid(new(-.16f,-.65f,-.16f),new(.16f,-.32f,.16f),Matrix.Identity,0,new Color(55,138,153));
+            _arm.Cuboid(new(-.16f,-.32f,-.16f),new(.16f,.45f,.16f),Matrix.Identity,0,new Color(199,146,111));
+            return;
+        }
         _isSprite = selection.Kind == ViewModelKind.Sprite;
         if (selection.Kind == ViewModelKind.Hidden) return;
         if (_isSprite)
@@ -69,6 +84,7 @@ internal sealed class FirstPersonRenderer : IDisposable
     private readonly GraphicsDevice _device;
     private readonly TextureAtlas _atlas; // ContentManager owns all textures.
     private readonly AlphaTestEffect _effect;
+    private readonly Texture2D _armTexture;
     private DynamicVertexBuffer _buffer;
     private readonly ViewModelGeometry _geometry = new();
     private ViewModelSelection _previous = new(ViewModelKind.Hidden, default);
@@ -76,6 +92,7 @@ internal sealed class FirstPersonRenderer : IDisposable
     public FirstPersonRenderer(GraphicsDevice device, TextureAtlas atlas)
     {
         _device = device; _atlas = atlas;
+        _armTexture=new Texture2D(device,1,1);_armTexture.SetData(new[]{Color.White});
         _effect = new AlphaTestEffect(device)
         {
             VertexColorEnabled = true, View = Matrix.Identity,
@@ -84,7 +101,7 @@ internal sealed class FirstPersonRenderer : IDisposable
         _buffer = new DynamicVertexBuffer(device, typeof(VertexPositionColorTexture), 48, BufferUsage.WriteOnly);
     }
 
-    public void Draw(GameState state, Inventory inventory,float light=1)
+    public void Draw(GameState state, Inventory inventory,float light=1,Matrix? swing=null)
     {
         ViewModelSelection selection = ViewModelSelection.Select(state, inventory);
         if (selection.Kind == ViewModelKind.Hidden) return;
@@ -107,7 +124,7 @@ internal sealed class FirstPersonRenderer : IDisposable
         RasterizerState rasterizer = _device.RasterizerState; SamplerState sampler = _device.SamplerStates[0];
         try
         {
-            Rectangle bounds = ViewModelLayout.Bounds(original);
+            Rectangle bounds = ViewModelLayout.Bounds(original,selection.Kind==ViewModelKind.Arm);
             _device.SamplerStates[0] = SamplerState.PointClamp;
             _device.BlendState = BlendState.Opaque;
             _device.DepthStencilState = DepthStencilState.Default;
@@ -115,14 +132,17 @@ internal sealed class FirstPersonRenderer : IDisposable
             // The world is finished. Clear depth while retaining its color, then draw in camera space.
             _device.Clear(ClearOptions.DepthBuffer, Color.Transparent, 1, 0);
             _device.Viewport = new Viewport(bounds);
-            _effect.Texture = selection.Kind==ViewModelKind.Sprite?_atlas.ItemTexture(selection.Item):_atlas.Texture;
+            _effect.Texture = selection.Kind==ViewModelKind.Arm?_armTexture:selection.Kind==ViewModelKind.Sprite?_atlas.ItemTexture(selection.Item):_atlas.Texture;
             _effect.DiffuseColor=new Vector3(light);
             _effect.Projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(50), bounds.Width / (float)bounds.Height, 0.05f, 10);
-            _effect.World = Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(0.25f) * Matrix.CreateRotationZ(-0.1f) * Matrix.CreateTranslation(0, 0, -2.2f);
+            _effect.World = Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(selection.Kind==ViewModelKind.Arm?-.25f:0.25f) * Matrix.CreateRotationZ(selection.Kind==ViewModelKind.Arm?.45f:-0.1f)
+                * Matrix.CreateScale(selection.Kind==ViewModelKind.Arm?1.65f:1)
+                * (swing??Matrix.Identity) * Matrix.CreateTranslation(selection.Kind==ViewModelKind.Arm?.25f:0,selection.Kind==ViewModelKind.Arm?-.35f:0, -2.2f);
             _device.SetVertexBuffer(_buffer);
             foreach (EffectPass pass in _effect.CurrentTechnique.Passes)
             {
                 pass.Apply();
+                _device.Textures[0]=_effect.Texture;
                 _device.DrawPrimitives(PrimitiveType.TriangleList, 0, _geometry.VertexCount / 3);
             }
         }
@@ -133,5 +153,5 @@ internal sealed class FirstPersonRenderer : IDisposable
             _device.RasterizerState = rasterizer; _device.SamplerStates[0] = sampler;
         }
     }
-    public void Dispose() { _buffer.Dispose(); _effect.Dispose(); }
+    public void Dispose() { _buffer.Dispose(); _effect.Dispose(); _armTexture.Dispose(); }
 }

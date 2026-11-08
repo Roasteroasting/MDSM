@@ -52,12 +52,28 @@ internal sealed class CommandBar : IDisposable
         if (Input.Selected) _sprites.Draw(_pixel, new Rectangle(bar.X + 8, bar.Y + 5 * scale, Math.Max(1,length * charWidth), 9 * scale), new Color(65,85,120));
         PixelFont.Draw(_sprites, _pixel, Input.Text.AsSpan(start, length), bar.X + 8, bar.Y + 5 * scale, scale, Color.White);
         _sprites.Draw(_pixel, new Rectangle(bar.X + 8 + (Input.Caret - start) * charWidth, bar.Y + 4 * scale, scale, 9 * scale), Color.White);
-        string hint = "ENTER: RUN  ESC: CLOSE  UP/DOWN: HISTORY  /HELP";
+        string hint = "ENTER: RUN  ESC: CLOSE  TAB: COMPLETE  UP/DOWN: HISTORY";
         PixelFont.Draw(_sprites,_pixel, PixelFont.Fit(hint,columns),bar.X+8,bar.Y-12*scale,scale,new Color(215,215,215));
-        int visible = Math.Min(_lines.Count, Math.Max(0, (bar.Y - 18 * scale) / lineHeight));
+        var choices=Input.Suggestions;int choiceRows=Math.Min(6,Math.Min(choices.Count,Math.Max(0,(bar.Y-30*scale)/lineHeight)));
+        int choiceTop=bar.Y-16*scale-choiceRows*lineHeight;
+        if(choiceRows>0)
+        {
+            int first=Math.Clamp(Input.SuggestionIndex-choiceRows+1,0,Math.Max(0,choices.Count-choiceRows));
+            int width=Math.Min(bar.Width,Math.Max(140*scale,Math.Min(columns,40)*charWidth+16));
+            _sprites.Draw(_pixel,new Rectangle(bar.X,choiceTop-3*scale,width,choiceRows*lineHeight+6*scale),new Color(15,18,22,240));
+            for(int row=0;row<choiceRows;row++)
+            {
+                int index=first+row,y=choiceTop+row*lineHeight;
+                if(index==Input.SuggestionIndex)_sprites.Draw(_pixel,new Rectangle(bar.X+3,y-2*scale,width-6,lineHeight),new Color(60,80,110));
+                string label=choices[index]+(index==choices.Count-1?"":row==choiceRows-1?" ...":"");
+                PixelFont.Draw(_sprites,_pixel,PixelFont.Fit(label,Math.Max(1,(width-16)/charWidth)),bar.X+8,y,scale,index==Input.SuggestionIndex?Color.Yellow:Color.LightGray);
+            }
+        }
+        int resultBottom=choiceRows>0?choiceTop-8*scale:bar.Y-18*scale;
+        int visible = Math.Min(_lines.Count, Math.Max(0, resultBottom / lineHeight));
         if (visible > 0)
         {
-            int top = bar.Y - 16 * scale - visible * lineHeight;
+            int top = resultBottom - visible * lineHeight;
             _sprites.Draw(_pixel,new Rectangle(bar.X,top-3*scale,bar.Width,visible*lineHeight+6*scale),new Color(15,18,22,215));
             for (int i = 0; i < visible; i++)
                 PixelFont.Draw(_sprites,_pixel,_lines[i].Text,bar.X+8,top+i*lineHeight,scale,_lines[i].Color);

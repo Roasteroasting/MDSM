@@ -15,7 +15,8 @@ public enum GameState
     Controls,
     About,
     Sleeping,
-    Command
+    Command,
+    SignEditing
 }
 
 internal enum MenuAction

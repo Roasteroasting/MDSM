@@ -13,6 +13,14 @@ public static class SurvivalInteractions
     public static bool BeforeBlocks(GameSession session)
     {
         ItemId item=session.Inventory.Selected.Item;
+        if(item==Items.FlintAndSteel)
+        {
+            BlockHit? target=BlockRaycaster.Cast(session.World,session.Camera.Position,session.Camera.Forward);
+            if(target is BlockHit h && h.HasPlacementFace && session.World.Fire.Ignite(h.PlacementCell,new(-h.Normal.X,-h.Normal.Y,-h.Normal.Z)))
+            {if(!session.Player.Creative)session.Inventory.WearSelected();session.Swing.Trigger();session.Sounds.Local(SoundKind.Ignite);}
+            return true;
+        }
+        if(item==Items.Snowball){if(session.Projectiles.ThrowSnowball(session.Inventory,session.Camera.Position,session.Camera.Forward,session.Player.Creative))session.Swing.Trigger();return true;}
         if(item==Items.Wheat)
         {
             PassiveMob mob=EntityRaycaster.Cast(session.World,session.Mobs,session.Camera.Position,session.Camera.Forward);
@@ -39,14 +47,16 @@ public static class SurvivalInteractions
         if(hit is not BlockHit block)return false;
         if(Items.TryGetBlock(held.Item,out var bedBlock) && bedBlock==BlockType.Bed)
         {
-            if(block.HasPlacementFace && world.PlaceBed(block.PlacementCell,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),session.Player.Bounds)
-                && !session.Player.Creative)session.Inventory.ConsumeSelected();return true;
+            if(block.HasPlacementFace && world.PlaceBed(block.PlacementCell,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),session.Player.Bounds))
+            {if(!session.Player.Creative)session.Inventory.ConsumeSelected();session.Swing.Trigger();}return true;
         }
-        if(held.Item==Items.WheatSeeds){world.Farming.Plant(block.Cell,session.Inventory,session.Player.Creative);return true;}
-        if(Items.Get(held.Item).Tool==ToolKind.Hoe){world.Farming.Till(block.Cell,session.Inventory,session.Player.Creative);return true;}
+        if(held.Item==Items.WheatSeeds || (held.Item==Items.Carrot || held.Item==Items.Potato) && Blocks.Soil(world.GetBlock(block.Cell.X,block.Cell.Y,block.Cell.Z)))
+        {if(world.Farming.Plant(block.Cell,session.Inventory,session.Player.Creative))session.Swing.Trigger();return true;}
+        if(Items.Get(held.Item).Tool==ToolKind.Hoe){if(world.Farming.Till(block.Cell,session.Inventory,session.Player.Creative))session.Swing.Trigger();return true;}
         if(Items.TryGetBlock(held.Item,out BlockType type) && type is BlockType.Door or BlockType.FenceGate or BlockType.Torch)
         {
-            if(block.HasPlacementFace && world.PlaceStructure(block.PlacementCell,type,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),new(-block.Normal.X,-block.Normal.Y,-block.Normal.Z),session.Player.Bounds) && !session.Player.Creative)session.Inventory.ConsumeSelected();
+            if(block.HasPlacementFace && world.PlaceStructure(block.PlacementCell,type,(byte)(((int)MathF.Round(session.Camera.Yaw/MathHelper.PiOver2)+4)%4),new(-block.Normal.X,-block.Normal.Y,-block.Normal.Z),session.Player.Bounds))
+            {if(!session.Player.Creative)session.Inventory.ConsumeSelected();session.Swing.Trigger();}
             return true;
         }
         return false;

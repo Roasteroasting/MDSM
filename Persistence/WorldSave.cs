@@ -12,7 +12,7 @@ namespace MDSM.Persistence;
 
 public sealed record WorldSave(World World, string Name, Vector3 PlayerPosition, float Yaw, float Pitch,
     Inventory Inventory = null, DroppedItemState[] DroppedItems = null, int Health = Player.MaximumHealth, PigState[] Pigs = null,
-    MobState[] Mobs = null, MobPopulationState Population = null,ArrowState[] Arrows=null,MobState[] Hostiles=null,double ExactHealth=-1); // Mobs contains non-pig species.
+    MobState[] Mobs = null, MobPopulationState Population = null,ArrowState[] Arrows=null,MobState[] Hostiles=null,double ExactHealth=-1,ArrowState[] Snowballs=null,BurningState PlayerFire=default); // Mobs contains non-pig species.
 
 public sealed record WorldMetadata(string Name, int Seed, Vector3 PlayerPosition, float Yaw, float Pitch,
     WorldSize Size = WorldSize.Normal, int Version = 1, int StoredHeight = World.Height)
@@ -37,7 +37,9 @@ public sealed class GameSession
     public Projectiles Projectiles { get; }
     public BowController Bow { get; }=new();
     public ViewBobbing Bobbing { get; }=new();
+    public ViewModelSwing Swing { get; }=new();
     public BedSleepController Sleep { get; }=new();
+    public EnvironmentalHazards Hazards {get;}=new();
     internal Action<Guid> ProjectileWear { get; }
     public Point3? ContainerCell { get; private set; }
     public BlockContainer ActiveContainer=>ContainerCell.HasValue?World.Containers.Get(ContainerCell.Value):null;
@@ -61,7 +63,7 @@ public sealed class GameSession
         World.SavedGameMode=settings.GameMode;
         World.SavedDifficulty=settings.Difficulty;
         World.SuppressSupportDrops=Player.Creative;
-        if (modeChanged) { Player.StopMovement(); Player.Breath.Reset(); Mining.Reset(); Bow.Cancel(); Bobbing.Reset(); }
+        if (modeChanged) { Player.StopMovement(); Player.Breath.Reset();if(Player.Creative)Player.Burning.Reset(); Mining.Reset(); Bow.Cancel(); Bobbing.Reset(); }
         _appliedMode = settings.GameMode;
         Hostiles.ApplySettings(settings);
     }
@@ -79,7 +81,7 @@ public sealed class GameSession
         Items = new DroppedItems(World, save.DroppedItems);
         World.LiveDrops=Items;
         World.Sounds=Sounds;
-        Projectiles=new Projectiles(World,save.Arrows);
+        Projectiles=new Projectiles(World,save.Arrows,save.Snowballs);
         Mobs = new PassiveMobPopulation(World, save.Pigs, save.Mobs, save.Population);
         Hostiles=new HostilePopulation(World,save.Hostiles);
         World.LiveMobs=Mobs;
@@ -89,6 +91,7 @@ public sealed class GameSession
         Player.Sounds=Sounds;
         World.SuppressSupportDrops=Player.Creative;
         if(save.ExactHealth>=0)Player.RestoreFraction(save.ExactHealth);
+        Player.Burning.Restore(save.PlayerFire);
         if (Player.IsDead) Player.Respawn(World); // Saved drops already exist; never drop again on load.
         Camera = new Camera { Position = Player.EyePosition };
         Camera.RestoreOrientation(save.Yaw, save.Pitch);
@@ -99,7 +102,7 @@ public sealed class GameSession
         if (!TryReturnInterfaceItems())
             throw new System.InvalidOperationException("Make room for held items and crafting ingredients before saving.");
         return new(World, Name, Player.Position, Sleep.IsSleeping?Sleep.ReturnYaw:Camera.Yaw, Sleep.IsSleeping?Sleep.ReturnPitch:Camera.Pitch, Inventory.Clone(), Items.Capture(), Player.Health,
-            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture(),Hostiles.Capture(),Player.HealthValue);
+            Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture(),Hostiles.Capture(),Player.HealthValue,Projectiles.CaptureSnowballs(),Player.Burning.Capture());
     }
 
     public bool TryOpenCrafting(int width)

@@ -141,8 +141,8 @@ internal static class PresentationChecks
     {
         var inventory = new Inventory(); var geometry = new ViewModelGeometry();
         var selection = ViewModelSelection.Select(GameState.Playing, inventory);
-        Require(selection.Kind == ViewModelKind.Hidden, "Empty hotbar shows a view model.");
-        geometry.Build(selection); Require(geometry.VertexCount == 0, "Empty hotbar generated geometry.");
+        Require(selection.Kind == ViewModelKind.Arm, "Empty hotbar must show the arm.");
+        geometry.Build(selection); Require(geometry.VertexCount == 72, "Arm cuboids are missing.");
         foreach (BlockType block in Blocks.Selection)
         {
             inventory.SetSlot(0, new ItemStack(Items.FromBlock(block), 1));
@@ -151,7 +151,7 @@ internal static class PresentationChecks
             {Require(selection.Kind==ViewModelKind.Sprite,"Bed must use its item artwork in first person.");geometry.Build(selection);Require(geometry.VertexCount==ItemSpriteGeometry.VertexCount,"Bed sprite is missing.");continue;}
             bool plant = Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch;
             Require(selection.Item == inventory.Selected.Item && selection.Kind == (plant ? ViewModelKind.Plant : ViewModelKind.Cube), "Held item ignores inventory/shape.");
-            geometry.Build(selection);int expected=plant?24:block==BlockType.Door?72:block is BlockType.Fence or BlockType.FenceGate?108:36;
+            geometry.Build(selection);int expected=plant?24:block is BlockType.Door or BlockType.WoodenStairs or BlockType.CobblestoneStairs or BlockType.Sign?72:block is BlockType.Fence or BlockType.FenceGate?108:36;
             Require(geometry.VertexCount == expected, "Held geometry changed representation.");
             float minZ = float.MaxValue, maxZ = float.MinValue;
             for (int i = 0; i < geometry.VertexCount; i++)
@@ -160,11 +160,11 @@ internal static class PresentationChecks
                 Require(vertex.TextureCoordinate.X > 0 && vertex.TextureCoordinate.X < 1 && vertex.TextureCoordinate.Y > 0 && vertex.TextureCoordinate.Y < 1,
                     "Model UVs escaped atlas texel centers.");
             }
-            float minimumDepth=Blocks.Get(block).Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door or BlockShape.Pane?.1f:.5f;
+            float minimumDepth=Blocks.Get(block).Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door or BlockShape.Pane or BlockShape.Sign?.1f:.5f;
             Require(maxZ - minZ > minimumDepth, "Held cube/plant became a flat HUD icon.");
         }
-        inventory.SelectedSlot = 1; Require(ViewModelSelection.Select(GameState.Playing, inventory).Kind == ViewModelKind.Hidden, "Empty slot did not hide the held item.");
-        geometry.Build(ViewModelSelection.Select(GameState.Playing, inventory)); Require(geometry.VertexCount == 0, "Empty slot retained item geometry.");
+        inventory.SelectedSlot = 1; Require(ViewModelSelection.Select(GameState.Playing, inventory).Kind == ViewModelKind.Arm, "Empty slot did not restore the arm.");
+        geometry.Build(ViewModelSelection.Select(GameState.Playing, inventory)); Require(geometry.VertexCount == 72, "Empty slot retained item geometry.");
         inventory.SelectedSlot = 0;
         Require(ViewModelSelection.Select(GameState.Playing, inventory).Item == inventory.Selected.Item, "Returning to an occupied slot lost its item model.");
         foreach (GameState state in Enum.GetValues<GameState>())
@@ -174,6 +174,9 @@ internal static class PresentationChecks
         {
             var viewport = new Viewport(0, 0, size.X, size.Y);
             Rectangle bounds = ViewModelLayout.Bounds(viewport), hotbar = InventoryLayout.HotbarSlot(viewport, 0);
+            Rectangle arm=ViewModelLayout.Bounds(viewport,true);
+            Require(arm.Right==viewport.Bounds.Right && arm.Left>bounds.Left && arm.Bottom==bounds.Bottom && arm.Height==bounds.Height
+                && !arm.Intersects(HealthHud.Bounds(viewport)) && !arm.Intersects(InventoryLayout.HotbarSlot(viewport,8)),"Arm lost its right/bottom anchor or overlaps the HUD.");
             Require(bounds.Left > size.X / 2 && bounds.Right <= size.X && bounds.Top > 0 && bounds.Bottom <= size.Y
                 && !bounds.Intersects(HealthHud.Bounds(viewport)) && !bounds.Intersects(InventoryLayout.HotbarSlot(viewport, 8)), "View model overlaps HUD/crosshair or leaves viewport.");
         }

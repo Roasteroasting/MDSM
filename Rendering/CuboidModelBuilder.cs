@@ -23,8 +23,8 @@ internal sealed class CuboidModelBuilder(int textureWidth, int textureHeight)
 
         void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, int faceTile, float shade)
         {
-            int columns = textureWidth / 16;
-            Rectangle source = region ?? new Rectangle(faceTile % columns * 16, faceTile / columns * 16, 16, 16);
+            int columns = Math.Max(1,textureWidth / 16);
+            Rectangle source = region ?? new Rectangle(faceTile % columns * 16, faceTile / columns * 16, Math.Min(16,textureWidth), Math.Min(16,textureHeight));
             Vector2 Uv(float u, float v) => new((source.X + 0.5f + u * (source.Width - 1)) / textureWidth,
                 (source.Y + 0.5f + v * (source.Height - 1)) / textureHeight);
             Color color = new(tint.ToVector3() * shade);

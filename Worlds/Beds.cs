@@ -16,7 +16,7 @@ public sealed partial class World
         if(Structures.Count>=65535)return false;
         foreach(Point3 p in new[]{foot,head})
         {
-            if(!Contains(p.X,p.Y,p.Z) || GetBlock(p.X,p.Y,p.Z)!=BlockType.Air || !IsSolid(p.X,p.Y-1,p.Z)
+            if(!Contains(p.X,p.Y,p.Z) || GetBlock(p.X,p.Y,p.Z)!=BlockType.Air || !SupportsVoxelTop(new(p.X,p.Y-1,p.Z))
                 || Overlaps(new(new(p.X,p.Y,p.Z),new(p.X+1,p.Y+9f/16,p.Z+1)),player)
                 || PlacementBlockedByMobs(p,BlockType.Bed) || Gravity.Intersects(Bounds(p)))return false;
         }

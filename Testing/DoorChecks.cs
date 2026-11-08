@@ -99,7 +99,7 @@ internal static class DoorChecks
         }
         private void Obtain(BlockType block,bool full=false)
         {
-            ItemId item=Items.FromBlock(block);int index=Array.IndexOf(Items.Obtainable.ToArray(),item);
+            ItemId item=Items.FromBlock(block);int index=Array.IndexOf(CreativeCatalog.All.ToArray(),item);
             Check(index>=0 && index<InventoryLayout.BrowserRows(GraphicsDevice.Viewport)*5,"Regression item is not visible in browser.");
             Click(InventoryLayout.BrowserSlot(GraphicsDevice.Viewport,index),shift:full);
         }
@@ -118,7 +118,7 @@ internal static class DoorChecks
                 {
                     case 1:
                         Field<GameSettings>("_settings").GameMode=GameMode.Creative;
-                        var world=PigChecks.Flat();var save=new WorldSave(world,"Door acquisition",new(40,1,40),0,0,new Inventory());
+                        var world=PigChecks.Flat();world.SavedGameMode=GameMode.Creative;var save=new WorldSave(world,"Door acquisition",new(40,1,40),0,0,new Inventory());
                         string id=Field<WorldSaveManager>("_saves").Create(save);Call("BeginWorld",id,save);
                         RenderingPerformanceChecks.Warm(Field<WorldRenderer>("_renderer"),Session.Camera);Press(Keys.E);break;
                     case 2:

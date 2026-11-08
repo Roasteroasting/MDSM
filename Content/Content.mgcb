@@ -29,6 +29,17 @@
 /processorParam:TextureFormat=Color
 /build:Blocks/terrain.png
 
+#begin UI/text.png
+/importer:TextureImporter
+/processor:TextureProcessor
+/processorParam:ColorKeyEnabled=False
+/processorParam:GenerateMipmaps=False
+/processorParam:PremultiplyAlpha=True
+/processorParam:ResizeToPowerOfTwo=False
+/processorParam:MakeSquare=False
+/processorParam:TextureFormat=Color
+/build:UI/text.png
+
 #begin Mobs/pig.png
 /importer:TextureImporter
 /processor:TextureProcessor

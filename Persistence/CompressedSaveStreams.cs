@@ -49,8 +49,9 @@ public static partial class WorldSerializer
             Span<byte> header=stackalloc byte[RecordHeaderBytes];RecordHeader(header,tag,sequence,input,payload.Length,actual);
             target.Write(header);target.Write(payload);_used=0;
         }
-        public void Finish(World world)
+        public void Finish(WorldSave save)
         {
+            World world=save.World;
             if(_phase!=2)throw new InvalidDataException("Incomplete world payload.");
             if(_used>0)Emit(GameStateRecord,_stateFrames++,codec);
             BinaryPrimitives.WriteDoubleLittleEndian(_raw,world.Time.Seconds);
@@ -61,6 +62,9 @@ public static partial class WorldSerializer
             _raw[10]=world.AllowCheats?(byte)1:(byte)0;
             _raw[11]=(byte)world.SavedDifficulty;
             _used=12;Emit(EnvironmentRecord,0,codec);
+            byte[] features=WriteFeatures(save);int sequence=0;
+            for(int offset=0;offset<features.Length;offset+=_raw.Length)
+            {_used=Math.Min(_raw.Length,features.Length-offset);features.AsSpan(offset,_used).CopyTo(_raw);Emit(FeaturesRecord,sequence++,codec);}
             Span<byte> end=stackalloc byte[RecordHeaderBytes];RecordHeader(end,EndRecord,0,ReadOnlySpan<byte>.Empty,0,SaveCodec.Stored);target.Write(end);_finished=true;
         }
         protected override void Dispose(bool disposing){if(disposing)_compression.Dispose();base.Dispose(disposing);}
@@ -73,6 +77,9 @@ public static partial class WorldSerializer
         private long _decoded,_encoded;
         private bool _ended;
         internal WorldEnvironment? Environment { get; private set; }
+        private readonly MemoryStream _features=new();
+        private int _featureFrames;
+        internal byte[] Features=>_featureFrames==0?null:_features.ToArray();
         public override bool CanRead=>true;public override bool CanWrite=>false;
         public override void Write(byte[] b,int o,int n)=>throw new NotSupportedException();
         public override int Read(byte[] b,int o,int n)=>Read(b.AsSpan(o,n));
@@ -93,7 +100,7 @@ public static partial class WorldSerializer
                 var codec=(SaveCodec)header[8];int sequence=BinaryPrimitives.ReadInt32LittleEndian(header[12..]),raw=BinaryPrimitives.ReadInt32LittleEndian(header[16..]),packed=BinaryPrimitives.ReadInt32LittleEndian(header[20..]);
                 if((flags&~RequiredRecord)!=0 || header[9]!=0 || header[10]!=0 || header[11]!=0 || (byte)codec>2)
                     throw new InvalidDataException("Unsupported compressed record flags or codec.");
-                bool known=tag<=EnvironmentRecord;
+                bool known=tag<=FeaturesRecord;
                 if(known && (version!=1 || flags!=RequiredRecord) || !known && (flags&RequiredRecord)!=0)
                     throw new InvalidDataException("Unsupported required save section or schema.");
                 if(raw<0 || raw>_raw.Length || packed<0 || packed>_packed.Length || sequence<0 || raw==0 && tag!=EndRecord)
@@ -107,12 +114,17 @@ public static partial class WorldSerializer
                 int chunkCount=metadata.StoredBlockCount/Chunk.BlockCount;
                 if(tag==EndRecord)
                 {
-                    if(_phase!=2 || _chunks!=chunkCount || _states==0 || metadata.Version>=12 && Environment==null || raw!=0 || packed!=0 || sequence!=0 || codec!=SaveCodec.Stored)
+                    if(_phase!=2 || _chunks!=chunkCount || _states==0 || metadata.Version>=12 && Environment==null || metadata.Version>=14 && _featureFrames==0 || raw!=0 || packed!=0 || sequence!=0 || codec!=SaveCodec.Stored)
                         throw new InvalidDataException("Save is missing required sections or has an invalid end record.");
                     Span<byte> expected=stackalloc byte[32];source.ReadExactly(expected);
                     if(!CryptographicOperations.FixedTimeEquals(expected,whole.GetHashAndReset()))throw new InvalidDataException("Compressed save checksum failed.");
                     if(source.ReadByte()!=-1)throw new InvalidDataException("Compressed save has trailing data.");
                     _ended=true;_position=_length=0;return;
+                }
+                if(tag==FeaturesRecord)
+                {
+                    if(metadata.Version<14 || Environment==null || sequence!=_featureFrames++ || _features.Length+raw>16*1024*1024)throw new InvalidDataException("Invalid world feature frames.");
+                    _features.Write(_raw,0,raw);continue;
                 }
                 if(tag==CoreHeaderRecord)
                 {
@@ -146,7 +158,7 @@ public static partial class WorldSerializer
                 _position=0;_length=raw;return;
             }
         }
-        protected override void Dispose(bool disposing){if(disposing)_compression.Dispose();base.Dispose(disposing);}
+        protected override void Dispose(bool disposing){if(disposing){_compression.Dispose();_features.Dispose();}base.Dispose(disposing);}
     }
     private readonly record struct WorldEnvironment(double Seconds,MDSM.Core.GameMode Mode,bool AllowCheats,MDSM.Core.Difficulty Difficulty);
 }

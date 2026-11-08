@@ -23,6 +23,7 @@ public sealed class WorldDecorator
             if (NearSpawn(world, x, z, SpawnClearRadius)) continue;
             float density = Density(x, z);
             float chance = density < 0.4f ? 0.0004f : 0.002f + (density - 0.4f) * 0.015f;
+            if(world.Climate.At(x,z)==Biome.SnowyForest)chance*=1.8f;
             if (Unit(Hash(x, z, 1)) >= chance || HasNearbyRoot(world, roots, x, z)) continue;
             int ground = heights[z * world.Width + x];
             int minimum = ground, maximum = ground;

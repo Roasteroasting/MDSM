@@ -117,17 +117,19 @@ internal static class InventoryChecks
         {
             Mine(null,false,.15f);
             inventory.SetSlot(0,MiningRules.Profile(block).Category==MiningCategory.Mineral?new ItemStack(Items.Tool(ToolTier.Diamond,ToolKind.Pickaxe),1):default);
+            if(block is BlockType.Cactus or BlockType.DeadBush)world.SetBlock(15,9,16,BlockType.Sand);
             if(block==BlockType.Bed)
             {world.SetBlock(15,9,16,BlockType.Grass);world.SetBlock(15,9,15,BlockType.Grass);Require(world.PlaceBed(new(15,10,16),0,new Player(new(128,30,128)).Bounds),"Bed mining fixture placement failed.");}
             else world.SetBlock(15,10,16,block);
             int before=drops.Entities.Count;float duration=MiningRules.Seconds(block,inventory.Selected);
             if(block==BlockType.Bedrock){Require(duration<0 && !Mine(hit,true,100) && world.GetBlock(15,10,16)==block && drops.Entities.Count==before,"Bedrock broke/dropped.");continue;}
-            bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower or BlockType.Sapling or BlockType.Torch;
+            bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower or BlockType.Sapling or BlockType.Torch or BlockType.DeadBush;
             Require(instant?duration==0:duration>0,"Mining duration policy invalid.");
             if(!instant)Require(!Mine(hit,true,duration-.01f) && mining.Progress>0,"Block broke too early.");
             Require(Mine(hit,true,instant?0:.02f) && world.GetBlock(15,10,16)==BlockType.Air && mining.Progress==0,"Block did not break at duration.");
             if(block is BlockType.Glass or BlockType.GlassPane){Require(drops.Entities.Count==before,"Glass should not drop a block.");continue;}
             if(block==BlockType.TallGrass){Require(drops.Entities.Count<=before+1 && drops.Entities.Skip(before).All(d=>d.Item==Items.WheatSeeds),"Tall grass produced invalid loot.");continue;}
+            if(block==BlockType.DeadBush){Require(drops.Entities.Count<=before+2 && drops.Entities.Skip(before).All(d=>d.Item==Items.Stick),"Dead bush produced invalid loot.");continue;}
             if(block==BlockType.Leaves){Require(drops.Entities.Skip(before).All(d=>d.Item==Items.Sapling || d.Item==Items.Stick || d.Item==Items.Apple),"Leaves bypassed the loot table.");continue;}
             ItemId expected=block==BlockType.Stone?Items.FromBlock(BlockType.Cobblestone):block==BlockType.CoalOre?Items.Coal:block==BlockType.DiamondOre?Items.Diamond:Items.FromBlock(block);
             Require(drops.Entities.Count==before+1 && (drops.Entities[^1].Item==expected || block==BlockType.Gravel && drops.Entities[^1].Item==Items.Flint)

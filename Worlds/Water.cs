@@ -16,7 +16,7 @@ public static class Water
     public static float Height(BlockType block) => block == BlockType.WaterFalling ? 1
         : IsWater(block) ? (8 - Level(block)) / 9f : 0;
     public static bool Replaceable(BlockType block) => block == BlockType.Air || IsWater(block)
-        || Blocks.Get(block).NeedsGrass;
+        || Blocks.Get(block).NeedsGrass || block is BlockType.Fire or BlockType.Snow;
 
     // Each shared corner uses exactly the same four world cells, even across chunk seams.
     public static float CornerHeight(World world, int cornerX, int y, int cornerZ)

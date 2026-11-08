@@ -22,8 +22,8 @@ public sealed partial class World
             if(direction.Y!=0)continue;
             Point3 neighbor=cell+direction;
             BlockType existing=GetBlock(neighbor.X,neighbor.Y,neighbor.Z);
-            if(existing is not (BlockType.GlassPane or BlockType.Fence))continue;
-            count=ShapeBoxes(neighbor,existing,boxes,true,changedNeighbor:cell,replacement:block);
+            if(existing is not (BlockType.GlassPane or BlockType.Fence) && Blocks.Get(existing).Shape!=BlockShape.Stairs)continue;
+            count=ShapeBoxes(neighbor,existing,boxes,true,changedNeighbor:cell,replacement:block,neighborState:proposed);
             for(int i=0;i<count;i++)if(MobOverlaps(boxes[i]))return true;
         }
         return false;

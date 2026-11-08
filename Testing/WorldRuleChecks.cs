@@ -68,7 +68,7 @@ internal static class WorldRuleChecks
         {
             byte[] v12=current[..(at+56+10)].Concat(current[(at+56+12)..]).ToArray();BitConverter.GetBytes(12).CopyTo(v12,4);
             BitConverter.GetBytes(10).CopyTo(v12,at+16);BitConverter.GetBytes(10).CopyTo(v12,at+20);v12[at+56+8]=oldMode;
-            SHA256.HashData(v12.AsSpan(at+56,10)).CopyTo(v12.AsSpan(at+24,32));Rehash(v12);
+            SHA256.HashData(v12.AsSpan(at+56,10)).CopyTo(v12.AsSpan(at+24,32));v12=OvernightChecks.WithoutFeatures(v12);Rehash(v12);
             var loaded=WorldSerializer.Read(new MemoryStream(v12));
             Check(loaded.World.AllowCheats && loaded.World.SavedGameMode==GameMode.Survival && loaded.World.SavedDifficulty==Difficulty.Normal && loaded.World.Time.Seconds==876.25
                 && hash.AsSpan().SequenceEqual(CompressionChecks.RawHash(loaded)),"Pre-change v12 did not migrate exactly once to allowed/Normal/Survival.");
@@ -76,7 +76,7 @@ internal static class WorldRuleChecks
             using var migrated=new MemoryStream();WorldSerializer.Write(migrated,played.Capture());migrated.Position=0;var again=WorldSerializer.Read(migrated);
             Check(again.World.SavedGameMode==GameMode.Creative && again.World.SavedDifficulty==Difficulty.Hard && again.World.AllowCheats,"Migrated world reset its chosen rules on subsequent load.");
         }
-        byte[] v11=current[..at].Concat(current[(at+56+12)..]).ToArray();BitConverter.GetBytes(11).CopyTo(v11,4);Rehash(v11);
+        byte[] v11=current[..at].Concat(current[(at+56+12)..]).ToArray();BitConverter.GetBytes(11).CopyTo(v11,4);v11=OvernightChecks.WithoutFeatures(v11);Rehash(v11);
         var legacy=WorldSerializer.Read(new MemoryStream(v11));Check(legacy.World.AllowCheats && legacy.World.SavedDifficulty==Difficulty.Normal && legacy.World.SavedGameMode==GameMode.Survival,"V11 migration failed.");
         using var raw=new MemoryStream();WorldSerializer.WriteLegacy(raw,save);raw.Position=0;legacy=WorldSerializer.Read(raw);
         Check(legacy.World.AllowCheats && legacy.World.SavedDifficulty==Difficulty.Normal && legacy.World.SavedGameMode==GameMode.Survival,"Raw legacy migration failed.");

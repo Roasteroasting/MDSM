@@ -13,7 +13,8 @@ public sealed class ShapedRecipe
     public int Width { get; }
     public int Height { get; }
     public ItemStack Output { get; }
-    public ShapedRecipe(int width, int height, ReadOnlySpan<CraftingIngredient> ingredients, ItemStack output)
+    public bool Shapeless {get;}
+    public ShapedRecipe(int width, int height, ReadOnlySpan<CraftingIngredient> ingredients, ItemStack output,bool shapeless=false)
     {
         if (width < 1 || width > 3 || height < 1 || height > 3 || ingredients.Length != width * height || output.IsEmpty)
             throw new ArgumentException("Invalid crafting recipe.");
@@ -27,9 +28,26 @@ public sealed class ShapedRecipe
             }
         if (!any) throw new ArgumentException("Recipes need ingredients.");
         Width = width; Height = height; _ingredients = ingredients.ToArray(); Output = output;
+        Shapeless=shapeless;
     }
     internal bool Matches(CraftingGrid grid, int offsetX, int offsetY)
     {
+        if(Shapeless)
+        {
+            for(int slot=0;slot<grid.SlotCount;slot++)
+            {
+                var actual=grid[slot];if(actual.IsEmpty)continue;bool known=false;
+                foreach(var need in _ingredients)known|=need.Item==actual.Item;if(!known)return false;
+            }
+            foreach(var need in _ingredients)
+            {
+                if(need==default)continue;int total=0,required=0;
+                foreach(var ingredient in _ingredients)if(ingredient.Item==need.Item)required+=ingredient.Count;
+                for(int slot=0;slot<grid.SlotCount;slot++)if(grid[slot].Item==need.Item)total+=grid[slot].Count;
+                if(total<required)return false;
+            }
+            return true;
+        }
         for (int y = 0; y < grid.Width; y++) for (int x = 0; x < grid.Width; x++)
         {
             int px = x - offsetX, py = y - offsetY;
@@ -41,6 +59,16 @@ public sealed class ShapedRecipe
     }
     internal void Consume(CraftingGrid grid, int offsetX, int offsetY)
     {
+        if(Shapeless)
+        {
+            foreach(var need in _ingredients)
+            {
+                int left=need.Count;
+                for(int slot=0;slot<grid.SlotCount && left>0;slot++)if(grid[slot].Item==need.Item)
+                {int n=Math.Min(left,grid[slot].Count);grid.SetSlot(slot,grid[slot].WithCount(grid[slot].Count-n));left-=n;}
+            }
+            return;
+        }
         for (int y = 0; y < Height; y++) for (int x = 0; x < Width; x++)
         {
             var need = _ingredients[y * Width + x]; if (need == default) continue;
@@ -64,6 +92,14 @@ public static class CraftingRecipes
             recipes.Add(new(w,h,pattern,new ItemStack(output,count)));
         }
         Add(2,2,Items.FromBlock(BlockType.CraftingTable),1,P,P,P,P);
+        recipes.Add(new(2,1,new[]{new CraftingIngredient(Items.IronIngot),new CraftingIngredient(Items.Flint)},new(Items.FlintAndSteel,1),true));
+        Add(3,3,Items.FromBlock(BlockType.Sign),3,P,P,P,P,P,P,default,S,default);
+        foreach(var material in new[]{(P,BlockType.WoodenSlab,BlockType.WoodenStairs),(C,BlockType.CobblestoneSlab,BlockType.CobblestoneStairs)})
+        {
+            Add(3,1,Items.FromBlock(material.Item2),6,material.Item1,material.Item1,material.Item1);
+            Add(2,2,Items.FromBlock(material.Item3),4,material.Item1,default,material.Item1,material.Item1);
+            Add(2,2,Items.FromBlock(material.Item3),4,default,material.Item1,material.Item1,material.Item1);
+        }
         Add(1,1,P,4,Items.FromBlock(BlockType.WoodLog));
         Add(1,2,S,4,P,P);
         Add(3,3,Items.FromBlock(BlockType.Chest),1,P,P,P,P,default,P,P,P,P);

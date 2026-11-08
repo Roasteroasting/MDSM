@@ -26,7 +26,10 @@ public sealed class PlayerAudio
         {
             _peak=Math.Max(_peak,player.Position.Y);
             if(player.Grounded && !_grounded && _peak-player.Position.Y>.15f)
+            {
                 world.Sounds?.Block(SoundKind.Land,BlockSounds.Surface(world,player.Position),player.Position);
+                world.Particles.Burst(BlockSounds.Surface(world,player.Position),player.Position,true);
+            }
             if(player.Grounded)
             {
                 _peak=player.Position.Y;

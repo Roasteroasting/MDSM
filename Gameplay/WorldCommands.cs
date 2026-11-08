@@ -74,7 +74,7 @@ internal sealed class WorldCommands
     }
     private static CommandResult Kill(string[] args, GameSession session)
     {
-        const string usage = "Usage: /kill @p OR /kill @e [type=mob|passive|hostile|player|item|arrow|falling_block|species name_or_ID]";
+        const string usage = "Usage: /kill @p OR /kill @e [type=mob|passive|hostile|player|item|arrow|snowball|falling_block|species name_or_ID]";
         if (args.Length is < 2 or > 3) return Error(usage);
         bool playerSelector = args[1].Equals("@p", StringComparison.OrdinalIgnoreCase);
         if (playerSelector && args.Length != 2 || !playerSelector && !args[1].Equals("@e", StringComparison.OrdinalIgnoreCase)) return Error(usage);
@@ -85,14 +85,15 @@ internal sealed class WorldCommands
             if (!args[2].StartsWith("type=", StringComparison.OrdinalIgnoreCase)) return Error(usage);
             type = args[2][5..].ToLowerInvariant();
             if (TryMob(type, out MobSpecies selected)) species = selected;
-            else if (type is not ("mob" or "passive" or "hostile" or "player" or "item" or "arrow" or "falling_block")) return Error("Unknown entity type. Use /help kill.");
+            else if (type is not ("mob" or "passive" or "hostile" or "player" or "item" or "arrow" or "snowball" or "falling_block")) return Error("Unknown entity type. Use /help kill.");
         }
         bool all = type == "all";
         int count = 0, failed = 0;
         // Free pre-existing item capacity first for an all-entity wipe, then use
         // ordinary mob deaths so natural population accounting stays correct.
         if (all || type == "item") count += session.Items.RemoveAll();
-        if (all || type == "arrow") count += session.Projectiles.RemoveAll();
+        if (all)count+=session.Projectiles.RemoveAll();
+        else if(type is "arrow" or "snowball")count+=session.Projectiles.RemoveAll(type=="arrow"?ProjectileKind.Arrow:ProjectileKind.Snowball);
         if (all || type == "falling_block") count += session.World.Gravity.RemoveActive();
         if (all || type is "mob" or "passive" || species < MobSpecies.Zombie)
             for (int i = session.Mobs.Entities.Count - 1; i >= 0; i--)
@@ -153,7 +154,7 @@ internal sealed class WorldCommands
         {
             "give" => new(true, "/give @p <item name_or_ID> [quantity 1-2304]\nExample: /give @p stone 64\nUse underscores in names, e.g. diamond_pickaxe.\nAll items must fit. Equipment arrives at full durability."),
             "spawn" => new(true, "/spawn <mob name_or_ID> [quantity 1-32]\nExample: /spawn sheep 3\nFinds safe nearby ground; respects entity limits and Peaceful.\nExplicit passive mobs do not increase respawn targets."),
-            "kill" => new(true, "/kill @p - Kill yourself, including in Creative.\n/kill @e - Remove ALL entities, including death loot.\n/kill @e type=<entity> - Filter targets.\nTypes: mob, passive, hostile, player, item, arrow,\nfalling_block, or a mob species name/ID (/help mobs).\nExample: /kill @e type=pig\nFiltered mob kills keep normal drops and respawn rules.\nItem/falling-block removal permanently deletes those entities."),
+            "kill" => new(true, "/kill @p - Kill yourself, including in Creative.\n/kill @e - Remove ALL entities, including death loot.\n/kill @e type=<entity> - Filter targets.\nTypes: mob, passive, hostile, player, item, arrow,\nsnowball, falling_block, or a mob species name/ID.\nExample: /kill @e type=pig\nFiltered mob kills keep normal drops and respawn rules.\nItem/falling-block removal permanently deletes those entities."),
             "mobs" => new(true, string.Join("\n", Enum.GetValues<MobSpecies>().Select(s => $"{(byte)s}: {s.ToString().ToLowerInvariant()}"))),
             "time" => new(true, "/time set <0-23999|sunrise|day|noon|sunset|night|midnight>\n/time query\n0 sunrise, 1000 day, 6000 noon, 12000 sunset,\n14000 night, 18000 midnight. 20 ticks = 1 gameplay second."),
             "gamemode" => new(true, "/gamemode <survival|creative>\nChanges the same mode setting used by Settings.\nPreserves inventory and equipment."),

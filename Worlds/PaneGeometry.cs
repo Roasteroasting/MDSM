@@ -28,11 +28,17 @@ public sealed partial class World
         if((connections&8)!=0)boxes[count++]=new(at+new Vector3(lo,0,hi),at+new Vector3(hi,1,1));
         return count;
     }
-    private bool PlacementOverlaps(Point3 cell,BlockType block,BoundingBox player)
+    private bool PlacementOverlaps(Point3 cell,BlockType block,BoundingBox player,StructureState? proposed=null)
     {
-        if(block!=BlockType.GlassPane)return Overlaps(Bounds(cell),player);
-        Span<BoundingBox> boxes=stackalloc BoundingBox[5];int count=PaneBoxes(cell,boxes);
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];int count=ShapeBoxes(cell,block,boxes,true,proposed);
         for(int i=0;i<count;i++)if(Overlaps(boxes[i],player))return true;
+        foreach(Point3 direction in Adjacent)
+        {
+            if(direction.Y!=0)continue;Point3 p=cell+direction;BlockType existing=GetBlock(p.X,p.Y,p.Z);
+            if(Blocks.Get(existing).Shape!=BlockShape.Stairs)continue;
+            count=ShapeBoxes(p,existing,boxes,true,changedNeighbor:cell,replacement:block,neighborState:proposed);
+            for(int i=0;i<count;i++)if(Overlaps(boxes[i],player))return true;
+        }
         return false;
     }
 }

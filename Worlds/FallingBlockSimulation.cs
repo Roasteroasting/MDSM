@@ -105,7 +105,7 @@ public sealed class FallingBlockSimulation
                 for (int y = 1; y < World.Height; y++)
                 {
                     BlockType block = _world.GetBlock(x, y, z);
-                    if (!Blocks.Falls(block) || _world.IsSolid(x, y - 1, z)) continue;
+                    if (!Blocks.Falls(block) || _world.SupportsVoxelTop(new(x,y-1,z))) continue;
                     if (_active.Count == MaximumActiveBlocks) { retry = true; break; }
                     if (_world.SetBlock(x, y, z, BlockType.Air))
                     {
@@ -163,7 +163,13 @@ public sealed class FallingBlockSimulation
                     next = support;
                     if (!movingSupport)
                     {
-                        if(_world.SetBlock(block.X, (int)floor, block.Z, block.Block))_world.Sounds?.Block(SoundKind.Land,block.Block,new(block.X+.5f,(float)floor,block.Z+.5f));
+                        Point3 ground=new(block.X,(int)floor-1,block.Z);
+                        bool partial=Blocks.Get(_world.GetBlock(ground.X,ground.Y,ground.Z)).Shape is BlockShape.Slab or BlockShape.Stairs
+                            && !_world.SupportsVoxelTop(ground);
+                        bool settled=partial?_world.LiveDrops?.TrySpawn(new(MDSM.Inventories.Items.FromBlock(block.Block),1),new(block.X+.5f,(float)floor+.2f,block.Z+.5f),.35f)==true
+                            :_world.SetBlock(block.X, (int)floor, block.Z, block.Block);
+                        if(!settled){block.Y=next;block.DownwardSpeed=0;below=block;i++;continue;}
+                        if(!partial)_world.Sounds?.Block(SoundKind.Land,block.Block,new(block.X+.5f,(float)floor,block.Z+.5f));
                         int last = _active.Count - 1;
                         _active[block.Index] = _active[last]; _active[block.Index].Index = block.Index; _active.RemoveAt(last);
                         stack.RemoveAt(i); continue;
