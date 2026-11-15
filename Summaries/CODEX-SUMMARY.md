@@ -1099,3 +1099,140 @@ Final isolated traversal measurements, now including the new terrain/plants and 
 All four measured phases had **zero frames over 16.7 ms**. Moving phases covered **451.6 / 451.5 blocks**, rebuilt **1,173 / 1,185 chunks**, retained **512 / 2,048 passives**, and ended with **1,468 / 1,499 resident chunks** and no queued retirements. Terrain buffers were estimated **352.9 / 365.2 MiB** (including any live pending retirements), water/lava simulation frontiers were zero, and moving managed allocations averaged **349 / 428 bytes per rendered frame**. Maximum full preparation **4.78 / 4.56 ms**, geometry **0.92 / 0.90 ms**, and water **0.40 / 0.49 ms**. Whole-process working-set snapshots were approximately **739 / 1,240 MiB**, not memory peaks or VRAM. Massive ended with one ordinarily spawned hostile. These are actual rendering/simulation runs, not unit-test-only shortcuts or reduced populations.
 
 Recommended manual checks: longer walks and fast flights through many regions at ordinary FPS caps, sudden turns/high viewpoints, busy fluid/fire/weather/combat scenes, subjective mountain traversal, desert plant density, command-list readability and all wall-fire views. Individual driver calls, foreground cold-light queries, water uploads and simulation/OS stalls can still exceed cooperative budgets; the results do not establish universal stutter elimination. No physical-input or extended manual gameplay verification was performed. `git diff --check` passed. README.md remains unchanged. No publishing commands, distribution builds, commits or new runtime dependencies were introduced.
+## Cave-relative dungeon frequency (2026-11-14)
+
+Investigated the actual new-world cave/dungeon pipeline. The old dungeon cap was
+horizontal area / 32,768, allowing only **8 rooms in Normal worlds**, despite
+roughly 175-197 original cave walks in the sampled seeds. Baseline full-generation
+measurements: Normal seed 173 **8/193**, seed 137 **8/175**, seed -907 **8/197**
+(rooms/cave walks), only about 4-5%. The old loop reached its cap; increasing
+candidate retries alone would not fix the scarcity.
+
+[CaveGenerator.cs](../Worlds/CaveGenerator.cs) now records small temporary ranges
+into its existing sparse candidate list, one range per original cave walk plus
+its branch. This adds no random draws and leaves cave carving unchanged.
+[DungeonGenerator.cs](../Worlds/DungeonGenerator.cs) deterministically shuffles
+those walks and targets **ceil(cave-walk count / 2)** rooms, trying at most **48
+sites/height variants per walk** and placing at most one room from each walk.
+Rejected walks fall through to other candidates. It does not force unsafe rooms
+to reach the target. Cave walks can intersect into larger connected networks, so
+this is not a promise of one room per two independently connected cave networks.
+
+The existing 5x5x5 interior, cave-air requirement, two-block-high entrance, solid
+foundation, fluid/Bedrock/container rejection, spawn protection, boundaries,
+18-block minimum spacing, original materials and 1-3 loot chests remain unchanged.
+A small spatial bucket map replaces scanning every previous room during spacing
+checks, keeping the increased population practical on Massive worlds. There are
+no full-volume searches or runtime generation scans. Temporary cave ranges are
+cleared after room placement and are never serialized.
+
+Measured full generated worlds after the change:
+
+| Size | Seed | Dungeons | Cave walks | Fraction |
+| --- | ---: | ---: | ---: | ---: |
+| Small | 173 | 21 | 41 | 51.2% |
+| Small | 137 | 23 | 45 | 51.1% |
+| Small | -907 | 27 | 54 | 50.0% |
+| Normal | 173 | 97 | 193 | 50.3% |
+| Normal | 137 | 88 | 175 | 50.3% |
+| Normal | -907 | 99 | 197 | 50.3% |
+| Large | 173 | 372 | 744 | 50.0% |
+| Massive | 173 | 1465 | 2930 | 50.0% |
+
+Normal generation took approximately **0.69-0.74 seconds**, Large **2.97 seconds**,
+and Massive **12.41 seconds** in the focused run; these are short local CPU
+measurements, not universal timing guarantees. Generation/runtime rendering
+architecture, residency, AI and save formats are unchanged. **Only newly created
+worlds receive these dungeons. Existing saves are never retroactively populated
+or regenerated.**
+
+Added [DungeonFrequencyChecks.cs](../Testing/DungeonFrequencyChecks.cs), registered
+in the full regression harness, with `--dungeon-test` and
+`--dungeon-generation-probe <Small|Normal|Large|Massive>` entry points in Program.
+Checks measure real populations across all four sizes, validate bounds/spawn
+protection/entrances/floors/chest budgets/spacing, compare repeated generation and
+loot, and save/load all rooms and exact chest contents without regeneration.
+Generated equipment correctly receives fresh instance GUIDs per separate world;
+determinism compares item/quantity/durability, while save/load compares the exact
+identity too. Existing room-safety checks remain and their old area-cap assertion
+now verifies the new cave-relative density policy.
+
+Debug and Release builds passed with **zero warnings/errors**; the focused
+all-size tests and real DesktopGL `--overnight-graphics-test` passed. The latter
+generated/rendered an actual Small world with **21 dungeons**, retaining existing
+water, screenshot and texture-state checks. The full Release regression suite
+passed **247/247**, with native exit **0**, including all-size generated-world
+compressed roundtrips, legacy compatibility, water/terrain and gameplay checks.
+`git diff --check` passed. No manual cave exploration or physical-input playtesting was
+performed. README.md is unchanged; no publishing commands or commits were made.
+
+## Three building/exploration quality-of-life additions (2026-11-14)
+
+Chosen under the user's open-ended authorization: **Creative middle-click pick
+block**, **`/locate dungeon`**, and **safe `/tp @p <x> <y> <z>`**. These build on
+the current registry, finite-world exploration, command UI and collision systems
+without adding assets, progression tiers, persistent formats or background work.
+
+[ExplorationTools.cs](../Gameplay/ExplorationTools.cs) centralizes the operations.
+Middle-click during Creative gameplay first selects an existing matching hotbar
+stack, then swaps a matching main-inventory stack into the selected hotbar slot.
+Otherwise it grants one item into a free hotbar slot, or safely moves the selected
+stack to an empty main slot before replacing it. Full inventories reject the pick
+without deleting or overwriting anything. Existing quantities, durability and
+instance identity survive moves. No items are granted in Survival or menus;
+holding middle mouse does not repeat grants. Picking uses the ordinary reach and
+ray geometry, including fluid targeting: Water/Lava become their filled Buckets,
+crop stages become Seeds/Carrots/Potatoes, upper Door/Bed halves become their
+ordinary item, and double slabs become single slabs. Ordinary Stone picks Stone,
+not its Survival Cobblestone drop. Fire has no inventory item and is rejected.
+[Game1.cs](../Core/Game1.cs) routes the press edge and resets mining/bow state;
+the Controls menu documents the new binding.
+
+`/locate dungeon` finds the nearest **intact chest-bearing dungeon-style room**
+and prints floor-center coordinates plus a `/tp` command. It examines existing
+persisted Chest entries, validates candidate room floors/roofs/interiors and
+deduplicates centers. It never scans the whole block array or relies on the
+non-persisted `GeneratedDungeons` diagnostic list, so older saved dungeons work.
+Rooms with no remaining chests or altered shells/interiors may no longer match;
+a player-built identical room can match too. The command does not generate
+structures, grant loot or move the player.
+
+`/tp @p <x> <y> <z>` uses feet coordinates, decimal absolute values, `~` to keep
+an axis and `~5` / `~-5` for relative offsets. Examples:
+`/tp @p 100.5 30 120.5`, `/tp @p ~10 ~ ~-5`. Invalid/nonfinite coordinates,
+finite-world boundaries, solid collision geometry, passive/hostile mob boxes,
+Water, Lava and Fire reject the whole operation without changing state. Clear
+air destinations are permitted: normal Survival falling still applies afterward.
+Successful teleports preserve health, equipment, inventories and facing, synchronize
+the camera, and reset velocity, old fall distance, breath, mining, bow and visual
+bobbing/swing state. Existing burning state is not healed or erased. The location
+persists through the existing player-position save field.
+
+Both commands use the established **Allow Cheats** gate. Help topics `/help tp`
+and `/help locate`, the overview and visible Tab autocomplete were updated in
+[WorldCommands.cs](../Gameplay/WorldCommands.cs) and
+[CommandCompletion.cs](../Input/CommandCompletion.cs). No save-format, world
+generation, population, chunk residency or Survival item-acquisition rules changed.
+
+Added three [ExplorationChecks.cs](../Testing/ExplorationChecks.cs) regression
+groups and `--exploration-test`: inventory preservation/capacity/special block
+mapping/Survival isolation; absolute/relative/invalid/unsafe teleport, mobs,
+fall reset, permissions and persisted position; nearest-room selection, edited
+rooms, geometry-based lookup after save/load without generation metadata, usable
+reported destinations and autocomplete. Expanded actual DesktopGL
+[CommandGraphicsChecks.cs](../Testing/CommandGraphicsChecks.cs) to route Enter
+through absolute/relative teleports and real middle-button press/hold/release
+through Game1, verifying the selected Stone item and preservation of Door stacks.
+Its existing menu, capture, resize, screenshot, persistence, death and world-switch
+checks still pass. Input is scripted, not physical manual playtesting.
+
+Debug/Release builds passed with zero warnings/errors; focused tests and the
+expanded `--command-graphics-test` passed with native exit 0. The full Release
+regression suite passed **250/250** with native exit 0. After strengthening the
+nearest-room and in-flight teleport-reset fixtures, the final Release build,
+focused tests and scripted graphics/input test were rerun successfully.
+`git diff --check` passed.
+README.md is unchanged; no publishing commands, commits, dependencies or new
+artwork were introduced. Manual recommendations: middle-click common/special
+blocks and fluids while building, inspect located dungeons in existing saves,
+and test long-distance teleports and subsequent movement on representative worlds.

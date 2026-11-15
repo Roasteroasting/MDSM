@@ -134,7 +134,8 @@ internal static class OvernightGameplayChecks
         C(w.Containers.Entries.Count is >=1 and <=3,"Dungeon chest count wrong.");
         foreach(var chest in w.Containers.Entries.Values)C(!chest.Empty,"Dungeon chest is empty.");
         C(w.GetBlock(17,10,20)==BlockType.Air && w.GetBlock(17,11,20)==BlockType.Air,"Dungeon sealed cave entrance.");
-        C(DungeonGenerator.Budget(WorldSize.Massive)==128 && DungeonGenerator.Budget(WorldSize.Small)==2,"Dungeon area scaling wrong.");
+        C(DungeonGenerator.Budget(WorldSize.Massive)==1474 && DungeonGenerator.Budget(WorldSize.Small)==23
+            && DungeonGenerator.Target(193)==97,"Dungeon cave-density scaling wrong.");
     }
     public static void Weather()
     {

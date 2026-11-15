@@ -1,4 +1,17 @@
-if(System.Array.Exists(args,a=>a=="--landscape-update-test"))
+if(args.Length==1 && args[0]=="--exploration-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.ExplorationChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--dungeon-test")
+{
+    MDSM.Testing.DungeonFrequencyChecks.Generation();
+    MDSM.Testing.OvernightGameplayChecks.Dungeons();
+}
+else if(args.Length==2 && args[0]=="--dungeon-generation-probe" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var dungeonSize))
+{
+    System.Environment.ExitCode=MDSM.Testing.DungeonFrequencyChecks.Probe(dungeonSize);
+}
+else if(System.Array.Exists(args,a=>a=="--landscape-update-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.LandscapeUpdateChecks.Run();
 }

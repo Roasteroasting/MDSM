@@ -9,18 +9,42 @@ namespace MDSM.Worlds;
 // a full-volume search, and rejected candidates leave all terrain untouched.
 public static class DungeonGenerator
 {
-    public static int Budget(WorldSize size)=>size.Width()*size.Width()/32768;
+    // About half of the 18%-per-chunk cave walks; actual targets use the
+    // generated cave count instead of an unrelated horizontal-area room cap.
+    public static int Budget(WorldSize size)=>size.Width()/16*(size.Width()/16)*9/100;
+    public static int Target(int caveSystems)=>(caveSystems+1)/2;
+    internal const int AttemptsPerSystem=48,MinimumSpacing=18;
     internal static IReadOnlyList<Point3> Generate(World world)
     {
         var random=new Random(unchecked(world.Seed^0x44554e47));var rooms=new List<Point3>();
-        if(world.CaveOreSites.Count==0)return rooms;
-        int target=Budget(world.Size);
-        for(int attempt=0;attempt<target*120 && rooms.Count<target;attempt++)
+        if(world.CaveOreSites.Count==0){world.CaveSystemSites.Clear();return rooms;}
+        int target=Target(world.CaveSystemSites.Count);
+        var systems=new int[world.CaveSystemSites.Count];for(int i=0;i<systems.Length;i++)systems[i]=i;
+        for(int i=systems.Length-1;i>0;i--){int j=random.Next(i+1);(systems[i],systems[j])=(systems[j],systems[i]);}
+        var nearby=new Dictionary<Point3,List<Point3>>();
+        foreach(int system in systems)
         {
-            Point3 site=world.CaveOreSites[random.Next(world.CaveOreSites.Count)];Point3 floor=new(site.X,site.Y-2,site.Z);
-            bool close=false;foreach(Point3 other in rooms)if(Vector3.DistanceSquared(new(other.X,other.Y,other.Z),new(floor.X,floor.Y,floor.Z))<18*18){close=true;break;}
-            if(!close && TryRoom(world,floor,random))rooms.Add(floor);
+            if(rooms.Count>=target)break;
+            var range=world.CaveSystemSites[system];if(range.Count==0)continue;
+            int start=random.Next(range.Count);
+            // Try distinct sites before retrying at a slightly different floor
+            // height. No full-world scan, and at most one room per cave walk.
+            for(int attempt=0;attempt<Math.Min(AttemptsPerSystem,range.Count*3);attempt++)
+            {
+                Point3 site=world.CaveOreSites[range.Start+(start+attempt)%range.Count];
+                int shift=attempt/range.Count;
+                Point3 floor=new(site.X,site.Y-2+(shift==1?1:shift==2?-1:0),site.Z);
+                Point3 bucket=new(floor.X/MinimumSpacing,floor.Y/MinimumSpacing,floor.Z/MinimumSpacing);
+                bool close=false;
+                for(int z=-1;z<=1 && !close;z++)for(int y=-1;y<=1 && !close;y++)for(int x=-1;x<=1 && !close;x++)
+                    if(nearby.TryGetValue(bucket+new Point3(x,y,z),out var neighbors))foreach(Point3 other in neighbors)
+                        if(Vector3.DistanceSquared(new(other.X,other.Y,other.Z),new(floor.X,floor.Y,floor.Z))<MinimumSpacing*MinimumSpacing){close=true;break;}
+                if(close || !TryRoom(world,floor,random))continue;
+                rooms.Add(floor);if(!nearby.TryGetValue(bucket,out var group))nearby.Add(bucket,group=new());group.Add(floor);
+                break;
+            }
         }
+        world.CaveSystemSites.Clear();
         return rooms;
     }
     internal static bool TryRoom(World world,Point3 center,Random random)

@@ -33,6 +33,7 @@ internal static class PrototypeChecks
             ("Crafting table placement/mining/persistence and all-size empty starts", CraftingChecks.BlocksAndPersistence),
             ("Responsive 2x2/3x3 crafting, inventory, hotbar and arrow layouts", CraftingChecks.Layout),
             ("Terrain layers, bounds, and edit revisions", CheckWorld),
+            ("Cave-relative dungeon frequency, entrances, spacing, deterministic loot and persistence",DungeonFrequencyChecks.Generation),
             ("Compact storage and world/chunk coordinate conversion", CheckCoordinates),
             ("Seed determinism, terrain layers, and continuous hills", CheckTerrain),
             ("Only face-sharing chunk meshes are invalidated", CheckChunkRevisions),
@@ -150,6 +151,7 @@ internal static class PrototypeChecks
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,OvernightGameplayChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SignFireChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,LandscapeUpdateChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,ExplorationChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,AudioChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SupportDropChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,CollisionUpdateChecks.All));

@@ -38,6 +38,7 @@ internal static class MenuInformation
         "Flint and Steel: Right mouse - Ignite; Left mouse Fire - Extinguish",
         "1-9 or numpad 1-9 - Select hotbar slot",
         "Mouse wheel - Down: next slot / Up: previous slot",
+        "Creative: Middle mouse - Pick targeted block (preserves inventory)",
         "F1 - Toggle HUD visibility",
         "F2 - Take screenshot",
         "F3 - Toggle debug overlay",

@@ -56,7 +56,15 @@ internal static class CommandGraphicsChecks
             Submit("/time set 18000");CommandChecks.Check(Session.World.Time.Seconds==900,"Actual command routing did not set time.");
             Submit("/gamemode creative");Input(.6);CommandChecks.Check(Session.Player.Creative && Session.World.SavedGameMode==GameMode.Creative
                 && new SettingsStore(Path.Combine(_root,"settings.json")).Load().GameMode==GameMode.Survival,"Command mode failed to update world or leaked into global settings.");
-            Submit("/help");
+            Submit("/tp @p 60.5 1 60.5");CommandChecks.Check(Session.Player.Position==new Vector3(60.5f,1,60.5f),"Actual teleport command did not move camera/player.");
+            Submit("/tp @p ~-20 ~ ~-20");CommandChecks.Check(Session.Player.Position==position,"Relative teleport failed through command input.");
+            Input(keys:new[]{Keys.Escape});Input();
+            Session.World.SetBlock(40,2,37,MDSM.Worlds.BlockType.Stone);
+            Input(mouse:new MouseState(0,0,0,ButtonState.Released,ButtonState.Pressed,ButtonState.Released,ButtonState.Released,ButtonState.Released));
+            CommandChecks.Check(Session.Inventory.Selected.Item==MDSM.Inventories.Items.FromBlock(MDSM.Worlds.BlockType.Stone) && Session.Inventory[0].Count==3,"Actual middle-click did not pick Stone or lost Door items.");
+            Input(mouse:new MouseState(0,0,0,ButtonState.Released,ButtonState.Pressed,ButtonState.Released,ButtonState.Released,ButtonState.Released));
+            CommandChecks.Check(Session.Inventory.Selected.Count==1,"Held middle mouse duplicated items.");
+            Input();Input(keys:new[]{Keys.T});Submit("/help");
             foreach(Point size in new[]{new Point(320,240),new(800,600),new(1280,720)})
             {
                 using var target=new RenderTarget2D(GraphicsDevice,size.X,size.Y,false,SurfaceFormat.Color,DepthFormat.Depth24);

@@ -308,6 +308,9 @@ public sealed class Player
         Position = destination; _verticalSpeed = 0; _fall.Reset(Position.Y); return true;
     }
 
+    internal void Teleport(Vector3 destination)
+    {Position=destination;StopMovement();Breath.Reset();}
+
     public void Respawn(World world)
     {
         Burning.Reset();

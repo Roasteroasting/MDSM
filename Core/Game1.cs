@@ -256,6 +256,11 @@ public class Game1 : Game
             _session.Sounds.Local(SoundKind.Drop);
         }
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+        if(!_awaitMouseRelease && mouse.MiddleButton==ButtonState.Pressed && _previousMouse.MiddleButton==ButtonState.Released && player.Creative)
+        {
+            if(ExplorationTools.Pick(_session,BlockRaycaster.Cast(world,camera.Position,camera.Forward,includeFluids:true))){_session.Mining.Reset();_session.Bow.Cancel();}
+            else {_notice="CANNOT PICK BLOCK: NO ITEM OR NO INVENTORY SPACE.";_noticeSeconds=3;}
+        }
         bool held = mouse.LeftButton == ButtonState.Pressed;
         if (_awaitMouseRelease)
         {

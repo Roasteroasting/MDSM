@@ -11,12 +11,15 @@ public static class CaveGenerator
     public static CaveStats Generate(World world,IReadOnlyList<Rectangle> waterRegions=null)
     {
         var timer=Stopwatch.StartNew();var sites=new List<Point3>();int systems=0,carved=0,pools=0,exposed=0,openings=0;
+        world.CaveSystemSites.Clear();
         for(int cz=0;cz<world.ChunksZ;cz++)for(int cx=0;cx<world.ChunksX;cx++)
         {
             var random=new Random(unchecked(world.Seed^cx*1788631^cz*638827^0x43415645));
             if(random.NextDouble()>.18)continue;
             Vector3 start=new(cx*16+random.Next(16),random.Next(9,47),cz*16+random.Next(16));systems++;
+            int first=sites.Count;
             Walk(start,random.NextSingle()*MathHelper.TwoPi,random.Next(55,140),0,random);
+            world.CaveSystemSites.Add((first,sites.Count-first));
         }
         // Final ore exposure pass runs after deposits/ordinary veins, from sparse cave sites.
         world.CaveOreSites=sites;

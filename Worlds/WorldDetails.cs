@@ -20,6 +20,9 @@ public sealed partial class World
     private Point3? _doorPartnerEdit;
     public CaveStats GeneratedCaves { get; internal set; }
     internal List<Point3> CaveOreSites { get; set; }=new();
+    // Temporary ranges into cave sites: one original cave walk plus its branch.
+    // Used only during generation; never serialized or retained for simulation.
+    internal List<(int Start,int Count)> CaveSystemSites {get;}=new();
     internal void NoteCaveOres(int coal,int iron,int diamond,int veins)=>GeneratedOres=GeneratedOres with {Coal=GeneratedOres.Coal+coal,Iron=GeneratedOres.Iron+iron,Diamond=GeneratedOres.Diamond+diamond,Veins=GeneratedOres.Veins+veins};
     private static readonly Point3[] Adjacent={new(1,0,0),new(-1,0,0),new(0,1,0),new(0,-1,0),new(0,0,1),new(0,0,-1)};
     private void ResolveFluidContact(Point3 cell)
