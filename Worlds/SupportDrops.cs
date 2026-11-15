@@ -36,7 +36,7 @@ public sealed partial class World
         if(changed && drops!=null)
             foreach(var drop in drops)
                 if(GetBlock(drop.Cell.X,drop.Cell.Y,drop.Cell.Z)!=drop.Previous)
-                    items.Spawn(drop.Item,1,new Vector3(drop.Cell.X+.5f,drop.Cell.Y+.5f,drop.Cell.Z+.5f));
+                    items.Spawn(drop.Item,1,Center(drop.Cell));
         return changed;
     }
 

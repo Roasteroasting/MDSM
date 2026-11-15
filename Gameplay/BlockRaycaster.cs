@@ -35,10 +35,12 @@ public static class BlockRaycaster
 
         while (distance <= reach)
         {
+            Point3 absolute=world.GlobalCell(x,y,z);
+            if(world.IsInfinite && y>=0 && y<World.Height && !world.IsLoaded(absolute))return null;
             BlockType block=world.GetBlock(x,y,z);
             if (solidOnly ? world.IsSolid(x, y, z) : (Blocks.IsRenderable(block) && (includeFluids || !Lava.Fluid(block))))
             {
-                Point3 cell=new(x,y,z);int count=world.BlockBoxes(cell,boxes);float closest=float.MaxValue;BoundingBox chosen=default;
+                Point3 cell=absolute;int count=world.BlockBoxes(cell,boxes);float closest=float.MaxValue;BoundingBox chosen=default;
                 for(int i=0;i<count;i++){float? hit=ray.Intersects(boxes[i]);if(hit.HasValue && hit.Value>=distance-.0001f && hit.Value<closest){closest=hit.Value;chosen=boxes[i];}}
                 if(closest<=reach)
                 {

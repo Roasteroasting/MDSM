@@ -15,7 +15,7 @@ public sealed partial class World
         BlockType block=GetBlock(cell.X,cell.Y,cell.Z);if(!Blocks.IsSolid(block))return false;
         if(Blocks.Get(block).Shape is not (BlockShape.Slab or BlockShape.Stairs))return true;
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];int count=BlockBoxes(cell,boxes,true);
-        for(int i=0;i<count;i++)if(boxes[i].Max.Y>=cell.Y+1-.001f && boxes[i].Min.X<=cell.X && boxes[i].Max.X>=cell.X+1 && boxes[i].Min.Z<=cell.Z && boxes[i].Max.Z>=cell.Z+1)return true;
+        Vector3 o=LocalPosition(cell);for(int i=0;i<count;i++)if(boxes[i].Max.Y>=cell.Y+1-.001f && boxes[i].Min.X<=o.X && boxes[i].Max.X>=o.X+1 && boxes[i].Min.Z<=o.Z && boxes[i].Max.Z>=o.Z+1)return true;
         return false;
     }
     public static Point3 FacingDirection(int facing)=>(facing&3) switch{0=>new(0,0,-1),1=>new(1,0,0),2=>new(0,0,1),_=>new(-1,0,0)};
@@ -40,7 +40,7 @@ public sealed partial class World
     public bool EditSign(Point3 cell,string text)
     {
         if(GetBlock(cell.X,cell.Y,cell.Z)!=BlockType.Sign || !ValidSignText(text))return false;
-        if(!Signs.TryGetValue(cell,out var prior)||prior!=text){Signs[cell]=text;MarkDirty(cell.X/16,cell.Z/16);Revision++;}return true;
+        if(!Signs.TryGetValue(cell,out var prior)||prior!=text){Signs[cell]=text;MarkDirty(Streaming.Coordinates.FloorDiv(cell.X,16),Streaming.Coordinates.FloorDiv(cell.Z,16));if(IsInfinite)MarkStreamedDirty(Streaming.Coordinates.FloorDiv(cell.X,16),Streaming.Coordinates.FloorDiv(cell.Z,16));Revision++;}return true;
     }
     public static bool ValidSignText(string text)
     {
@@ -51,12 +51,12 @@ public sealed partial class World
     }
     private int BuildingBoxes(Point3 cell,BlockType block,Span<BoundingBox> boxes,StructureState? proposed,Point3? changedNeighbor=null,BlockType replacement=BlockType.Air,StructureState? neighborState=null)
     {
-        Vector3 o=new(cell.X,cell.Y,cell.Z);var state=proposed??Structure(cell);bool upper=(state.Facing&4)!=0;
+        Vector3 o=LocalPosition(cell);var state=proposed??Structure(cell);bool upper=(state.Facing&4)!=0;
         if(block==BlockType.Sign)
         {
             Point3 support=state.Support;bool wall=support.Y==0;
             Vector3 min=new(-.5f,wall?.25f:.5f,-.0625f),max=new(.5f,wall?.75f:1,.0625f);
-            Matrix transform=SignTransform(cell,state);
+            Matrix transform=SignTransform(new(cell.X-OriginX,cell.Y,cell.Z-OriginZ),state);
             boxes[0]=TransformBounds(min,max,transform);
             if(wall)return 1;
             boxes[1]=TransformBounds(new(-.0625f,0,-.0625f),new(.0625f,.5f,.0625f),transform);return 2;

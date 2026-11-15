@@ -17,7 +17,7 @@ internal static class MobCommandPlacement
             float angle = random.NextSingle() * MathHelper.TwoPi, radius = 3 + random.NextSingle() * 9;
             int x = (int)MathF.Floor(player.X + MathF.Cos(angle) * radius);
             int z = (int)MathF.Floor(player.Z + MathF.Sin(angle) * radius);
-            if (x < 2 || z < 2 || x >= world.Width - 2 || z >= world.Depth - 2) continue;
+            if (x < world.LocalMinX+2 || z < world.LocalMinZ+2 || x >= world.LocalMaxX - 2 || z >= world.LocalMaxZ - 2) continue;
             int preferred = Math.Clamp((int)MathF.Floor(player.Y), 1, World.Height - 1);
             for (int offset = 0; offset <= 16; offset++)
             for (int side = 0; side < (offset == 0 ? 1 : 2); side++)

@@ -19,7 +19,7 @@ internal static class LargeLakeChecks
     public static void Notice()
     {
         Require(WorldCreationLayout.NoticeText.Contains("2048 \u00d7 128 \u00d7 2048"),"Notice dimension symbols were corrupted.");
-        foreach(WorldSize size in Enum.GetValues<WorldSize>())foreach(GameState state in Enum.GetValues<GameState>())
+        foreach(WorldSize size in WorldSizes.Finite)foreach(GameState state in Enum.GetValues<GameState>())
             Require(WorldCreationLayout.NoticeVisible(state,size)==(state==GameState.WorldCreation && size==WorldSize.Massive),"Incorrect notice visibility.");
         foreach(Point size in new[]{new Point(320,240),new Point(640,480),new Point(801,603),new Point(1280,720),new Point(1920,1080)})
         {

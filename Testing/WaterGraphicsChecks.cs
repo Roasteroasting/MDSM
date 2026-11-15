@@ -102,8 +102,8 @@ internal static class WaterGraphicsChecks
                     foreach (Chunk chunk in lake.Chunks)
                     {
                         if (surface != default) break;
-                        for (int z = chunk.OriginZ; z < chunk.OriginZ + 16 && surface == default; z++)
-                        for (int x = chunk.OriginX; x < chunk.OriginX + 16 && surface == default; x++)
+                        for (int z = checked((int)chunk.OriginZ); z < checked((int)chunk.OriginZ) + 16 && surface == default; z++)
+                        for (int x = checked((int)chunk.OriginX); x < checked((int)chunk.OriginX) + 16 && surface == default; x++)
                         for (int y = 1; y < World.Height; y++)
                             if (Water.IsSource(lake.GetBlock(x, y, z)) && !Water.IsWater(lake.GetBlock(x, y + 1, z))) { surface = new Point3(x, y, z); break; }
                     }

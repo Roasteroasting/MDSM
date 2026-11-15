@@ -31,15 +31,15 @@ public sealed class BedSleepController
         _notice=null;
         if(IsSleeping || session.Player.IsDead || !float.IsFinite(hit.Distance) || hit.Distance<0 || hit.Distance>BlockRaycaster.Reach
             || !ResolveBed(session.World,hit.Cell,out Point3 foot,out Point3 head,out byte facing))return false;
-        var bounds=new BoundingBox(new Vector3(Math.Min(foot.X,head.X),foot.Y,Math.Min(foot.Z,head.Z)),
-            new Vector3(Math.Max(foot.X,head.X)+1,foot.Y+9f/16,Math.Max(foot.Z,head.Z)+1));
+        Vector3 f=session.World.LocalPosition(foot),h=session.World.LocalPosition(head);
+        var bounds=new BoundingBox(Vector3.Min(f,h),Vector3.Max(f,h)+new Vector3(1,9f/16,1));
         if(MonstersNearby(session,bounds)){_notice=MonsterNotice;return false;}
         if(!session.World.Time.CanSleep)return false;
         _foot=foot;Head=head;_facing=facing;_bedBounds=bounds;
         ReturnCameraPosition=session.Camera.Position;ReturnYaw=session.Camera.Yaw;ReturnPitch=session.Camera.Pitch;
         Elapsed=0;IsSleeping=true;
         session.Camera.PresentationOffset=Vector3.Zero;
-        session.Camera.Position=new(head.X+.5f,head.Y+9f/16+.3f,head.Z+.5f);
+        session.Camera.Position=h+new Vector3(.5f,9f/16+.3f,.5f);
         Point3 towardHead=World.BedDirection(facing);
         session.Camera.RestoreOrientation(MathF.Atan2(-towardHead.X,towardHead.Z),.08f);
         return true;

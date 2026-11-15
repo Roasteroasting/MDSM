@@ -47,7 +47,7 @@ public static partial class WorldSerializer
         writer.Write(states.Length);
         foreach(var state in states)
         {
-            writer.Write(state.Cell.X);writer.Write(state.Cell.Y);writer.Write(state.Cell.Z);writer.Write((byte)state.Block);writer.Write(state.Slots.Length);
+            writer.Write(checked((int)state.Cell.X));writer.Write(state.Cell.Y);writer.Write(checked((int)state.Cell.Z));writer.Write((byte)state.Block);writer.Write(state.Slots.Length);
             foreach(var stack in state.Slots)WriteStack(writer,stack);
             writer.Write(state.Progress);writer.Write(state.Burn);writer.Write(state.BurnTotal);
         }

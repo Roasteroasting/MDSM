@@ -17,7 +17,7 @@ public sealed partial class World
         if(Blocks.ConnectsPane(PlacementNeighbor(new(cell.X,cell.Y,cell.Z+1),changedNeighbor,replacement)))mask|=8;
         return mask;
     }
-    internal int PaneBoxes(Point3 cell,Span<BoundingBox> boxes)=>PaneBoxes(cell,PaneConnections(cell),boxes);
+    internal int PaneBoxes(Point3 cell,Span<BoundingBox> boxes)=>PaneBoxes(new(cell.X-OriginX,cell.Y,cell.Z-OriginZ),PaneConnections(cell),boxes);
     internal static int PaneBoxes(Point3 cell,int connections,Span<BoundingBox> boxes)
     {
         const float lo=7f/16,hi=9f/16;Vector3 at=new(cell.X,cell.Y,cell.Z);int count=1;

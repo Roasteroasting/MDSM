@@ -80,10 +80,10 @@ public static class SurvivalInteractions
             next=held.Item==Items.WaterBucket?BlockType.WaterSource:BlockType.LavaSource;receive=Items.Bucket;
         }
         if(session.Player.Creative)
-        {bool changed=world.SetBlock(cell.X,cell.Y,cell.Z,next);if(changed)session.Sounds.At(next==BlockType.Air?SoundKind.Scoop:SoundKind.Pour,BlockSounds.Center(cell));return changed;}
+        {bool changed=world.SetBlock(cell.X,cell.Y,cell.Z,next);if(changed)session.Sounds.At(next==BlockType.Air?SoundKind.Scoop:SoundKind.Pour,world.Center(cell));return changed;}
         if(held.Count==1)copy.SetSlot(copy.SelectedSlot,new(receive,1));
         else {copy.ConsumeSelected();if(!copy.Add(new ItemStack(receive,1)).IsEmpty)return false;}
         if(!world.SetBlock(cell.X,cell.Y,cell.Z,next))return false;
-        for(int i=0;i<Inventory.SlotCount;i++)inventory.SetSlot(i,copy[i]);session.Sounds.At(next==BlockType.Air?SoundKind.Scoop:SoundKind.Pour,BlockSounds.Center(cell));return true;
+        for(int i=0;i<Inventory.SlotCount;i++)inventory.SetSlot(i,copy[i]);session.Sounds.At(next==BlockType.Air?SoundKind.Scoop:SoundKind.Pour,world.Center(cell));return true;
     }
 }

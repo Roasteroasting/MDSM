@@ -30,7 +30,7 @@ internal static class WorldExpansionChecks
     }
     public static void DimensionsAndTerrain()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldSizes.Finite)
         {
             int width = 256 << (int)size;
             Require(size.Width() == width && size.BlockCount() == (long)width*128*width, "Dimension/count overflow.");
@@ -65,7 +65,7 @@ internal static class WorldExpansionChecks
         Require(world.ChunkCount == width/16*(width/16) && world.Chunks.Length == world.ChunkCount, "Incorrect chunk count.");
         foreach (Chunk chunk in world.Chunks)
         {
-            int x=chunk.OriginX+15,z=chunk.OriginZ+15;
+            int x=checked((int)chunk.OriginX)+15,z=checked((int)chunk.OriginZ)+15;
             world.SetBlock(x,127,z,BlockType.Stone);
             Require(world.GetBlock(x,127,z)==BlockType.Stone && world.SurfaceY(x,z)==127 && chunk.Blocks.Length==32768, "High-Y index/cache failure.");
             world.SetBlock(x,127,z,BlockType.Air); Require(world.SurfaceY(x,z)==-1,"Surface cache did not invalidate.");
@@ -86,7 +86,7 @@ internal static class WorldExpansionChecks
         int previousTrees=0,previousPlants=0;
         try
         {
-            foreach (WorldSize size in Enum.GetValues<WorldSize>())
+            foreach (WorldSize size in WorldSizes.Finite)
             {
                 GC.Collect(); GC.WaitForPendingFinalizers();
                 Snapshot snapshot=GenerateAndSave(size,path);
@@ -128,13 +128,13 @@ internal static class WorldExpansionChecks
             if(Blocks.Get(block).NeedsGrass)plants++;
             if(Blocks.Falls(block))
             {
-                Require(y>0 && world.IsSolid(chunk.OriginX+x,y-1,chunk.OriginZ+z),"Unsupported natural Sand/Gravel.");
+                Require(y>0 && world.IsSolid(checked((int)chunk.OriginX)+x,y-1,checked((int)chunk.OriginZ)+z),"Unsupported natural Sand/Gravel.");
                 if(block==BlockType.Sand)sand++;else gravel++;
             }
             if(Water.IsWater(block))
             {
                 water++; Require(Water.IsSource(block),"New water is not a stable source.");
-                Require(chunk.OriginX+x>1 && chunk.OriginX+x<world.Width-2 && chunk.OriginZ+z>1 && chunk.OriginZ+z<world.Depth-2,"Truncated water feature.");
+                Require(checked((int)chunk.OriginX)+x>1 && checked((int)chunk.OriginX)+x<world.Width-2 && checked((int)chunk.OriginZ)+z>1 && checked((int)chunk.OriginZ)+z<world.Depth-2,"Truncated water feature.");
             }
         }
         Require(trees>world.Width*world.Depth/1500 && plants>world.Width*world.Depth/100 && sand>0 && gravel>0 && water>0,"Generation densities/materials invalid.");
@@ -191,7 +191,7 @@ internal static class WorldExpansionChecks
                 for(int y=0;y<128;y++)if(Water.IsWater(chunk.GetBlock(x,y,z))){top=y;depth++;}
                 if(top>=0)
                 {
-                    int wx=chunk.OriginX+x,wz=chunk.OriginZ+z;
+                    int wx=checked((int)chunk.OriginX)+x,wz=checked((int)chunk.OriginZ)+z;
                     columns.Add(wz*world.Width+wx,(top,depth));
                     Require(!Blocks.Get(world.GetBlock(wx,top+1,wz)).NeedsGrass,"Underwater vegetation.");
                 }

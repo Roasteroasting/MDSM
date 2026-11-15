@@ -23,7 +23,7 @@ internal static class DungeonFrequencyChecks
     }
     public static void Generation()
     {
-        foreach(var size in Enum.GetValues<WorldSize>())
+        foreach(var size in WorldSizes.Finite)
         foreach(int seed in size<=WorldSize.Normal?new[]{173,137,-907}:new[]{173})
         {
             World world=Measure(size,seed);

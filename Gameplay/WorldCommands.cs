@@ -16,7 +16,7 @@ internal sealed class WorldCommands
 {
     public const int MaximumGive = Inventory.SlotCount * ItemStack.Maximum, MaximumSpawn = 32;
     private readonly Random _random = new();
-    private const string Overview = "/help [give|spawn|kill|time|gamemode|locate|tp|items [page]|mobs]\n/give @p <item> [quantity]\n/spawn <mob> [quantity]\n/kill @p OR /kill @e [type=<entity>]\n/time set <0-23999|day|noon|sunset|night|midnight|sunrise>\n/time query\n/gamemode <survival|creative>\n/locate dungeon\n/tp @p <x> <y> <z>";
+    private const string Overview = "/help [give|spawn|kill|time|gamemode|locate|tp|precision|items [page]|mobs]\n/give @p <item> [quantity]\n/spawn <mob> [quantity]\n/kill @p OR /kill @e [type=<entity>]\n/time set <0-23999|day|noon|sunset|night|midnight|sunrise>\n/time query\n/gamemode <survival|creative>\n/locate dungeon\n/tp [@p] <x> <y> <z>\n/precision <modern|legacy>";
     private static CommandResult Error(string text) => new(false, text);
     public CommandResult Execute(string text, GameSession session, GameSettings settings)
     {
@@ -29,17 +29,22 @@ internal sealed class WorldCommands
         {
             case "/help": return Help(args);
             case "/kill": return Kill(args, session);
+            case "/precision":
+                if(args.Length!=2 || args[1].ToLowerInvariant() is not ("modern" or "legacy"))return Error("Usage: /precision <modern|legacy> (visual camera precision only)");
+                settings.LegacyVisualPrecision=args[1].Equals("legacy",StringComparison.OrdinalIgnoreCase);
+                return new(true,settings.LegacyVisualPrecision?"Legacy visual camera snapping enabled. Physics and targeting remain precise.":"Modern precise rendering enabled.",true);
             case "/locate":
                 if(args.Length!=2 || !args[1].Equals("dungeon",StringComparison.OrdinalIgnoreCase))return Error("Usage: /locate dungeon");
                 var room=ExplorationTools.NearestDungeon(session.World,session.Player.Position);
                 if(room is not Point3 p)return Error("No intact chest-bearing dungeon found in this world.");
-                return new(true,FormattableString.Invariant($"Nearest dungeon: {p.X+.5f} {p.Y} {p.Z+.5f}\n/tp @p {p.X+.5f} {p.Y} {p.Z+.5f}"));
+                return new(true,FormattableString.Invariant($"Nearest dungeon: {p.X+.5} {p.Y} {p.Z+.5}\n/tp @p {p.X+.5} {p.Y} {p.Z+.5}"));
             case "/tp":
-                if(args.Length!=5 || !args[1].Equals("@p",StringComparison.OrdinalIgnoreCase))return Error("Usage: /tp @p <x> <y> <z> (use ~ for relative coordinates)");
-                var origin=session.Player.Position;
-                if(!Coordinate(args[2],origin.X,out float x)||!Coordinate(args[3],origin.Y,out float y)||!Coordinate(args[4],origin.Z,out float z))return Error("Coordinates must be finite numbers, ~, or offsets such as ~5.");
-                if(!ExplorationTools.Teleport(session,new(x,y,z)))return Error("Unsafe destination: outside world, blocked, occupied, or in water/lava/fire. Nothing moved.");
-                return new(true,FormattableString.Invariant($"Teleported to {x} {y} {z}."));
+                int coordinateStart=args.Length==4?1:args.Length==5&&args[1].Equals("@p",StringComparison.OrdinalIgnoreCase)?2:0;
+                if(coordinateStart==0)return Error("Usage: /tp [@p] <x> <y> <z> (use ~ for relative coordinates)");
+                var origin=session.Player.AbsolutePosition;
+                if(!Coordinate(args[coordinateStart],origin.X,out double x)||!Coordinate(args[coordinateStart+1],origin.Y,out double y)||!Coordinate(args[coordinateStart+2],origin.Z,out double z))return Error("Coordinates must be finite numbers, ~, or offsets such as ~5.");
+                if(!(session.World.IsInfinite?session.RequestTeleport(new(x,y,z)):ExplorationTools.Teleport(session,new((float)x,(float)y,(float)z))))return Error("Unsafe destination: outside world, blocked, occupied, or in water/lava/fire. Nothing moved.");
+                return new(true,FormattableString.Invariant($"{(session.World.IsInfinite?"Loading teleport destination":"Teleported to")} {x} {y} {z}."));
             case "/give":
                 if (args.Length is < 3 or > 4 || !args[1].Equals("@p", StringComparison.OrdinalIgnoreCase)) return Error("Usage: /give @p <item name_or_ID> [quantity 1-2304]");
                 if (!TryItem(args[2], out ItemId item)) return Error("Unknown item. Use /help items [page] for names and IDs.");
@@ -83,12 +88,12 @@ internal sealed class WorldCommands
             default: return Error("Unknown command. Use /help.");
         }
     }
-    private static bool Coordinate(string text,float origin,out float value)
+    private static bool Coordinate(string text,double origin,out double value)
     {
         bool relative=text.StartsWith('~');string number=relative?text[1..]:text;
-        value=0;if(number.Length>0 && !float.TryParse(number,NumberStyles.Float,CultureInfo.InvariantCulture,out value))return false;
+        value=0;if(number.Length>0 && !double.TryParse(number,NumberStyles.Float,CultureInfo.InvariantCulture,out value))return false;
         if(number.Length==0 && !relative)return false;
-        if(relative)value+=origin;return float.IsFinite(value);
+        if(relative)value+=origin;return double.IsFinite(value);
     }
     private static CommandResult Kill(string[] args, GameSession session)
     {
@@ -167,12 +172,13 @@ internal sealed class WorldCommands
             foreach (ItemId item in Items.Obtainable.Slice((page - 1) * perPage, Math.Min(perPage, Items.Obtainable.Length - (page - 1) * perPage))) listing += $"\n{item.Value}: {Key(Items.Name(item))}";
             return new(true, listing);
         }
-        if (args.Length != 2) return Error("Usage: /help [give|spawn|kill|time|gamemode|locate|tp|items [page]|mobs]");
+        if (args.Length != 2) return Error("Usage: /help [give|spawn|kill|time|gamemode|locate|tp|precision|items [page]|mobs]");
         return topic switch
         {
             "give" => new(true, "/give @p <item name_or_ID> [quantity 1-2304]\nExample: /give @p stone 64\nUse underscores in names, e.g. diamond_pickaxe.\nAll items must fit. Equipment arrives at full durability."),
+            "precision" => new(true,"/precision <modern|legacy>\nOptional visual camera snapping at large coordinates.\nModern is the default. Physics, targeting, saves and Far Lands noise are unchanged."),
             "locate" => new(true,"/locate dungeon\nFind the nearest intact chest-bearing dungeon, including in older saves.\nReports floor-center coordinates and a /tp command. Does not teleport you."),
-            "tp" => new(true,"/tp @p <x> <y> <z>\nExample: /tp @p 100.5 80 120.5\n~ keeps an axis; ~5 / ~-5 are relative offsets.\nUses feet coordinates; preserves health, inventory and facing.\nRejects blocks, mobs, fluids, fire and out-of-world destinations.\nAir is allowed: Survival gravity still applies after teleporting."),
+            "tp" => new(true,"/tp [@p] <x> <y> <z>\nExample: /tp @p 100.5 80 120.5\n~ keeps an axis; ~5 / ~-5 are relative offsets.\nUses feet coordinates; preserves health, inventory and facing.\nRejects blocks, mobs, fluids, fire and out-of-world destinations.\nAir is allowed: Survival gravity still applies after teleporting."),
             "spawn" => new(true, "/spawn <mob name_or_ID> [quantity 1-32]\nExample: /spawn sheep 3\nFinds safe nearby ground; respects entity limits and Peaceful.\nExplicit passive mobs do not increase respawn targets."),
             "kill" => new(true, "/kill @p - Kill yourself, including in Creative.\n/kill @e - Remove ALL entities, including death loot.\n/kill @e type=<entity> - Filter targets.\nTypes: mob, passive, hostile, player, item, arrow,\nsnowball, falling_block, or a mob species name/ID.\nExample: /kill @e type=pig\nFiltered mob kills keep normal drops and respawn rules.\nItem/falling-block removal permanently deletes those entities."),
             "mobs" => new(true, string.Join("\n", Enum.GetValues<MobSpecies>().Select(s => $"{(byte)s}: {s.ToString().ToLowerInvariant()}"))),

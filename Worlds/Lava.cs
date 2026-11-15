@@ -21,10 +21,10 @@ public static class Lava
     }
     public static bool Intersects(World world,BoundingBox bounds)
     {
-        for(int cz=Math.Max(0,(int)bounds.Min.Z/16);cz<=Math.Min(world.ChunksZ-1,(int)bounds.Max.Z/16);cz++)
-        for(int cx=Math.Max(0,(int)bounds.Min.X/16);cx<=Math.Min(world.ChunksX-1,(int)bounds.Max.X/16);cx++)
+        for(int cz=Math.Max(world.LocalMinZ/16,(int)MathF.Floor(bounds.Min.Z/16));cz<=Math.Min((world.LocalMaxZ-1)/16,(int)MathF.Floor(bounds.Max.Z/16));cz++)
+        for(int cx=Math.Max(world.LocalMinX/16,(int)MathF.Floor(bounds.Min.X/16));cx<=Math.Min((world.LocalMaxX-1)/16,(int)MathF.Floor(bounds.Max.X/16));cx++)
         {
-            if(world.GetChunk(cx,cz).LavaCount==0)continue;
+            if(!world.TryGetLocalChunk(cx,cz,out var chunk)||chunk.LavaCount==0)continue;
             for(int y=Math.Max(0,(int)MathF.Floor(bounds.Min.Y));y<=Math.Min(World.Height-1,(int)bounds.Max.Y);y++)
             for(int z=Math.Max(cz*16,(int)MathF.Floor(bounds.Min.Z));z<=Math.Min(cz*16+15,(int)bounds.Max.Z);z++)
             for(int x=Math.Max(cx*16,(int)MathF.Floor(bounds.Min.X));x<=Math.Min(cx*16+15,(int)bounds.Max.X);x++)

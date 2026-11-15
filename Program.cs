@@ -1,4 +1,20 @@
-if(args.Length==1 && args[0]=="--exploration-test")
+if(args.Length==1 && args[0]=="--infinite-graphics-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.InfiniteGraphicsChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--infinite-integration-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.InfiniteIntegrationChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--streaming-graphics-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.StreamingGraphicsChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--streaming-foundation-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.StreamingFoundationChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--exploration-test")
 {
     System.Environment.ExitCode=MDSM.Testing.ExplorationChecks.Run();
 }

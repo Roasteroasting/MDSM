@@ -39,7 +39,11 @@ public sealed class Player
     public bool Crouching { get; private set; }
 
     // Position is the center of the player's feet.
-    public Vector3 Position { get; private set; }
+    private FramedPosition _pose;
+    public Vector3 Position {get=>_pose.Local;private set=>_pose.Local=value;}
+    public MDSM.Worlds.Streaming.WorldPosition AbsolutePosition=>_pose.Absolute;
+    internal void Bind(World world)=>_pose.Bind(world);
+    internal void SetAbsolute(MDSM.Worlds.Streaming.WorldPosition position){_pose.SetAbsolute(position);StopMovement();Breath.Reset();}
     public Vector3 EyePosition => Position + new Vector3(0, Crouching ? CrouchingEyeHeight : StandingEyeHeight, 0);
     public bool Grounded { get; private set; }
     public BoundingBox Bounds => BoundsAt(Position);
@@ -90,6 +94,7 @@ public sealed class Player
 
     public void Update(World world, Vector3 movement, bool jump, float elapsedSeconds, bool crouch = false, bool swimUp = false, bool fastFlight = false)
     {
+        Bind(world);
         if (IsDead || !float.IsFinite(elapsedSeconds) || elapsedSeconds <= 0)
             return;
 
@@ -194,18 +199,18 @@ public sealed class Player
             return false;
 
         Vector3 next = Position;
-        if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, world.Width - HalfWidth);
+        if (axis == 0) next.X = Math.Clamp(next.X + amount, world.LocalMinX + HalfWidth, world.LocalMaxX - HalfWidth);
         else if (axis == 1) next.Y = Creative ? Math.Clamp(next.Y + amount, 0, World.Height + 16) : next.Y + amount;
-        else next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
+        else next.Z = Math.Clamp(next.Z + amount, world.LocalMinZ + HalfWidth, world.LocalMaxZ - HalfWidth);
 
         BoundingBox bounds = BoundsAt(next);
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         bool collided = false;
-        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+        for (int x = Math.Max(world.LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)-1); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+        for (int z = Math.Max(world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
-            int count=world.BlockBoxes(new(x,y,z),boxes,true);for(int box=0;box<count;box++)
+            int count=world.BlockBoxes(world.GlobalCell(x,y,z),boxes,true);for(int box=0;box<count;box++)
             {
             BoundingBox obstacle=boxes[box];if(!World.Overlaps(bounds,obstacle))continue;
             collided = true;
@@ -227,9 +232,9 @@ public sealed class Player
         // Survival void recovery and mode changes can reach the flight boundary
         // from below. Apply those existing world limits before searching for an exit.
         if (!float.IsFinite(Position.X) || !float.IsFinite(Position.Y) || !float.IsFinite(Position.Z)) return false;
-        Vector3 bounded = new(Math.Clamp(Position.X, HalfWidth, world.Width - HalfWidth),
+        Vector3 bounded = new(Math.Clamp(Position.X, world.LocalMinX + HalfWidth, world.LocalMaxX - HalfWidth),
             Creative ? Math.Clamp(Position.Y, 0, World.Height + 16) : Position.Y,
-            Math.Clamp(Position.Z, HalfWidth, world.Depth - HalfWidth));
+            Math.Clamp(Position.Z, world.LocalMinZ + HalfWidth, world.LocalMaxZ - HalfWidth));
         if (bounded != Position) { Position = bounded; StopMovement(); }
         if (!world.IntersectsSolid(Bounds)) return true;
         Vector3 best = Position;
@@ -245,19 +250,19 @@ public sealed class Player
             Vector3 candidate = Position;
             for (int pass = 0; pass < 16; pass++)
             {
-                if (candidate.X < HalfWidth || candidate.X > world.Width - HalfWidth
-                    || candidate.Z < HalfWidth || candidate.Z > world.Depth - HalfWidth
+                if (candidate.X < world.LocalMinX + HalfWidth || candidate.X > world.LocalMaxX - HalfWidth
+                    || candidate.Z < world.LocalMinZ + HalfWidth || candidate.Z > world.LocalMaxZ - HalfWidth
                     || candidate.Y < 0 || candidate.Y > World.Height + 16) break;
                 float distance = Vector3.DistanceSquared(candidate, Position);
                 if (distance >= shortest) break;
                 BoundingBox bounds = BoundsAt(candidate);
                 Vector3 next = candidate;
                 bool overlap = false;
-                for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+                for (int x = Math.Max(world.LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
                 for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y) - 1); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-                for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+                for (int z = Math.Max(world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
                 {
-                    int count = world.BlockBoxes(new(x, y, z), boxes, true);
+                    int count = world.BlockBoxes(world.GlobalCell(x,y,z), boxes, true);
                     for (int i = 0; i < count; i++)
                     {
                         BoundingBox obstacle = boxes[i];
@@ -285,7 +290,7 @@ public sealed class Player
     private bool TryStep(World world, float amount, int axis)
     {
         Vector3 destination = Position + (axis == 0 ? Vector3.UnitX : Vector3.UnitZ) * amount;
-        if (destination.X < HalfWidth || destination.Z < HalfWidth || destination.X > world.Width - HalfWidth || destination.Z > world.Depth - HalfWidth) return false;
+        if (destination.X < world.LocalMinX + HalfWidth || destination.Z < world.LocalMinZ + HalfWidth || destination.X > world.LocalMaxX - HalfWidth || destination.Z > world.LocalMaxZ - HalfWidth) return false;
         BoundingBox bounds = BoundsAt(destination);
         Span<BoundingBox> boxes = stackalloc BoundingBox[9];
         float rise = 0;
@@ -293,7 +298,7 @@ public sealed class Player
         for (int y = Math.Max(0, (int)MathF.Floor(Position.Y) - 1); y <= (int)MathF.Floor(bounds.Max.Y); y++)
         for (int z = (int)MathF.Floor(bounds.Min.Z); z <= (int)MathF.Floor(bounds.Max.Z); z++)
         {
-            int count = world.BlockBoxes(new(x, y, z), boxes, true);
+            int count = world.BlockBoxes(world.GlobalCell(x,y,z), boxes, true);
             for (int i = 0; i < count; i++) if (World.Overlaps(bounds, boxes[i])) rise = Math.Max(rise, boxes[i].Max.Y - Position.Y);
         }
         if (rise <= 0 || rise > StepHeight + .0001f) return false;
@@ -320,6 +325,7 @@ public sealed class Player
 
     private void MoveToSpawn(World world)
     {
+        if(world.IsInfinite){_pose.SetAbsolute(world.InfiniteSpawn);StopMovement();return;}
         Vector3 spawn = world.Spawn;
         // Edits can obstruct the original spawn. Find clear space above the terrain.
         while (spawn.Y < World.Height && world.IntersectsSolid(BoundsAt(spawn)))

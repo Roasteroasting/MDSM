@@ -9,7 +9,7 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
-    private static void WritePoint(BinaryWriter writer,Point3 p){writer.Write(p.X);writer.Write(p.Y);writer.Write(p.Z);}
+    private static void WritePoint(BinaryWriter writer,Point3 p){writer.Write(checked((int)p.X));writer.Write(p.Y);writer.Write(checked((int)p.Z));}
     private static Point3 ReadPoint(BinaryReader reader)=>new(reader.ReadInt32(),reader.ReadInt32(),reader.ReadInt32());
     private static void WriteCompletion(BinaryWriter writer,WorldSave save,Inventory inventory,PigState[] pigs,MobState[] others)
     {

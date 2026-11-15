@@ -5,16 +5,18 @@ namespace MDSM.Worlds;
 
 public sealed class Chunk
 {
+    internal int Slot {get;set;}
     public const int Size = 16;
     public const int BlockCount = Size * World.Height * Size;
 
-    private readonly byte[] _blocks = new byte[BlockCount];
+    private readonly byte[] _blocks;
     private readonly byte[] _solidTops = new byte[Size * Size]; // Y+1; 128 fits in one byte, zero denotes air.
-    public int X { get; }
-    public int Z { get; }
-    public int OriginX => X * Size;
-    public int OriginZ => Z * Size;
+    public long X { get; }
+    public long Z { get; }
+    public long OriginX => checked(X * Size);
+    public long OriginZ => checked(Z * Size);
     public int Revision { get; private set; }
+    internal int BlockRevision { get; private set; }
     public int WaterRevision { get; private set; }
     public int WaterCount { get; private set; }
     public int LavaCount { get; private set; }
@@ -26,10 +28,12 @@ public sealed class Chunk
     public BoundingBox Bounds { get; }
     internal System.ReadOnlySpan<byte> Blocks => _blocks;
 
-    internal Chunk(int x, int z)
+    internal Chunk(long x, long z,byte[] ownedBlocks=null)
     {
         X = x;
         Z = z;
+        if(ownedBlocks!=null && ownedBlocks.Length!=BlockCount)throw new ArgumentException("Incorrect owned block length.");
+        _blocks=ownedBlocks??new byte[BlockCount];
         Bounds = new BoundingBox(new Vector3(OriginX, 0, OriginZ),
             new Vector3(OriginX + Size, World.Height, OriginZ + Size));
     }
@@ -48,6 +52,7 @@ public sealed class Chunk
         if(Special((BlockType)_blocks[index]))StructureCount--;
         if(MDSM.Worlds.Blocks.Crop((BlockType)_blocks[index]))CropCount--;
         _blocks[index] = (byte)block;
+        BlockRevision++;
         if (Water.IsWater(block)) WaterCount++;
         if (Lava.IsLava(block)) LavaCount++;
         if(block==BlockType.Fire)FireCount++;
@@ -70,6 +75,7 @@ public sealed class Chunk
         if (storedHeight is not (64 or World.Height) || blocks.Length != Size * storedHeight * Size)
             throw new System.ArgumentException("Incorrect chunk data length.", nameof(blocks));
         blocks.CopyTo(_blocks);
+        BlockRevision++;
         _blocks.AsSpan(blocks.Length).Clear();
         WaterCount = 0;
         LavaCount=0;

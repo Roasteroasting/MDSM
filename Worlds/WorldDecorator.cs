@@ -64,10 +64,10 @@ public sealed class WorldDecorator
     }
 
     // Checks every affected cell before writing, so rejected candidates leave no partial tree.
-    internal static bool TryTree(World world, int x, int ground, int z, int trunkHeight, int radius, uint shape,bool growing=false)
+    internal static bool TryTree(World world, long x, int ground, long z, int trunkHeight, int radius, uint shape,bool growing=false)
     {
         if (trunkHeight < 4 || trunkHeight > 6 || radius != 2
-            || x - radius < 0 || x + radius >= world.Width || z - radius < 0 || z + radius >= world.Depth
+            || !world.Contains(x-radius,ground,z-radius) || !world.Contains(x+radius,ground,z+radius) || !world.IsLoaded(new(x-radius,ground,z-radius)) || !world.IsLoaded(new(x+radius,ground,z+radius))
             || ground < 0 || ground + trunkHeight + 1 >= World.Height
             || !Blocks.SupportsPlant(world.GetBlock(x,ground,z),growing?BlockType.Sapling:BlockType.TallGrass))
             return false;
@@ -91,7 +91,7 @@ public sealed class WorldDecorator
             if (CanopyCell(dx, layer, dz, radius, shape) && world.GetBlock(x + dx, top + layer, z + dz) == BlockType.Air)
                 Write(x + dx, top + layer, z + dz, BlockType.Leaves);
         return true;
-        void Write(int px,int py,int pz,BlockType block)
+        void Write(long px,int py,long pz,BlockType block)
         {
             if(!growing)world.SetGeneratedBlock(px,py,pz,block);
             else if(world.SetBlock(px,py,pz,block) && block==BlockType.Leaves)world.Vegetation.MarkNatural(new Point3(px,py,pz));

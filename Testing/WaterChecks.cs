@@ -191,7 +191,7 @@ internal static class WaterChecks
             {
                 Point3 first = default; foreach (Point3 p in positions) { first = p; break; }
                 positions.Remove(first); queue.Enqueue(first); count++;
-                int minX = first.X, maxX = first.X, minZ = first.Z, maxZ = first.Z;
+                long minX = first.X, maxX = first.X, minZ = first.Z, maxZ = first.Z;
                 while (queue.Count > 0)
                 {
                     Point3 p = queue.Dequeue(); minX = Math.Min(minX, p.X); maxX = Math.Max(maxX, p.X); minZ = Math.Min(minZ, p.Z); maxZ = Math.Max(maxZ, p.Z);
@@ -224,8 +224,8 @@ internal static class WaterChecks
         {
             if (chunk.WaterCount == 0) continue;
             for (int y = 1; y < World.Height; y++)
-            for (int z = chunk.OriginZ; z < chunk.OriginZ + 16; z++)
-            for (int x = chunk.OriginX; x < chunk.OriginX + 16; x++)
+            for (int z = checked((int)chunk.OriginZ); z < checked((int)chunk.OriginZ) + 16; z++)
+            for (int x = checked((int)chunk.OriginX); x < checked((int)chunk.OriginX) + 16; x++)
             {
                 if (!Water.IsWater(world.GetBlock(x, y, z))) continue;
                 if (world.IsSolid(x, y - 1, z)) bed = new Point3(x, y - 1, z);

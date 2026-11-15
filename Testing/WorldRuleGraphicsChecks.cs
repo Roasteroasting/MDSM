@@ -56,6 +56,7 @@ internal static class WorldRuleGraphicsChecks
                 Check(Menu.SelectedDifficulty==Difficulty.Hard && Menu.SelectedMode==GameMode.Creative,"New creation options did not cycle.");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Massive,"Size fixture failed.");
                 foreach(Point size in new[]{new Point(320,240),new(640,480),new(1280,720)})Snapshot(size,"world-rules-creation");
+                Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Infinite,"Infinite world selection failed.");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Small,"Small world selection failed.");
                 Click(WorldCreationLayout.Button(GraphicsDevice.Viewport,0));Check(Field<object>("_creation")!=null,"Create button failed to start generation.");_stage=1;
             }

@@ -31,11 +31,11 @@ internal static class WaterMeshBuilder
         if (chunk.WaterCount == 0) return;
         var light=world.Lighting.GetPage(chunk.X,chunk.Z);
         for (int y = 0; y < World.Height; y++)
-        for (int z = chunk.OriginZ; z < chunk.OriginZ + Chunk.Size; z++)
-        for (int x = chunk.OriginX; x < chunk.OriginX + Chunk.Size; x++)
+        for (long z = chunk.OriginZ; z < chunk.OriginZ + Chunk.Size; z++)
+        for (long x = chunk.OriginX; x < chunk.OriginX + Chunk.Size; x++)
         {
             if (!Water.IsWater(world.GetBlock(x, y, z))) continue;
-            bool Visible(int nx, int ny, int nz) => !Water.IsWater(world.GetBlock(nx, ny, nz)) && !Blocks.IsOpaque(world.GetBlock(nx, ny, nz));
+            bool Visible(long nx, int ny, long nz) => !Water.IsWater(world.GetBlock(nx, ny, nz)) && !Blocks.IsOpaque(world.GetBlock(nx, ny, nz));
             bool top = Visible(x, y + 1, z), bottom = Visible(x, y - 1, z), near = Visible(x, y, z - 1), far = Visible(x, y, z + 1),
                 left = Visible(x - 1, y, z), right = Visible(x + 1, y, z);
             // Deep lakes contain mostly enclosed cells: no corner-height work or geometry for them.

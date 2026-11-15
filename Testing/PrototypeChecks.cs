@@ -152,6 +152,8 @@ internal static class PrototypeChecks
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SignFireChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,LandscapeUpdateChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,ExplorationChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,StreamingFoundationChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteIntegrationChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,AudioChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SupportDropChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,CollisionUpdateChecks.All));
@@ -427,7 +429,7 @@ internal static class PrototypeChecks
             foreach (int local in new[] { 0, 15 })
             foreach (int y in new[] { 0, 63 })
             {
-                int x = chunk.OriginX + local, z = chunk.OriginZ + local;
+                int x = checked((int)chunk.OriginX) + local, z = checked((int)chunk.OriginZ) + local;
                 Require(world.SetBlock(x, y, z, BlockType.Dirt), "Valid extreme coordinate rejected.");
                 Require(world.GetBlock(x, y, z) == BlockType.Dirt && chunk.GetBlock(local, y, local) == BlockType.Dirt,
                     "World-to-local coordinate conversion failed.");

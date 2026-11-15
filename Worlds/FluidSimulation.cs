@@ -7,13 +7,13 @@ using Microsoft.Xna.Framework;
 namespace MDSM.Worlds;
 
 // A frontier, not a flood fill: changes become visible together once every water tick.
-public sealed class FluidSimulation
+public sealed partial class FluidSimulation
 {
     public const double TickSeconds = 0.2;
     public const int MaximumUpdatesPerTick = 2048;
     private readonly World _world;
     private readonly Queue<Point3> _queue = new();
-    private readonly HashSet<int> _queued=new(); // Sparse active frontier, shared implementation for both fluids.
+    private readonly HashSet<Point3> _queued=new(); // Sparse active frontier, shared implementation for both fluids.
     private readonly List<(Point3 Cell, BlockType Block)> _changes = new(MaximumUpdatesPerTick);
     private double _clock;
     public int PendingCount => _queue.Count;
@@ -22,12 +22,12 @@ public sealed class FluidSimulation
 
     private readonly bool _lava;
     internal FluidSimulation(World world,bool lava=false) { _world = world;_lava=lava; }
-    private int Index(Point3 p) => (p.Y * _world.Depth + p.Z) * _world.Width + p.X;
+    private static Point3 Index(Point3 p)=>p;
     private void Enqueue(Point3 cell)
     {
-        if (!_world.Contains(cell.X, cell.Y, cell.Z)) return;
+        if (!_world.Contains(cell.X, cell.Y, cell.Z) || !_world.IsLoaded(cell)) return;
 
-        int index = Index(cell);
+        Point3 index = Index(cell);
         if (!_queued.Add(index)) return;
         _queue.Enqueue(cell);
     }
@@ -88,6 +88,7 @@ public sealed class FluidSimulation
         for (int i = 0; i < count; i++)
         {
             Point3 cell = _queue.Dequeue(); _queued.Remove(Index(cell));
+            if(!_world.IsSimulated(cell)){Enqueue(cell);continue;}
             BlockType before = At(cell), after = Desired(cell, before);
             if (before != after) _changes.Add((cell, after));
         }
@@ -98,11 +99,11 @@ public sealed class FluidSimulation
             bool changed=_world.SetBlock(change.Cell.X, change.Cell.Y, change.Cell.Z, change.Block);
             if(changed && !_lava && _world.Sounds!=null)
             {
-                float distance=Vector3.DistanceSquared(BlockSounds.Center(change.Cell),_world.Sounds.Listener);
+                float distance=Vector3.DistanceSquared(_world.Center(change.Cell),_world.Sounds.Listener);
                 if(distance<nearest){nearest=distance;audible=change.Cell;}
             }
         }
-        if(audible.HasValue)_world.Sounds?.At(SoundKind.WaterFlow,BlockSounds.Center(audible.Value),.4f);
+        if(audible.HasValue)_world.Sounds?.At(SoundKind.WaterFlow,_world.Center(audible.Value),.4f);
     }
 
     private BlockType Source=>_lava?BlockType.LavaSource:BlockType.WaterSource;

@@ -8,20 +8,20 @@ using MDSM.Audio;
 namespace MDSM.Worlds;
 
 // The existing column frontier starts falls; only active objects move between voxel edits.
-public sealed class FallingBlockSimulation
+public sealed partial class FallingBlockSimulation
 {
     public const double TickSeconds = 0.05;
     public const int MaximumColumnsPerTick = 32;
     public const int MaximumActiveBlocks = 4096;
     public const double Acceleration = 24, TerminalSpeed = 20;
     private readonly World _world;
-    private readonly Queue<int> _columns = new();
-    private BitArray _queued;
+    private readonly Queue<Point3> _columns = new();
+    private readonly HashSet<Point3> _queued=new();
     private double _clock;
-    private int _updating = -1;
+    private Point3? _updating;
     private readonly List<FallingBlock> _active = new();
-    private readonly Dictionary<int, List<FallingBlock>> _fallingColumns = new();
-    private readonly List<int> _emptyColumns = new();
+    private readonly Dictionary<Point3, List<FallingBlock>> _fallingColumns = new();
+    private readonly List<Point3> _emptyColumns = new();
     public IReadOnlyList<FallingBlock> Active => _active;
     public int PendingCount => _columns.Count;
     public int LastProcessedColumns { get; private set; }
@@ -36,19 +36,19 @@ public sealed class FallingBlockSimulation
     }
     internal FallingBlockSimulation(World world) => _world = world;
 
-    private void Enqueue(int column)
+    private void Enqueue(Point3 column)
     {
         if (column == _updating) return;
-        _queued ??= new BitArray(_world.Width * _world.Depth);
-        if (_queued[column]) return;
-        _queued[column] = true; _columns.Enqueue(column);
+
+        if (!_queued.Add(column)) return;
+        _columns.Enqueue(column);
     }
-    internal void Changed(int x, int z, BlockType before, BlockType after)
+    internal void Changed(long x, long z, BlockType before, BlockType after)
     {
         if (Blocks.Falls(before) || Blocks.Falls(after) || Blocks.IsSolid(before) != Blocks.IsSolid(after))
-            Enqueue(z * _world.Width + x);
+            Enqueue(new(x,0,z));
     }
-    public int[] CaptureColumns() => _columns.ToArray();
+    public int[] CaptureColumns() {var values=new int[_columns.Count];int i=0;foreach(var cell in _columns)values[i++]=checked((int)(cell.Z*_world.Width+cell.X));return values;}
     public FallingBlockState[] CaptureActive()
     {
         var result = new FallingBlockState[_active.Count];
@@ -59,11 +59,11 @@ public sealed class FallingBlockSimulation
     {
         int count = _world.Width * _world.Depth;
         if (columns.Length > count) throw new InvalidDataException("Too many pending gravity columns.");
-        _columns.Clear(); _queued?.SetAll(false); _clock = 0; _active.Clear(); _fallingColumns.Clear();
+        _columns.Clear(); _queued.Clear(); _clock = 0; _active.Clear(); _fallingColumns.Clear();
         foreach (int column in columns)
         {
-            if ((uint)column >= count || (_queued != null && _queued[column])) throw new InvalidDataException("Invalid or duplicate gravity column.");
-            Enqueue(column);
+            if ((uint)column >= count || _queued.Contains(new(column%_world.Width,0,column/_world.Width))) throw new InvalidDataException("Invalid or duplicate gravity column.");
+            Enqueue(new(column%_world.Width,0,column/_world.Width));
         }
         if (falling.Length > MaximumActiveBlocks) throw new InvalidDataException("Too many active falling blocks.");
         foreach (FallingBlockState state in falling)
@@ -96,8 +96,9 @@ public sealed class FallingBlockSimulation
         LastMovedBlocks = 0; LastProcessedColumns = Math.Min(_columns.Count, MaximumColumnsPerTick);
         for (int i = 0; i < LastProcessedColumns; i++)
         {
-            int column = _columns.Dequeue(); _queued[column] = false; _updating = column;
-            int x = column % _world.Width, z = column / _world.Width;
+            Point3 column = _columns.Dequeue(); _queued.Remove(column); _updating = column;
+            if(!_world.IsSimulated(column)){_updating=null;Enqueue(column);continue;}
+            long x = column.X, z = column.Z;
             bool retry = false;
             try
             {
@@ -115,7 +116,7 @@ public sealed class FallingBlockSimulation
                     else { retry = true; break; } // A blocked loot reservation must not duplicate a falling block.
                 }
             }
-            finally { _updating = -1; }
+            finally { _updating = null; }
             if (retry) Enqueue(column); // Leave excess blocks in storage until capacity is available.
         }
     }
@@ -123,7 +124,7 @@ public sealed class FallingBlockSimulation
     private void Add(FallingBlockState state)
     {
         var block = new FallingBlock(state) { Index = _active.Count }; _active.Add(block);
-        int column = state.Z * _world.Width + state.X;
+        Point3 column = new(state.X,0,state.Z);
         if (!_fallingColumns.TryGetValue(column, out List<FallingBlock> stack))
             _fallingColumns.Add(column, stack = new List<FallingBlock>());
         int at = 0; while (at < stack.Count && stack[at].Y < state.Y) at++;
@@ -131,11 +132,11 @@ public sealed class FallingBlockSimulation
     }
     public bool Intersects(BoundingBox bounds)
     {
-        int minX = Math.Max(0, (int)MathF.Floor(bounds.Min.X)), maxX = Math.Min(_world.Width - 1, (int)MathF.Floor(bounds.Max.X));
-        int minZ = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)), maxZ = Math.Min(_world.Depth - 1, (int)MathF.Floor(bounds.Max.Z));
+        int minX = Math.Max(_world.LocalMinX, (int)MathF.Floor(bounds.Min.X)), maxX = Math.Min(_world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X));
+        int minZ = Math.Max(_world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)), maxZ = Math.Min(_world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z));
         for (int z = minZ; z <= maxZ; z++) for (int x = minX; x <= maxX; x++)
-            if (_fallingColumns.TryGetValue(z * _world.Width + x, out List<FallingBlock> stack))
-                foreach (FallingBlock block in stack) if (World.Overlaps(bounds, block.Bounds)) return true;
+            if (_fallingColumns.TryGetValue(_world.GlobalCell(x,0,z), out List<FallingBlock> stack))
+                foreach (FallingBlock block in stack) if (World.Overlaps(bounds,new BoundingBox(_world.LocalPosition(new Point3(block.X,0,block.Z))+Vector3.Up*(float)block.Y,_world.LocalPosition(new Point3(block.X,0,block.Z))+Vector3.Up*(float)block.Y+Vector3.One))) return true;
         return false;
     }
     private void Move(double elapsed)
@@ -143,6 +144,7 @@ public sealed class FallingBlockSimulation
         _emptyColumns.Clear();
         foreach (var column in _fallingColumns)
         {
+            if(!_world.IsSimulated(column.Key))continue;
             List<FallingBlock> stack = column.Value;
             FallingBlock below = null;
             for (int i = 0; i < stack.Count;)
@@ -166,10 +168,10 @@ public sealed class FallingBlockSimulation
                         Point3 ground=new(block.X,(int)floor-1,block.Z);
                         bool partial=Blocks.Get(_world.GetBlock(ground.X,ground.Y,ground.Z)).Shape is BlockShape.Slab or BlockShape.Stairs
                             && !_world.SupportsVoxelTop(ground);
-                        bool settled=partial?_world.LiveDrops?.TrySpawn(new(MDSM.Inventories.Items.FromBlock(block.Block),1),new(block.X+.5f,(float)floor+.2f,block.Z+.5f),.35f)==true
+                        bool settled=partial?_world.LiveDrops?.TrySpawn(new(MDSM.Inventories.Items.FromBlock(block.Block),1),_world.LocalPosition(new Point3(block.X,0,block.Z))+new Vector3(.5f,(float)floor+.2f,.5f),.35f)==true
                             :_world.SetBlock(block.X, (int)floor, block.Z, block.Block);
                         if(!settled){block.Y=next;block.DownwardSpeed=0;below=block;i++;continue;}
-                        if(!partial)_world.Sounds?.Block(SoundKind.Land,block.Block,new(block.X+.5f,(float)floor,block.Z+.5f));
+                        if(!partial)_world.Sounds?.Block(SoundKind.Land,block.Block,_world.LocalPosition(new Point3(block.X,0,block.Z))+new Vector3(.5f,(float)floor,.5f));
                         int last = _active.Count - 1;
                         _active[block.Index] = _active[last]; _active[block.Index].Index = block.Index; _active.RemoveAt(last);
                         stack.RemoveAt(i); continue;
@@ -180,6 +182,6 @@ public sealed class FallingBlockSimulation
             }
             if (stack.Count == 0) _emptyColumns.Add(column.Key);
         }
-        foreach (int column in _emptyColumns) _fallingColumns.Remove(column);
+        foreach (Point3 column in _emptyColumns) _fallingColumns.Remove(column);
     }
 }

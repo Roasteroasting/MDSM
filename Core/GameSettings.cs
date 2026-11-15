@@ -15,6 +15,7 @@ public sealed class GameSettings
     public int FpsCap { get => _fpsCap; set => _fpsCap = Math.Clamp(value, MinimumFps, MaximumFps); }
     public bool UncappedFps { get; set; }
     public bool ViewBobbing { get; set; } = true;
+    public bool LegacyVisualPrecision { get; set; }
     private float _brightness=.5f;
     public float Brightness { get=>_brightness;set=>_brightness=float.IsFinite(value)?Math.Clamp(value,0,1):.5f; }
     private float _masterVolume=.8f,_effectsVolume=1,_mobVolume=1,_interfaceVolume=1;
@@ -55,6 +56,8 @@ public sealed class SettingsStore
                 settings.UncappedFps = uncapped.GetBoolean();
             if(root.TryGetProperty("ViewBobbing",out var bobbing) && bobbing.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 settings.ViewBobbing=bobbing.GetBoolean();
+            if(root.TryGetProperty("LegacyVisualPrecision",out var precision) && precision.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                settings.LegacyVisualPrecision=precision.GetBoolean();
             // Mode/difficulty are active-world values, never application preferences.
             // Ignore obsolete JSON fields so they cannot override a loaded world.
             ReadVolume("MasterVolume",v=>settings.MasterVolume=v);ReadVolume("EffectsVolume",v=>settings.EffectsVolume=v);
@@ -79,7 +82,7 @@ public sealed class SettingsStore
         {
             using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.Brightness,
+                JsonSerializer.Serialize(file, new { settings.FpsCap, settings.UncappedFps, settings.ViewBobbing, settings.LegacyVisualPrecision, settings.Brightness,
                     settings.MasterVolume,settings.EffectsVolume,settings.MobVolume,settings.InterfaceVolume }, new JsonSerializerOptions { WriteIndented = true });
                 file.Flush(true);
             }

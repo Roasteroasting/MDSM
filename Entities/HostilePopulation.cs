@@ -13,7 +13,7 @@ namespace MDSM.Entities;
 public readonly record struct HostileSpawnSearch(int CandidateColumns, int FloorChecks, int Spawned,
     int OutsideWorld, int Distance, int NoFloor, int Blocked, int Fluid, int Torch, int Occupied);
 
-public sealed class HostilePopulation
+public sealed partial class HostilePopulation
 {
     public const int Maximum = 36, MaximumSpawnAttempts = 128;
     public const float MinimumSpawnDistance = 24, SpawnRadius = 64, ActiveRadius = 64, DespawnRadius = 128;
@@ -38,7 +38,7 @@ public sealed class HostilePopulation
     {
         _world=world;_random=new(unchecked(world.Seed^0x484f5354));if(saved==null)return;if(saved.Length>Maximum)throw new InvalidDataException("Too many hostile mobs.");foreach(var state in saved){Validate(state,world);Add(state);}
     }
-    private void Add(MobState state){var mob=new PassiveMob(state,_random.Next());_mobs.Add(mob);_brains[mob]=new(){LastSeen=mob.Position,OldAim=mob.Position,CurrentAim=mob.Position};}
+    private void Add(MobState state){var mob=new PassiveMob(state,_random.Next());mob.Bind(_world);_mobs.Add(mob);_brains[mob]=new(){LastSeen=mob.Position,OldAim=mob.Position,CurrentAim=mob.Position};}
     internal bool TrySummon(MobSpecies species, Vector3 feet)
     {
         if (species is < MobSpecies.Zombie or > MobSpecies.Spider || _mobs.Count >= Maximum) return false;
@@ -49,14 +49,16 @@ public sealed class HostilePopulation
         => Reject(species, feet, player) == SpawnRejection.None;
     private SpawnRejection Reject(MobSpecies species, Vector3 feet, Vector3 player)
     {
-        if (feet.Y<1 || feet.Y+MobDefinitions.Get(species).Height>World.Height || feet.X<2 || feet.Z<2 || feet.X>=_world.Width-2 || feet.Z>=_world.Depth-2) return SpawnRejection.OutsideWorld;
+        if (feet.Y<1 || feet.Y+MobDefinitions.Get(species).Height>World.Height || feet.X<_world.LocalMinX+2 || feet.Z<_world.LocalMinZ+2 || feet.X>=_world.LocalMaxX-2 || feet.Z>=_world.LocalMaxZ-2) return SpawnRejection.OutsideWorld;
         float distance=Vector3.DistanceSquared(feet,player);
         if (distance<MinimumSpawnDistance*MinimumSpawnDistance || distance>SpawnRadius*SpawnRadius) return SpawnRejection.Distance;
         if (!_world.IsSolid((int)feet.X,(int)feet.Y-1,(int)feet.Z)) return SpawnRejection.NoFloor;
         var bounds=PassiveMob.BoundsAt(species,feet);
         if (_world.IntersectsSolid(bounds)) return SpawnRejection.Blocked;
         if (Water.Intersects(_world,bounds) || Lava.Intersects(_world,bounds)) return SpawnRejection.Fluid;
-        if (_world.Lighting.Effective(feet)!=0) return SpawnRejection.Torch; // Diagnostics: any light rejection, not a radius approximation.
+        if(_world.IsInfinite)
+        {if(!_world.Lighting.TryEffective(_world.GlobalCell(feet),out int light)||light!=0)return SpawnRejection.Torch;}
+        else if (_world.Lighting.Effective(feet)!=0) return SpawnRejection.Torch; // Diagnostics: any light rejection, not a radius approximation.
         return SpawnRejection.None;
     }
     public void Update(float elapsed,Player player,Projectiles arrows,PassiveMobPopulation passive=null)
@@ -68,6 +70,7 @@ public sealed class HostilePopulation
         for(int i=_mobs.Count-1;i>=0;i--)
         {
             PassiveMob mob=_mobs[i];float distance=Vector3.DistanceSquared(mob.Position,player.Position);
+            if(!_world.IsSimulated(_world.GlobalCell(mob.Position)))continue;
             if(distance>DespawnRadius*DespawnRadius){_brains.Remove(mob);_mobs.RemoveAt(i);continue;}
             if(distance>ActiveRadius*ActiveRadius){mob.TickLife(elapsed);continue;}
             ActiveCount++;
@@ -122,7 +125,7 @@ public sealed class HostilePopulation
     private SpawnRejection FindFloor(MobSpecies species,int x,int z,Vector3 player,PassiveMobPopulation passive,ref int checks,out Vector3 feet)
     {
         feet=default;
-        if(x<2 || z<2 || x>=_world.Width-2 || z>=_world.Depth-2)return SpawnRejection.OutsideWorld;
+        if(x<_world.LocalMinX+2 || z<_world.LocalMinZ+2 || x>=_world.LocalMaxX-2 || z>=_world.LocalMaxZ-2)return SpawnRejection.OutsideWorld;
         int preferred=Math.Clamp((int)MathF.Floor(player.Y)+_random.Next(-8,9),1,World.Height-1);
         SpawnRejection last=SpawnRejection.NoFloor;
         // Bounded full-height floor search includes night surfaces and dark structures.
@@ -163,7 +166,7 @@ public sealed class HostilePopulation
         if(state.Species is <MobSpecies.Zombie or >MobSpecies.Spider)throw new InvalidDataException("Invalid hostile species.");
         float half=MobDefinitions.Get(state.Species).HalfWidth;
         if(!float.IsFinite(state.Position.LengthSquared()) || !float.IsFinite(state.Yaw)||Math.Abs(state.Yaw)>MathHelper.Pi
-            || state.Health<1||state.Health>MobDefinitions.Get(state.Species).MaximumHealth || state.Position.X<half || state.Position.Z<half || state.Position.X>world.Width-half || state.Position.Z>world.Depth-half || state.Position.Y< -16 || state.Position.Y>World.Height+16
+            || state.Health<1||state.Health>MobDefinitions.Get(state.Species).MaximumHealth || state.Position.X<world.LocalMinX+half || state.Position.Z<world.LocalMinZ+half || state.Position.X>world.LocalMaxX-half || state.Position.Z>world.LocalMaxZ-half || state.Position.Y< -16 || state.Position.Y>World.Height+16
             || state.BabySeconds!=0||state.Sheared||state.WoolSeconds!=0||state.LoveSeconds!=0||state.BreedCooldown!=0||state.Bred)throw new InvalidDataException("Invalid hostile mob.");
     }
 }

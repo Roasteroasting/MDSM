@@ -52,7 +52,7 @@ internal static class ExplorationTools
             {
                 Point3 center=pair.Key+new Point3(x,0,z);
                 if(!tested.Add(center))continue;
-                float distance=Vector3.DistanceSquared(player,new(center.X+.5f,center.Y,center.Z+.5f));
+                float distance=Vector3.DistanceSquared(player,world.Center(center));
                 if(distance>=best || !Room(world,center))continue;
                 best=distance;nearest=center;
             }
@@ -74,7 +74,7 @@ internal static class ExplorationTools
     {
         var world=session.World;var player=session.Player;
         if(!float.IsFinite(destination.X)||!float.IsFinite(destination.Y)||!float.IsFinite(destination.Z)
-            ||destination.X<Player.HalfWidth||destination.Z<Player.HalfWidth||destination.X>world.Width-Player.HalfWidth||destination.Z>world.Depth-Player.HalfWidth
+            ||destination.X<world.LocalMinX+Player.HalfWidth||destination.Z<world.LocalMinZ+Player.HalfWidth||destination.X>world.LocalMaxX-Player.HalfWidth||destination.Z>world.LocalMaxZ-Player.HalfWidth
             ||destination.Y<0||destination.Y+Player.BodyHeight>World.Height+(player.Creative?16:0))return false;
         var bounds=new BoundingBox(destination+new Vector3(-Player.HalfWidth,0,-Player.HalfWidth),destination+new Vector3(Player.HalfWidth,Player.BodyHeight,Player.HalfWidth));
         if(world.IntersectsSolid(bounds)||Water.Intersects(world,bounds)||Lava.Intersects(world,bounds)||world.Fire.Contact(bounds))return false;

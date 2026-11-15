@@ -100,8 +100,8 @@ internal static class MobGraphicsChecks
                     Call("SetState", GameState.WorldCreation); MenuController menu = Field<MenuController>("_menu");
                     foreach (char ch in "Mixed new world") menu.TextInput(ch);
                     Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch); Press(Keys.Tab);
-                    foreach (WorldSize size in new[] { WorldSize.Large, WorldSize.Massive, WorldSize.Small, WorldSize.Normal })
-                    { Press(Keys.Right); Require(menu.SelectedSize == size, "Create menu did not cycle all four sizes."); }
+                    foreach (WorldSize size in new[] { WorldSize.Large, WorldSize.Massive, WorldSize.Infinite, WorldSize.Small, WorldSize.Normal })
+                    { Press(Keys.Right); Require(menu.SelectedSize == size, "Create menu did not cycle all five sizes."); }
                     Press(Keys.Left);
                     Call("HandleMenuAction", MenuAction.CreateWorld);
                     var creationWait = System.Diagnostics.Stopwatch.StartNew();

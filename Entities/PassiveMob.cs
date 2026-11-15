@@ -13,7 +13,11 @@ public sealed class PassiveMob
     public MobDefinition Definition { get; }
     private float HalfWidth => !Baby?Definition.HalfWidth:Species switch{MobSpecies.Cow=>.32f,MobSpecies.Chicken=>.2f,_=>.3f};
     private float Height => !Baby?Definition.Height:Species switch{MobSpecies.Pig=>.8f,MobSpecies.Cow=>1.2f,MobSpecies.Sheep=>.95f,_=>.65f};
-    public Vector3 Position { get; private set; }
+    private FramedPosition _pose;
+    public Vector3 Position {get=>_pose.Local;private set=>_pose.Local=value;}
+    public MDSM.Worlds.Streaming.WorldPosition AbsolutePosition=>_pose.Absolute;
+    internal void Bind(World world)=>_pose.Bind(world);
+    internal void FrameChanged()=>_cacheRevision=-1;
     public float Yaw { get; private set; }
     public int Health { get; private set; }
     public bool IsDead => Health == 0;
@@ -218,11 +222,11 @@ public sealed class PassiveMob
         BoundingBox probe = new(ahead + new Vector3(-HalfWidth,0,-HalfWidth), ahead + new Vector3(HalfWidth,Height,HalfWidth));
         bool obstacleFound = false;
         Span<BoundingBox> boxes = stackalloc BoundingBox[9];
-        for (int x=Math.Max(0,(int)MathF.Floor(probe.Min.X));x<=Math.Min(world.Width-1,(int)MathF.Floor(probe.Max.X));x++)
+        for (int x=Math.Max(world.LocalMinX,(int)MathF.Floor(probe.Min.X));x<=Math.Min(world.LocalMaxX-1,(int)MathF.Floor(probe.Max.X));x++)
         for (int y=Math.Max(0,(int)MathF.Floor(probe.Min.Y)-1);y<=Math.Min(World.Height-1,(int)MathF.Floor(probe.Max.Y));y++)
-        for (int z=Math.Max(0,(int)MathF.Floor(probe.Min.Z));z<=Math.Min(world.Depth-1,(int)MathF.Floor(probe.Max.Z));z++)
+        for (int z=Math.Max(world.LocalMinZ,(int)MathF.Floor(probe.Min.Z));z<=Math.Min(world.LocalMaxZ-1,(int)MathF.Floor(probe.Max.Z));z++)
         {
-            int count = world.BlockBoxes(new(x,y,z), boxes, true);
+            int count = world.BlockBoxes(world.GlobalCell(x,y,z), boxes, true);
             for (int i=0;i<count;i++)
                 if (World.Overlaps(probe,boxes[i]))
                 {
@@ -242,19 +246,19 @@ public sealed class PassiveMob
     {
         if (amount == 0) return false;
         Vector3 next = Position;
-        if (axis == 0) next.X = Math.Clamp(next.X + amount, HalfWidth, world.Width - HalfWidth);
-        else if (axis == 2) next.Z = Math.Clamp(next.Z + amount, HalfWidth, world.Depth - HalfWidth);
+        if (axis == 0) next.X = Math.Clamp(next.X + amount, world.LocalMinX + HalfWidth, world.LocalMaxX - HalfWidth);
+        else if (axis == 2) next.Z = Math.Clamp(next.Z + amount, world.LocalMinZ + HalfWidth, world.LocalMaxZ - HalfWidth);
         else next.Y += amount;
         BoundingBox bounds = new(next+new Vector3(-HalfWidth,0,-HalfWidth),next+new Vector3(HalfWidth,Height,HalfWidth));
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         CacheCollisionCells(world, bounds);
         bool blocked = axis == 0 ? next.X != Position.X + amount : axis == 2 && next.Z != Position.Z + amount;
-        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+        for (int x = Math.Max(world.LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)-1); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+        for (int z = Math.Max(world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
             if (!_solidCells[((y - _minY) * _cacheDepth + z - _minZ) * _cacheWidth + x - _minX]) continue;
-            int count=world.BlockBoxes(new(x,y,z),boxes,true);for(int box=0;box<count;box++)
+            int count=world.BlockBoxes(world.GlobalCell(x,y,z),boxes,true);for(int box=0;box<count;box++)
             {
             BoundingBox obstacle=boxes[box];if(!World.Overlaps(bounds,obstacle))continue;
             blocked = true;

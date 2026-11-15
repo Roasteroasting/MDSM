@@ -52,6 +52,7 @@ public sealed class WorldSaveManager
     public void Save(string id, WorldSave save)
     {
         string directory = WorldDirectory(id);
+        if(save.World.IsInfinite){InfiniteWorldPersistence.Save(directory,save);return;}
         Directory.CreateDirectory(directory);
         string destination = Path.Combine(directory, FileName);
         string temporary = Path.Combine(directory, $"{FileName}.{Guid.NewGuid():N}.tmp");
@@ -75,11 +76,36 @@ public sealed class WorldSaveManager
             catch (UnauthorizedAccessException) { }
         }
     }
+    internal System.Threading.Tasks.Task BeginInfiniteSave(string id,WorldSave save)
+    {if(!save.World.IsInfinite)throw new ArgumentException("A streamed checkpoint requires an Infinite world.");return InfiniteWorldPersistence.BeginSave(WorldDirectory(id),save);}
 
     public WorldSave Load(string id)
     {
-        using var stream = File.OpenRead(Path.Combine(WorldDirectory(id), FileName));
-        return WorldSerializer.Read(stream);
+        string directory=WorldDirectory(id);
+        using(var stream=File.OpenRead(Path.Combine(directory,FileName)))if(!InfiniteWorldPersistence.IsInfinite(stream))return WorldSerializer.Read(stream);
+        return InfiniteWorldPersistence.Load(directory);
+    }
+    internal (string Id,WorldSave Save) CreateInfinite(int seed,string name,bool cheats,MDSM.Core.Difficulty difficulty,MDSM.Core.GameMode mode)
+    {
+        WorldSerializer.ValidateName(name);string id=Guid.NewGuid().ToString("N"),directory=WorldDirectory(id);
+        var world=World.OpenStreamed(seed,Path.Combine(directory,"regions"));world.Climate.VariedGeneration=true;world.AllowCheats=cheats;world.SavedDifficulty=difficulty;world.SavedGameMode=mode;
+        try
+        {
+            var deadline=Stopwatch.StartNew();bool ready=false;
+            while(!ready)
+            {
+                world.UpdateStreaming(new(0,0));ready=true;
+                for(int z=-1;z<=1;z++)for(int x=-1;x<=1;x++)ready&=world.IsLoaded(new(x*16,0,z*16));
+                if(world.ChunkLifecycle.Error!=null)throw new IOException("Could not initialize Infinite terrain.",world.ChunkLifecycle.Error);
+                if(deadline.Elapsed.TotalSeconds>60)throw new IOException("Timed out initializing spawn terrain.");if(!ready)System.Threading.Thread.Sleep(1);
+            }
+            bool found=false;
+            for(int r=0;r<=14&&!found;r++)for(int z=-r;z<=r&&!found;z++)for(int x=-r;x<=r&&!found;x++)
+            {int y=world.SurfaceY(x,z);if(y<1||y+3>=World.Height||!Blocks.IsSolid(world.GetBlock(x,y,z))||world.GetBlock(x,y+1,z)!=BlockType.Air||world.GetBlock(x,y+2,z)!=BlockType.Air)continue;world.InfiniteSpawn=new(x+.5,y+1.01,z+.5);found=true;}
+            if(!found)throw new IOException("No safe spawn found in initial terrain. Try a different seed.");
+            var save=new WorldSave(world,name,world.Spawn,0,0,Inventories.Inventory.CreateNewWorld(),ExactPosition:world.InfiniteSpawn);Save(id,save);return(id,save);
+        }
+        catch{world.ChunkLifecycle.DisposeAsync().AsTask().GetAwaiter().GetResult();throw;}
     }
 
     internal void SetActiveWorld(string id)
@@ -93,7 +119,8 @@ public sealed class WorldSaveManager
         RequireInactive(id);
         name = WorldSerializer.ValidateName(name);
         WorldSave save = Load(id);
-        Save(id, save with { Name = name });
+        try{Save(id, save with { Name = name });}
+        finally{if(save.World.IsInfinite)save.World.ChunkLifecycle.DisposeAsync().AsTask().GetAwaiter().GetResult();}
     }
 
     public void Delete(string id)
@@ -159,7 +186,7 @@ public sealed class WorldSaveManager
                 _ = WorldDirectory(id);
                 RejectLink(path);
                 using var stream = File.OpenRead(path);
-                WorldMetadata metadata = WorldSerializer.ReadMetadata(stream);
+                WorldMetadata metadata = InfiniteWorldPersistence.IsInfinite(stream)?InfiniteWorldPersistence.Metadata(directory):WorldSerializer.ReadMetadata(stream);
                 entries.Add(new WorldEntry(id, metadata.Name, metadata.Seed, File.GetLastWriteTimeUtc(path), null, metadata.Size));
             }
             catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)

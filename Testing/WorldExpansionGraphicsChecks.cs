@@ -122,8 +122,8 @@ internal static class WorldExpansionGraphicsChecks
             GraphicsDevice.BlendState=BlendState.Opaque;GraphicsDevice.DepthStencilState=DepthStencilState.Default;
             GraphicsDevice.RasterizerState=RasterizerState.CullCounterClockwise;GraphicsDevice.SamplerStates[0]=SamplerState.PointClamp;
             int draws=0;
-            for(int cz=Math.Max(0,cell.Z/16-2);cz<=Math.Min(world.ChunksZ-1,cell.Z/16+2);cz++)
-            for(int cx=Math.Max(0,cell.X/16-2);cx<=Math.Min(world.ChunksX-1,cell.X/16+2);cx++)
+            for(long cz=Math.Max(0,cell.Z/16-2);cz<=Math.Min(world.ChunksZ-1,cell.Z/16+2);cz++)
+            for(long cx=Math.Max(0,cell.X/16-2);cx<=Math.Min(world.ChunksX-1,cell.X/16+2);cx++)
             {
                 using var mesh=new ChunkMesh(GraphicsDevice,world.GetChunk(cx,cz));mesh.Update(world,builder);
                 if(!mesh.HasGeometry)continue;

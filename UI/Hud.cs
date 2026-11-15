@@ -7,6 +7,7 @@ using MDSM.Core;
 using MDSM.Inventories;
 using MDSM.Rendering;
 using MDSM.Worlds;
+using MDSM.Worlds.Streaming;
 
 namespace MDSM.UI;
 
@@ -34,9 +35,9 @@ public sealed class Hud : IDisposable
 
     public void Draw(Viewport viewport, Inventory inventory, bool captured, bool showDebug,
         Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0,
-        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0,bool creative=false,BreathMeter breath=null)
+        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0,bool creative=false,BreathMeter breath=null,WorldPosition? exactPosition=null)
     {
-        UpdateDebug(showDebug && visible, playerPosition, world, gameTime.ElapsedGameTime.TotalSeconds, renderer, diagnostics);
+        UpdateDebug(showDebug && visible, exactPosition??world.AbsolutePosition(playerPosition), world, gameTime.ElapsedGameTime.TotalSeconds, renderer, diagnostics);
         if (!visible) return;
         int width = viewport.Width, height = viewport.Height;
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
@@ -104,7 +105,7 @@ public sealed class Hud : IDisposable
         _sprites.End();
     }
 
-    private void UpdateDebug(bool visible, Vector3 position, World world, double elapsed, WorldRenderer renderer, FrameDiagnostics diagnostics)
+    private void UpdateDebug(bool visible, WorldPosition position, World world, double elapsed, WorldRenderer renderer, FrameDiagnostics diagnostics)
     {
         _frameCount++;
         _fpsElapsed += elapsed;
@@ -121,11 +122,11 @@ public sealed class Hud : IDisposable
             return;
         _debugElapsed = 0;
         _debugLines[0] = FormattableString.Invariant($"X {position.X:0.0} Y {position.Y:0.0} Z {position.Z:0.0}");
-        _debugLines[1] = $"CHUNK {(int)MathF.Floor(position.X) / Chunk.Size} {(int)MathF.Floor(position.Z) / Chunk.Size}";
+        _debugLines[1] = $"CHUNK {ChunkAddress.At((long)Math.Floor(position.X),(long)Math.Floor(position.Z))}";
         _debugLines[2] = $"FPS {_fps}";
         _debugLines[3] = $"SEED {world.Seed}";
         _debugLines[4] = $"CHUNKS {world.ChunkCount}";
-        _debugLines[5] = $"WORLD {world.Width} X {World.Height} X {world.Depth}";
+        _debugLines[5] = world.Size.Dimensions();
         _debugLines[6] = $"MESH {renderer?.MeshedChunks ?? 0} GPU {renderer?.GpuChunks ?? 0} DRAW {renderer?.VisibleChunks ?? 0}";
         _debugLines[7] = $"EST VB {((renderer?.BufferBytes ?? 0) + (diagnostics?.DynamicBufferBytes ?? 0)) / 1048576.0:0.0} MIB";
         _debugLines[8] = $"DRAWS {diagnostics?.DrawCalls ?? 0} TRIS {diagnostics?.Triangles ?? 0}";

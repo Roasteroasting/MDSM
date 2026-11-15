@@ -25,8 +25,8 @@ public static class DropPlacement
                 6 => (-forward + right) * 0.7f, 7 => (-forward - right) * 0.7f, _ => Vector3.Zero
             };
             Vector3 candidate = player.Position + offset * 1.1f + new Vector3(0, 0.6f + level * 0.5f, 0);
-            candidate.X = Math.Clamp(candidate.X, DroppedItem.Radius, world.Width - DroppedItem.Radius);
-            candidate.Z = Math.Clamp(candidate.Z, DroppedItem.Radius, world.Depth - DroppedItem.Radius);
+            candidate.X = Math.Clamp(candidate.X, world.LocalMinX + DroppedItem.Radius, world.LocalMaxX - DroppedItem.Radius);
+            candidate.Z = Math.Clamp(candidate.Z, world.LocalMinZ + DroppedItem.Radius, world.LocalMaxZ - DroppedItem.Radius);
             candidate.Y = Math.Clamp(candidate.Y, -16 + DroppedItem.Radius, World.Height + 16);
             var bounds = new BoundingBox(candidate - new Vector3(DroppedItem.Radius), candidate + new Vector3(DroppedItem.Radius));
             if (world.IntersectsSolid(bounds) || (avoidPlayer && World.Overlaps(bounds, player.Bounds))) continue;

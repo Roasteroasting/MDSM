@@ -21,6 +21,11 @@ public sealed class Camera
     public Vector3 Right => new(MathF.Cos(_yaw), 0, MathF.Sin(_yaw));
     public Matrix View => Matrix.CreateLookAt(Position+PresentationOffset, Position+PresentationOffset + Forward, Vector3.Up);
 
+    // Optional historical camera snapping. Narrow ONLY a presentation copy;
+    // physics, F3, raycasts, saving and noise always retain their exact frame.
+    internal static Vector3 PrecisionOffset(Worlds.Streaming.WorldPosition eye,bool legacy)
+        =>legacy?new((float)((double)(float)eye.X-eye.X),(float)((double)(float)eye.Y-eye.Y),(float)((double)(float)eye.Z-eye.Z)):Vector3.Zero;
+
     public Matrix Projection(float aspectRatio) =>
         Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(75), aspectRatio, 0.05f, FarPlane);
 

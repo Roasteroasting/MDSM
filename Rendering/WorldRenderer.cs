@@ -10,7 +10,7 @@ using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
-public sealed class WorldRenderer : IDisposable
+public sealed partial class WorldRenderer : IDisposable
 {
     public static readonly Color SkyColor = new(143, 190, 232);
     public const float FogStart = 80, FogEnd = 144;
@@ -66,12 +66,20 @@ public sealed class WorldRenderer : IDisposable
     internal bool PrepareInitialMeshes(Camera camera, int budget = MaximumBuildsPerFrame)
     {
         Prepare(camera, budget,initial:true);
+        if(_world.IsInfinite)
+        {
+            var p=_world.AbsolutePosition(camera.Position);var c=MDSM.Worlds.Streaming.ChunkAddress.At((long)Math.Floor(p.X),(long)Math.Floor(p.Z));
+            for(int z=-1;z<=1;z++)for(int x=-1;x<=1;x++)
+            {long bx=(c.X+x)*16,bz=(c.Z+z)*16;if(!MDSM.Worlds.Streaming.Coordinates.Valid(bx,bz)||!MDSM.Worlds.Streaming.Coordinates.Valid(bx+15,bz+15))continue;if(!_world.TryGetChunkAt(bx,bz,out var chunk)||_meshes[chunk.Slot]==null||_meshes[chunk.Slot].NeedsBuild)return false;}
+            return true;
+        }
         return PendingChunks == 0 && _retiring.Count==0;
     }
 
     // All creation/uploads/evictions happen here on the graphics thread. No CPU mesh cache.
     internal void Prepare(Camera camera, int budget = MaximumBuildsPerFrame,bool initial=false)
     {
+        if(_world.IsInfinite){PrepareStreamed(camera,initial?budget:Math.Min(budget,1));return;}
         long start = Stopwatch.GetTimestamp();
         _frustum.Matrix = camera.View * camera.Projection(_device.Viewport.AspectRatio);
         if (_region.Update(camera.Position, _device.Viewport.AspectRatio))
@@ -150,8 +158,8 @@ public sealed class WorldRenderer : IDisposable
         _falling = new FallingBlockRenderer(device, atlas);
         _region = new ChunkRegion(world);
         _water = new WaterRenderer(device, atlas, world, _region);
-        _meshes = new ChunkMesh[world.ChunkCount];
-        _visible = new ChunkMesh[world.ChunkCount];
+        _meshes = new ChunkMesh[world.ChunkSlotCapacity];
+        _visible = new ChunkMesh[world.ChunkSlotCapacity];
         _terrainEffect = atlas.LightingEffect.Clone();
         _selectionEffect = new BasicEffect(device)
         {
@@ -167,11 +175,11 @@ public sealed class WorldRenderer : IDisposable
         _frustum.Matrix = view * projection;
         VisibleChunks = 0;
         Prepare(camera);
-        _sky.Draw(camera,_world.Time,_world.Seed,_world.Weather.MotionSeconds);
+        _sky.Draw(camera,_world.Time,_world.Seed,_world.Weather.MotionSeconds,_world.OriginX,_world.OriginZ);
         foreach (int index in _region.Indices)
         {
             ChunkMesh mesh = _meshes[index];
-            if (mesh != null && mesh.HasGeometry && _frustum.Intersects(mesh.Bounds))
+            if (mesh != null && mesh.HasGeometry && _frustum.Intersects(_world.IsInfinite?_world.RelativeBounds(mesh.Chunk):mesh.Bounds))
                 _visible[VisibleChunks++] = mesh;
         }
 
@@ -185,7 +193,10 @@ public sealed class WorldRenderer : IDisposable
         {
             pass.Apply();
             for (int i = 0; i < VisibleChunks; i++)
+            {
+                if(_world.IsInfinite)ApplyChunkTransform(_visible[i],camera,pass);
                 _visible[i].Draw();
+            }
         }
 
         bool signs=false;for(int i=0;i<VisibleChunks;i++)signs|=_visible[i].HasText;
@@ -193,7 +204,7 @@ public sealed class WorldRenderer : IDisposable
         {
             FlatLighting.Apply(_terrainEffect,_device,_textTexture,_world,camera,Brightness,.5f);
             foreach(var pass in _terrainEffect.CurrentTechnique.Passes)
-            {pass.Apply();for(int i=0;i<VisibleChunks;i++)_visible[i].DrawText();}
+            {pass.Apply();for(int i=0;i<VisibleChunks;i++){if(_world.IsInfinite)ApplyChunkTransform(_visible[i],camera,pass);_visible[i].DrawText();}}
             // Keep the established terrain binding contract for later entity,
             // water and screenshot passes, including HUD-hidden frames.
             _device.Textures[0]=null;_device.Textures[0]=_texture;
@@ -209,7 +220,7 @@ public sealed class WorldRenderer : IDisposable
 
     private void DrawSelection(BlockHit hit, Camera camera, float miningProgress)
     {
-        BoundingBox box = World.Bounds(hit.Cell);
+        BoundingBox box = _world.LocalBounds(hit.Cell);
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];int count=_world.BlockBoxes(hit.Cell,boxes);
         _selectionEffect.View = camera.View;
         _selectionEffect.Projection = camera.Projection(_device.Viewport.AspectRatio);

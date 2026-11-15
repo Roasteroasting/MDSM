@@ -13,7 +13,7 @@ public sealed class TerrainGenerator
 
     public TerrainGenerator(int seed,bool varied=false,int width=0) { _seed=seed;_varied=varied;_width=width; }
 
-    public int SurfaceY(int x, int z)
+    public int SurfaceY(long x, long z)
     {
         // Broad hills modulated by a slower field leave some areas relatively flat.
         float flatness = 0.8f + Noise(x / 320f + 31, z / 320f - 17) * 0.2f;
@@ -38,7 +38,7 @@ public sealed class TerrainGenerator
         }
         return Math.Clamp((int)MathF.Round(height),MinimumSurface,_varied?MountainMaximum:MaximumSurface);
     }
-    internal float MountainStrength(int x,int z)
+    internal float MountainStrength(long x,long z)
     {
         const int spacing=384;int cx=(int)MathF.Floor(x/(float)spacing),cz=(int)MathF.Floor(z/(float)spacing);float highest=0;
         for(int dz=-1;dz<=1;dz++)for(int dx=-1;dx<=1;dx++)
@@ -84,7 +84,7 @@ public sealed class TerrainGenerator
         for (int z = 0; z < Chunk.Size; z++)
         for (int x = 0; x < Chunk.Size; x++)
         {
-            int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
+            int worldX = checked((int)chunk.OriginX) + x, worldZ = checked((int)chunk.OriginZ) + z;
             int top = heights[worldZ*world.Width+worldX];
             int dirt = DirtDepth(worldX, worldZ);
             bool desert=_varied && world.Climate.At(worldX,worldZ)==Biome.Desert;

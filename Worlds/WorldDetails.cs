@@ -29,9 +29,9 @@ public sealed partial class World
     {
         bool water=Water.IsWater(GetBlock(cell.X,cell.Y,cell.Z));
         if(water)
-        {foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Lava.IsLava(GetBlock(p.X,p.Y,p.Z)) && SetBlock(p.X,p.Y,p.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,BlockSounds.Center(p));}}
+        {foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Lava.IsLava(GetBlock(p.X,p.Y,p.Z)) && SetBlock(p.X,p.Y,p.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,Center(p));}}
         else if(Lava.IsLava(GetBlock(cell.X,cell.Y,cell.Z)))
-            foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Water.IsWater(GetBlock(p.X,p.Y,p.Z))){if(SetBlock(cell.X,cell.Y,cell.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,BlockSounds.Center(cell));break;}}
+            foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Water.IsWater(GetBlock(p.X,p.Y,p.Z))){if(SetBlock(cell.X,cell.Y,cell.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,Center(cell));break;}}
     }
     public StructureState Structure(Point3 cell)
     {
@@ -42,12 +42,14 @@ public sealed partial class World
     {
         BlockType block=GetBlock(cell.X,cell.Y,cell.Z);if(block is not (BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper))return false;
         var state=Structure(cell);Structures[state.Cell]=state with {Open=!state.Open};
-        Sounds?.At(block==BlockType.FenceGate?(state.Open?SoundKind.GateClose:SoundKind.GateOpen):(state.Open?SoundKind.DoorClose:SoundKind.DoorOpen),BlockSounds.Center(state.Cell));
+        Sounds?.At(block==BlockType.FenceGate?(state.Open?SoundKind.GateClose:SoundKind.GateOpen):(state.Open?SoundKind.DoorClose:SoundKind.DoorOpen),Center(state.Cell));
         DirtyDetail(state.Cell);return true;
     }
     internal void DirtyDetail(Point3 cell)
     {
-        Revision++;for(int z=Math.Max(0,cell.Z/16-1);z<=Math.Min(ChunksZ-1,cell.Z/16+1);z++)for(int x=Math.Max(0,cell.X/16-1);x<=Math.Min(ChunksX-1,cell.X/16+1);x++)GetChunk(x,z).MarkDirty();
+        if(IsInfinite)
+        {long cx=Streaming.Coordinates.FloorDiv(cell.X,16),cz=Streaming.Coordinates.FloorDiv(cell.Z,16);MarkStreamedDirty(cx,cz);for(long z=cz-1;z<=cz+1;z++)for(long x=cx-1;x<=cx+1;x++)if(TryGetChunkAt(x*16,z*16,out var chunk))chunk.MarkDirty();return;}
+        Revision++;for(long z=Math.Max(0,cell.Z/16-1);z<=Math.Min(ChunksZ-1,cell.Z/16+1);z++)for(long x=Math.Max(0,cell.X/16-1);x<=Math.Min(ChunksX-1,cell.X/16+1);x++)GetChunk(x,z).MarkDirty();
     }
     public bool PlaceStructure(Point3 cell,BlockType block,byte facing,Point3 support,BoundingBox player)
     {
@@ -55,12 +57,12 @@ public sealed partial class World
         if(Structures.Count>=65536)return false;
         byte orientation=(byte)(facing%4);
         if(block==BlockType.Door)
-        {Vector3 center=(player.Min+player.Max)*.5f;if((orientation%2==0?center.X-cell.X:center.Z-cell.Z)<.5f)orientation|=4;}
+        {Vector3 center=(player.Min+player.Max)*.5f;if((orientation%2==0?center.X-(cell.X-OriginX):center.Z-(cell.Z-OriginZ))<.5f)orientation|=4;}
         var proposed = new StructureState(cell,orientation,false,support);
         if(block==BlockType.Door)
         {
             if(!Contains(cell.X,cell.Y+1,cell.Z) || GetBlock(cell.X,cell.Y,cell.Z)!=BlockType.Air || GetBlock(cell.X,cell.Y+1,cell.Z)!=BlockType.Air
-                || !SupportsVoxelTop(new(cell.X,cell.Y-1,cell.Z)) || Overlaps(new(new(cell.X,cell.Y,cell.Z),new(cell.X+1,cell.Y+2,cell.Z+1)),player)
+                || !SupportsVoxelTop(new(cell.X,cell.Y-1,cell.Z)) || Overlaps(new(LocalPosition(cell),LocalPosition(cell)+new Vector3(1,2,1)),player)
                 || PlacementBlockedByMobs(cell,block,proposed)
                 || PlacementBlockedByMobs(cell+new Point3(0,1,0),BlockType.DoorUpper,proposed))return false;
             _structureEdit=true;SetBlock(cell.X,cell.Y,cell.Z,block);SetBlock(cell.X,cell.Y+1,cell.Z,BlockType.DoorUpper);_structureEdit=false;
@@ -72,7 +74,7 @@ public sealed partial class World
             if(!TryPlaceBlock(cell,block,player,support,proposed))return false;
         }
         Structures[cell]=proposed;if(block==BlockType.Torch)Torches.Add(cell);DirtyDetail(cell);
-        if(block==BlockType.Door)Sounds?.Block(SoundKind.Place,block,BlockSounds.Center(cell));return true;
+        if(block==BlockType.Door)Sounds?.Block(SoundKind.Place,block,Center(cell));return true;
     }
     private bool CanDetailChange(Point3 cell,BlockType previous,BlockType next)
     {
@@ -127,8 +129,8 @@ public sealed partial class World
         if(collision && !Blocks.IsSolid(block))return 0;
         if(shape==BlockShape.Fire)return Fire.SelectionBoxes(cell,boxes);
         if(OrientedBuilding(block))return BuildingBoxes(cell,block,boxes,proposed,changedNeighbor,replacement,neighborState);
-        if(shape==BlockShape.Pane)return PaneBoxes(cell,PaneConnections(cell,changedNeighbor,replacement),boxes);
-        int count=0;Vector3 origin=new(cell.X,cell.Y,cell.Z);
+        if(shape==BlockShape.Pane)return PaneBoxes(new(cell.X-OriginX,cell.Y,cell.Z-OriginZ),PaneConnections(cell,changedNeighbor,replacement),boxes);
+        int count=0;Vector3 origin=LocalPosition(cell);
         count=1;boxes[0]=new(origin,origin+Vector3.One);
         if(shape==BlockShape.Cactus){boxes[0]=new(origin+new Vector3(1f/16,0,1f/16),origin+new Vector3(15f/16,1,15f/16));return 1;}
         if(shape==BlockShape.Fluid)
@@ -188,7 +190,7 @@ public sealed class TorchIndex
     public bool Protected(Vector3 position)
     {
         Point3 key=Bucket(new((int)position.X,(int)position.Y,(int)position.Z));
-        for(int y=key.Y-1;y<=key.Y+1;y++)for(int z=key.Z-1;z<=key.Z+1;z++)for(int x=key.X-1;x<=key.X+1;x++)
+        for(int y=key.Y-1;y<=key.Y+1;y++)for(long z=key.Z-1;z<=key.Z+1;z++)for(long x=key.X-1;x<=key.X+1;x++)
             if(_cells.TryGetValue(new(x,y,z),out var set))foreach(Point3 p in set)if(Vector3.DistanceSquared(position,new(p.X+.5f,p.Y+.5f,p.Z+.5f))<=225)return true;
         return false;
     }

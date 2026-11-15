@@ -301,7 +301,7 @@ internal static class ProgressionChecks
         Point3 Plot()
         {
             for(int dz=-4;dz<=4;dz++)for(int dx=-4;dx<=4;dx++)
-            {int x=root.X+dx,z=root.Z+dz,y=terrain.SurfaceY(x,z)+1;var point=new Point3(x,y,z);
+            {long x=root.X+dx,z=root.Z+dz;int y=terrain.SurfaceY(x,z)+1;var point=new Point3(x,y,z);
                 if(world.GetBlock(x,y,z)==BlockType.Air && !World.Overlaps(World.Bounds(point),session.Player.Bounds)
                     && Vector3.Distance(session.Camera.Position,new Vector3(x+.5f,y+.5f,z+.5f))<5.5f)return point;}
             throw new Exception("No nearby plot.");

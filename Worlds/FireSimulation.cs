@@ -7,7 +7,7 @@ namespace MDSM.Worlds;
 
 public enum FireAttachment:byte { Automatic,Floor,North,East,South,West }
 public readonly record struct FireState(Point3 Cell,double Remaining,double NextTick,FireAttachment Attachment=FireAttachment.Automatic);
-public sealed class FireSimulation(World world)
+public sealed partial class FireSimulation(World world)
 {
     public const int Maximum=4096,Budget=64;
     public const double SpreadChancePerTick=.25;
@@ -29,7 +29,7 @@ public sealed class FireSimulation(World world)
         if(support is Point3 explicitFace && (explicitFace.Y>0 || Math.Abs(explicitFace.X)+Math.Abs(explicitFace.Y)+Math.Abs(explicitFace.Z)!=1))return false;
         foreach(Point3 d in Adjacent)if(Water.IsWater(world.GetBlock(cell.X+d.X,cell.Y+d.Y,cell.Z+d.Z)))return false;
         FireAttachment attachment=support.HasValue?Encode(support.Value):Infer(cell);
-        if(!Valid(cell,attachment) || world.Weather.ExposedRain(new(cell.X+.5f,cell.Y+.5f,cell.Z+.5f)) || !world.SetBlock(cell.X,cell.Y,cell.Z,BlockType.Fire))return false;
+        if(!Valid(cell,attachment) || world.Weather.ExposedRain(world.Center(cell)) || !world.SetBlock(cell.X,cell.Y,cell.Z,BlockType.Fire))return false;
         _flames[cell].Attachment=attachment;return true;
     }
     private static FireAttachment Encode(Point3 support)=>support.Y<0?FireAttachment.Floor:(FireAttachment)(2+(support.X>0?1:support.X<0?3:support.Z>0?2:0));
@@ -47,12 +47,12 @@ public sealed class FireSimulation(World world)
         if(Valid(cell,FireAttachment.Floor))return FireAttachment.Floor;
         for(int i=0;i<4;i++){var a=(FireAttachment)(2+i);if(Valid(cell,a))return a;}return FireAttachment.Automatic;
     }
-    public FireAttachment Attachment(Point3 cell)=>_flames.TryGetValue(cell,out var flame) && Valid(cell,flame.Attachment)?flame.Attachment:Infer(cell);
+    public FireAttachment Attachment(Point3 cell)=>_flames.TryGetValue(cell,out var flame) && Valid(cell,flame.Attachment)?flame.Attachment:world.DormantFireAttachment(cell) is var dormant && dormant!=FireAttachment.Automatic?dormant:Infer(cell);
     internal int SelectionBoxes(Point3 cell,Span<BoundingBox> boxes)
     {
         FireAttachment attachment=Attachment(cell);if(attachment==FireAttachment.Automatic)return 0;
-        Vector3 origin=new(cell.X,cell.Y,cell.Z);
-        if(attachment==FireAttachment.Floor){boxes[0]=World.Bounds(cell);return 1;}
+        Vector3 origin=world.LocalPosition(cell);
+        if(attachment==FireAttachment.Floor){boxes[0]=new(origin,origin+Vector3.One);return 1;}
         Point3 d=Direction(attachment);Vector3 min=new(.02f,.02f,.02f),max=new(.98f,.92f,.98f);
         if(d.X!=0){min.X=d.X>0?.665f:.015f;max.X=d.X>0?.985f:.335f;}
         else {min.Z=d.Z>0?.665f:.015f;max.Z=d.Z>0?.985f:.335f;}
@@ -77,9 +77,9 @@ public sealed class FireSimulation(World world)
         if(Count==0)return false;
         Span<BoundingBox> shapes=stackalloc BoundingBox[1];
         for(int y=Math.Max(0,(int)MathF.Floor(bounds.Min.Y));y<=Math.Min(World.Height-1,(int)bounds.Max.Y);y++)
-        for(int z=Math.Max(0,(int)MathF.Floor(bounds.Min.Z));z<=Math.Min(world.Depth-1,(int)bounds.Max.Z);z++)
-        for(int x=Math.Max(0,(int)MathF.Floor(bounds.Min.X));x<=Math.Min(world.Width-1,(int)bounds.Max.X);x++)
-            if(world.GetBlock(x,y,z)==BlockType.Fire && SelectionBoxes(new(x,y,z),shapes)>0 && World.Overlaps(bounds,shapes[0]))return true;
+        for(int z=Math.Max(world.LocalMinZ,(int)MathF.Floor(bounds.Min.Z));z<=Math.Min(world.LocalMaxZ-1,(int)bounds.Max.Z);z++)
+        for(int x=Math.Max(world.LocalMinX,(int)MathF.Floor(bounds.Min.X));x<=Math.Min(world.LocalMaxX-1,(int)bounds.Max.X);x++)
+            if(world.GetBlock(x,y,z)==BlockType.Fire && SelectionBoxes(world.GlobalCell(x,y,z),shapes)>0 && World.Overlaps(bounds,shapes[0]))return true;
         return false;
     }
     public void Update(double elapsed)
@@ -88,6 +88,7 @@ public sealed class FireSimulation(World world)
         for(int i=0;i<Math.Min(8,_lava.Count);i++)
         {
             Point3 p=_lava.Dequeue();_lavaQueued.Remove(p);BlockType b=world.GetBlock(p.X,p.Y,p.Z);
+            if(!world.IsSimulated(p)){if(_lavaQueued.Add(p))_lava.Enqueue(p);continue;}
             foreach(Point3 d in Adjacent)
             {
                 Point3 other=p+d;BlockType adjacent=world.GetBlock(other.X,other.Y,other.Z);
@@ -100,7 +101,8 @@ public sealed class FireSimulation(World world)
         {
             _ticks.Dequeue();LastProcessed++;
             if(!_flames.TryGetValue(next.Cell,out var flame)||flame.Version!=next.Version)continue;
-            Point3 cell=next.Cell;bool wet=world.Weather.ExposedRain(new(cell.X+.5f,cell.Y+.5f,cell.Z+.5f));Point3? fuel=null;
+            if(!world.IsSimulated(next.Cell)){flame.Expires+=1;flame.Due=_time+1;_ticks.Enqueue((next.Cell,flame.Version),flame.Due);continue;}
+            Point3 cell=next.Cell;bool wet=world.Weather.ExposedRain(world.Center(cell));Point3? fuel=null;
             flame.Attachment=Attachment(cell);
             foreach(Point3 d in Adjacent)
             {Point3 p=cell+d;BlockType b=world.GetBlock(p.X,p.Y,p.Z);wet|=Water.IsWater(b);if(Flammable(b))fuel=p;}

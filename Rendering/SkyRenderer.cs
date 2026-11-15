@@ -15,13 +15,13 @@ internal sealed class SkyRenderer : IDisposable
     private readonly Texture2D _atlas;
     public SkyRenderer(GraphicsDevice device,Texture2D atlas)
     { _device=device;_atlas=atlas;_effect=new BasicEffect(device){World=Matrix.Identity,VertexColorEnabled=true}; }
-    public void Draw(Camera camera,WorldTime time,int seed=0,double cloudTime=-1)
+    public void Draw(Camera camera,WorldTime time,int seed=0,double cloudTime=-1,long originX=0,long originZ=0)
     {
         _device.DepthStencilState=DepthStencilState.None;_device.BlendState=BlendState.Opaque;_device.RasterizerState=RasterizerState.CullNone;
         _effect.View=camera.View;_effect.Projection=camera.Projection(_device.Viewport.AspectRatio);
         Square(0,time.SunDirection,7,new Color(255,238,158));Square(6,time.MoonDirection,5,new Color(203,217,235));
         foreach(var pass in _effect.CurrentTechnique.Passes){pass.Apply();_device.DrawUserPrimitives(PrimitiveType.TriangleList,_vertices,0,4);}
-        DrawClouds(camera,time,seed,cloudTime<0?time.Seconds:cloudTime);
+        DrawClouds(camera,time,seed,cloudTime<0?time.Seconds:cloudTime,originX,originZ);
         void Square(int offset,Vector3 direction,float radius,Color color)
         {
             direction.Normalize();Vector3 center=camera.Position+direction*120;
@@ -32,15 +32,15 @@ internal sealed class SkyRenderer : IDisposable
             _vertices[offset+3]=new(a,color);_vertices[offset+4]=new(c,color);_vertices[offset+5]=new(d,color);
         }
     }
-    private void DrawClouds(Camera camera,WorldTime time,int seed,double seconds)
+    private void DrawClouds(Camera camera,WorldTime time,int seed,double seconds,long originX,long originZ)
     {
-        float drift=(float)(seconds*.5);int cx=(int)MathF.Floor((camera.Position.X-drift)/32),cz=(int)MathF.Floor(camera.Position.Z/32);
+        double drift=seconds*.5;long cx=(long)Math.Floor((originX+(double)camera.Position.X-drift)/32),cz=(long)Math.Floor((originZ+(double)camera.Position.Z)/32);
         _clouds.Clear();Color tint=Color.Lerp(new Color(69,76,96),new Color(242,244,245),time.Daylight/14f);
-        for(int z=cz-5;z<=cz+5;z++)for(int x=cx-5;x<=cx+5;x++)
+        for(long z=cz-5;z<=cz+5;z++)for(long x=cx-5;x<=cx+5;x++)
         {
             uint hash=unchecked((uint)(x*73856093^z*19349663^seed));hash^=hash>>13;hash*=1274126177;hash^=hash>>16;
             if(hash%7>2)continue;
-            Vector3 min=new(x*32+drift,World.Height+12,z*32),max=min+new Vector3(22+hash%8,3,20+(hash>>8)%10);
+            Vector3 min=new((float)(x*32-originX+drift),World.Height+12,z*32-originZ),max=min+new Vector3(22+hash%8,3,20+(hash>>8)%10);
             _clouds.Cuboid(min,max,Matrix.Identity,Blocks.Get(BlockType.Snow).SideTile,tint);
         }
         _device.DepthStencilState=DepthStencilState.Default;_effect.World=Matrix.Identity;

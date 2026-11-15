@@ -125,7 +125,7 @@ public static partial class WorldSerializer
             FallingBlockState[] falling = save.World.Gravity.CaptureActive();
             writer.Write(falling.Length);
             foreach (FallingBlockState block in falling)
-            { writer.Write((byte)block.Block); writer.Write(block.X); writer.Write(block.Z); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
+            { writer.Write((byte)block.Block); writer.Write(checked((int)block.X)); writer.Write(checked((int)block.Z)); writer.Write(block.Y); writer.Write(block.DownwardSpeed); }
             WriteSurvival(writer,save,inventory,drops,containers);
             WriteRefinements(writer,save.World.Vegetation.Capture(),mobs);
             WriteCompletion(writer,save,inventory,pigs,mobs);

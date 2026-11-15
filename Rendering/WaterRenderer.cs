@@ -35,7 +35,7 @@ internal sealed class WaterRenderer : IDisposable
     internal int CachedFaces { get; private set; }
     internal long BufferBytes => (long)(_buffer?.VertexCount ?? 0) * VertexPositionColorTexture.VertexDeclaration.VertexStride;
     internal int DrawnVertices => _count * 6;
-    internal bool NeedsBuild(int index) => _revisions[index] != _world.Chunks[index].WaterRevision;
+    internal bool NeedsBuild(int index) => _revisions[index] != _world.ChunkAtSlot(index).WaterRevision;
     internal void Evict(int index)
     {
         if (_chunks[index] != null) { CachedChunks--; CachedFaces -= _chunks[index].Count; }
@@ -44,7 +44,7 @@ internal sealed class WaterRenderer : IDisposable
     internal void PrepareChunk(int index)
     {
         if (!NeedsBuild(index)) return;
-        Chunk chunk = _world.Chunks[index]; _revisions[index] = chunk.WaterRevision;
+        Chunk chunk = _world.ChunkAtSlot(index); _revisions[index] = chunk.WaterRevision;
         if (chunk.WaterCount == 0) { Evict(index); _revisions[index] = chunk.WaterRevision; return; }
         if (_chunks[index] == null) { _chunks[index] = new List<WaterFace>(); CachedChunks++; }
         CachedFaces -= _chunks[index].Count;
@@ -56,11 +56,14 @@ internal sealed class WaterRenderer : IDisposable
     {
         _device = device; _world = world; _texture = atlas.Water;
         _ownsRegion = region == null; _region = region ?? new ChunkRegion(world);
-        _chunks = new List<WaterFace>[world.ChunkCount]; _revisions = new int[world.ChunkCount];
+        _chunks = new List<WaterFace>[world.ChunkSlotCapacity]; _revisions = new int[world.ChunkSlotCapacity];
         Array.Fill(_revisions, -1);
         _effect = atlas.LightingEffect.Clone();
     }
 
+    internal void UploadPrepared(int slot,List<WaterFace> faces,int revision)
+    {Evict(slot);_chunks[slot]=faces;_revisions[slot]=revision;CachedChunks++;CachedFaces+=faces.Count;_geometryChanged=true;}
+    private long _originX=long.MinValue,_originZ;
     public void Draw(Camera camera)
     {
         Matrix projection = camera.Projection(_device.Viewport.AspectRatio), viewProjection = camera.View * projection;
@@ -70,6 +73,7 @@ internal sealed class WaterRenderer : IDisposable
             // Standalone water checks use the same bounded region. Gameplay shares terrain's upload budget.
             foreach (int index in _region.Indices) PrepareChunk(index);
         }
+        if(_originX!=_world.OriginX||_originZ!=_world.OriginZ){_geometryChanged=true;_originX=_world.OriginX;_originZ=_world.OriginZ;}
         bool changed = !_initialized || _geometryChanged || _regionVersion != _region.Version
             || camera.Position != _lastPosition || viewProjection != _lastViewProjection;
         if (changed)
@@ -79,7 +83,7 @@ internal sealed class WaterRenderer : IDisposable
             _frustum.Matrix = viewProjection; _nextVisible.Clear();
             foreach (int i in _region.Indices)
             {
-                if (_chunks[i] == null || _chunks[i].Count == 0 || !_frustum.Intersects(_world.Chunks[i].Bounds)) continue;
+                if (_chunks[i] == null || _chunks[i].Count == 0 || !_frustum.Intersects(_world.RelativeBounds(_world.ChunkAtSlot(i)))) continue;
                 int index = _nextVisible.Count;
                 if (index >= _visible.Count || _visible[index] != i) faceSetChanged = upload = true;
                 _nextVisible.Add(i);
@@ -95,7 +99,8 @@ internal sealed class WaterRenderer : IDisposable
                     foreach (int index in _nextVisible) foreach (WaterFace face in _chunks[index])
                     {
                         if (_count == _faces.Length) Array.Resize(ref _faces, _faces.Length * 2);
-                        _faces[_count++] = face;
+                        Vector3 offset=_world.IsInfinite?new Vector3(_world.ChunkAtSlot(index).OriginX-_world.OriginX,0,_world.ChunkAtSlot(index).OriginZ-_world.OriginZ):Vector3.Zero;
+                        _faces[_count++] = face with{A=face.A+offset,B=face.B+offset,C=face.C+offset,D=face.D+offset};
                     }
                 }
                 // Sort compact keys, computing each distance once rather than comparing and

@@ -49,7 +49,7 @@ public sealed class MiningController
             world.Containers.Detach(hit.Cell);
             bool changed = world.RemoveHarvestedBlock(hit.Cell,items,0,creative:true);
             if (!changed) world.Containers.Reattach(contents);
-            if(changed){world.Sounds?.Block(SoundKind.Break,block,BlockSounds.Center(hit.Cell));world.Particles.Burst(block,BlockSounds.Center(hit.Cell));}
+            if(changed){world.Sounds?.Block(SoundKind.Break,block,world.Center(hit.Cell));world.Particles.Burst(block,world.Center(hit.Cell));}
             Reset();if(changed)CooldownRemaining=BreakCooldownSeconds;return changed;
         }
         float seconds = MiningRules.Seconds(block,tool);
@@ -58,13 +58,13 @@ public sealed class MiningController
             // An unharvestable solid can still be struck. Throttle this feedback
             // independently of the repeatedly reset (invalid) mining progress.
             if(Blocks.IsSolid(block) && (_failedHitCell!=hit.Cell || _failedHitSeconds<=0))
-            {world.Sounds?.Block(SoundKind.Hit,block,BlockSounds.Center(hit.Cell));_failedHitCell=hit.Cell;_failedHitSeconds=.22f;}
+            {world.Sounds?.Block(SoundKind.Hit,block,world.Center(hit.Cell));_failedHitCell=hit.Cell;_failedHitSeconds=.22f;}
             Reset();return false;
         }
         if (Target != hit.Cell || _block != block || _tool!=tool || _slot!=(inventory?.SelectedSlot??-1))
         { Reset(); Target = hit.Cell; _block = block;_tool=tool;_slot=inventory?.SelectedSlot??-1; }
         if(seconds>0 && (_hitSoundSeconds-=elapsed)<=0)
-        {world.Sounds?.Block(SoundKind.Hit,block,BlockSounds.Center(hit.Cell));_hitSoundSeconds=.22f;}
+        {world.Sounds?.Block(SoundKind.Hit,block,world.Center(hit.Cell));_hitSoundSeconds=.22f;}
         if (float.IsFinite(elapsed) && elapsed > 0) _elapsed += elapsed;
         Progress = seconds == 0 ? 1 : Math.Clamp(_elapsed / seconds, 0, 1);
         if (Progress < 1) return false;
@@ -78,9 +78,9 @@ public sealed class MiningController
         world.Containers.Detach(hit.Cell);
         bool removed=world.RemoveHarvestedBlock(hit.Cell,items,drops);
         if (!removed) { world.Containers.Reattach(container);Reset(); return false; }
-        world.Sounds?.Block(SoundKind.Break,block,BlockSounds.Center(hit.Cell));
-        world.Particles.Burst(block,BlockSounds.Center(hit.Cell));
-        Vector3 center = new(hit.Cell.X + 0.5f, hit.Cell.Y + 0.5f, hit.Cell.Z + 0.5f);
+        world.Sounds?.Block(SoundKind.Break,block,world.Center(hit.Cell));
+        world.Particles.Burst(block,world.Center(hit.Cell));
+        Vector3 center = world.Center(hit.Cell);
         for(int i=0;i<lootCount;i++)items.Spawn(loot[i],1,center);
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)items.TrySpawn(container[i],center,.35f);
         if(inventory!=null && (MiningRules.Wears(tool) || block is BlockType.Leaves or BlockType.DeadBush && tool.Item==Items.Shears))inventory.WearSelected();

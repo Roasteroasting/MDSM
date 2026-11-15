@@ -19,11 +19,12 @@ public static class Water
         || Blocks.Get(block).NeedsGrass || block is BlockType.Fire or BlockType.Snow;
 
     // Each shared corner uses exactly the same four world cells, even across chunk seams.
-    public static float CornerHeight(World world, int cornerX, int y, int cornerZ)
+    public static float CornerHeight(World world,int x,int y,int z)=>CornerHeight(world,world.OriginX+x,y,world.OriginZ+z);
+    public static float CornerHeight(World world, long cornerX, int y, long cornerZ)
     {
         float sum = 0; int weight = 0;
-        for (int z = cornerZ - 1; z <= cornerZ; z++)
-        for (int x = cornerX - 1; x <= cornerX; x++)
+        for (long z = cornerZ - 1; z <= cornerZ; z++)
+        for (long x = cornerX - 1; x <= cornerX; x++)
         {
             BlockType block = world.GetBlock(x, y, z);
             if (!IsWater(block)) continue;
@@ -38,13 +39,13 @@ public static class Water
     {
         // Most entities occupy dry chunks. Avoid repeated voxel/height queries there.
         bool wet = false;
-        for (int cz = Math.Max(0, (int)MathF.Floor(bounds.Min.Z / Chunk.Size)); cz <= Math.Min(world.ChunksZ - 1, (int)MathF.Floor(bounds.Max.Z / Chunk.Size)); cz++)
-        for (int cx = Math.Max(0, (int)MathF.Floor(bounds.Min.X / Chunk.Size)); cx <= Math.Min(world.ChunksX - 1, (int)MathF.Floor(bounds.Max.X / Chunk.Size)); cx++)
-            wet |= world.GetChunk(cx, cz).WaterCount != 0;
+        for (int cz = Math.Max(world.LocalMinZ/16, (int)MathF.Floor(bounds.Min.Z / Chunk.Size)); cz <= Math.Min((world.LocalMaxZ-1)/16, (int)MathF.Floor(bounds.Max.Z / Chunk.Size)); cz++)
+        for (int cx = Math.Max(world.LocalMinX/16, (int)MathF.Floor(bounds.Min.X / Chunk.Size)); cx <= Math.Min((world.LocalMaxX-1)/16, (int)MathF.Floor(bounds.Max.X / Chunk.Size)); cx++)
+            wet |= world.TryGetLocalChunk(cx,cz,out var chunk) && chunk.WaterCount != 0;
         if (!wet) return false;
-        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+        for (int x = Math.Max(world.LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+        for (int z = Math.Max(world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
         {
             if (!IsWater(world.GetBlock(x, y, z))) continue;
             float height = (CornerHeight(world, x, y, z) + CornerHeight(world, x + 1, y, z)

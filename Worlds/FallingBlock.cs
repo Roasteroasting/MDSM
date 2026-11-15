@@ -3,14 +3,14 @@ using Microsoft.Xna.Framework;
 
 namespace MDSM.Worlds;
 
-public readonly record struct FallingBlockState(BlockType Block, int X, int Z, double Y, double DownwardSpeed);
+public readonly record struct FallingBlockState(BlockType Block, long X, long Z, double Y, double DownwardSpeed);
 
 // Feet position: the cube occupies [X,X+1] x [Y,Y+1] x [Z,Z+1].
 public sealed class FallingBlock
 {
     public BlockType Block { get; }
-    public int X { get; }
-    public int Z { get; }
+    public long X { get; }
+    public long Z { get; }
     public double Y { get; internal set; }
     public double DownwardSpeed { get; internal set; }
     internal double PreviousY;

@@ -17,10 +17,12 @@ internal sealed class ChunkRegion
     public int Version { get; private set; }
     public int Radius => _radius;
     public int MaximumCount => (2 * (_radius + 2) + 1) * (2 * (_radius + 2) + 1);
-    public ChunkRegion(World world) { _world = world; _present = new bool[world.ChunkCount]; }
+    private Chunk[] _known;
+    public ChunkRegion(World world) { _world = world; _present = new bool[world.ChunkSlotCapacity];_known=new Chunk[_present.Length]; }
     public bool Contains(int index) => _present[index];
     public bool Update(Vector3 position, float aspect)
     {
+        if(_world.IsInfinite)return UpdateStreamed(position);
         int x = Math.Clamp((int)MathF.Floor(position.X / Chunk.Size), 0, _world.ChunksX - 1);
         int z = Math.Clamp((int)MathF.Floor(position.Z / Chunk.Size), 0, _world.ChunksZ - 1);
         // A sphere enclosing the far frustum corners also covers all camera elevations/directions.
@@ -44,5 +46,22 @@ internal sealed class ChunkRegion
         }
         Version++;
         return true;
+    }
+    private bool UpdateStreamed(Vector3 position)
+    {
+        Removed.Clear();bool changed=false;var center=_world.AbsolutePosition(position);
+        long x=MDSM.Worlds.Streaming.Coordinates.FloorDiv((long)Math.Floor(center.X),16),z=MDSM.Worlds.Streaming.Coordinates.FloorDiv((long)Math.Floor(center.Z),16);
+        _radius=_world.ChunkLifecycle.RenderDistance;
+        for(int i=Indices.Count-1;i>=0;i--)
+        {
+            int slot=Indices[i];var c=_world.ChunkAtSlot(slot);
+            // Keep one extra GPU ring. Reversing across a chunk boundary reuses
+            // its previous geometry while the wider loaded ring owns the blocks.
+            if(c==_known[slot] && c!=null && Math.Abs(c.X-x)<=_radius+1 && Math.Abs(c.Z-z)<=_radius+1)continue;
+            _present[slot]=false;Removed.Add(slot);Indices.RemoveAt(i);_known[slot]=null;changed=true;
+        }
+        foreach(var c in _world.Chunks)if(!_present[c.Slot] && Math.Abs(c.X-x)<=_radius && Math.Abs(c.Z-z)<=_radius)
+        {_present[c.Slot]=true;_known[c.Slot]=c;Indices.Add(c.Slot);changed=true;}
+        if(changed)Version++;return changed;
     }
 }

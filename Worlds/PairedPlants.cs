@@ -15,7 +15,7 @@ public sealed partial class World
                 int found = System.MemoryExtensions.IndexOfAny(blocks[offset..], (byte)BlockType.DoubleTallGrassLower, (byte)BlockType.DoubleTallGrassUpper);
                 if (found < 0) break;
                 int index = offset + found; offset = index + 1;
-                int x = chunk.OriginX + index % 16, y = index / 256, z = chunk.OriginZ + index / 16 % 16;
+                long x = chunk.OriginX + index % 16, z = chunk.OriginZ + index / 16 % 16;int y=index/256;
                 bool lower = blocks[index] == (byte)BlockType.DoubleTallGrassLower;
                 if (lower ? GetBlock(x,y-1,z)!=BlockType.Grass || GetBlock(x,y+1,z)!=BlockType.DoubleTallGrassUpper
                     : GetBlock(x,y-1,z)!=BlockType.DoubleTallGrassLower)

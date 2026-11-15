@@ -23,7 +23,7 @@ internal static class CompletionPerformanceChecks
         try
         {
             Directory.CreateDirectory(root);
-            foreach(WorldSize size in Enum.GetValues<WorldSize>())
+            foreach(WorldSize size in WorldSizes.Finite)
             {
                 string path=Path.Combine(root,size+".dat");Result expected=Generate(size,path);GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();Read(expected,path);File.Delete(path);GC.Collect();
             }

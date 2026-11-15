@@ -8,16 +8,17 @@ public sealed partial class World
 {
     public const int Height = 128;
     public WorldSize Size { get; }
+    public bool IsInfinite=>Size==WorldSize.Infinite;
     public int Width => Size.Width();
     public int Depth => Width;
     public int ChunksX => Width / Chunk.Size;
     public int ChunksZ => Depth / Chunk.Size;
-    public int ChunkCount => ChunksX * ChunksZ;
+    public int ChunkCount => IsInfinite?_residentChunks.Length:ChunksX * ChunksZ;
     public int BlockCount => Width * Height * Depth;
     public const int DefaultSeed = 173;
 
     private readonly Chunk[] _chunks;
-    public ReadOnlySpan<Chunk> Chunks => _chunks;
+    public ReadOnlySpan<Chunk> Chunks => IsInfinite?_residentChunks:_chunks;
     public int Seed { get; }
     public int Revision { get; private set; }
     internal SoundEvents Sounds { get; set; }
@@ -39,7 +40,7 @@ public sealed partial class World
     public OreGenerationStats GeneratedOres { get; private set; }
     public System.Collections.Generic.IReadOnlyList<Point3> GeneratedDungeons {get;private set;}=Array.Empty<Point3>();
     public System.Collections.Generic.IReadOnlyList<NaturalLake> GeneratedLakes { get; private set; } = Array.Empty<NaturalLake>();
-    public Vector3 Spawn => new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
+    public Vector3 Spawn => IsInfinite?LocalPosition(InfiniteSpawn):new(Width / 2f + 0.5f, SurfaceY(Width / 2, Depth / 2) + 1.01f, Depth / 2f + 0.5f);
 
     public World(int seed = DefaultSeed, WorldSize size = WorldSize.Normal) : this(seed, size, true) { }
 
@@ -57,8 +58,13 @@ public sealed partial class World
         Fluids = new FluidSimulation(this);
         LavaFlow=new FluidSimulation(this,true);
         Gravity = new FallingBlockSimulation(this);
-        _ = size.Width(); // Validate before allocating storage.
         Size = size;
+        if(IsInfinite)
+        {
+            if(generateTerrain)throw new InvalidOperationException("Infinite terrain must be requested through the chunk lifecycle.");
+            _chunks=Array.Empty<Chunk>();return;
+        }
+        _ = size.Width(); // Validate before allocating storage.
         _chunks = new Chunk[ChunkCount];
         for (int z = 0; z < ChunksZ; z++)
         for (int x = 0; x < ChunksX; x++)
@@ -102,35 +108,40 @@ public sealed partial class World
         return world;
     }
 
-    public Chunk GetChunk(int x, int z)
+    public Chunk GetChunk(long x, long z)
     {
-        if ((uint)x >= ChunksX || (uint)z >= ChunksZ)
+        if(IsInfinite)return _resident.TryGetValue(new(x,z),out var loaded)?loaded:throw new InvalidOperationException("Chunk is not resident.");
+        if (x<0 || x>=ChunksX || z<0 || z>=ChunksZ)
             throw new ArgumentOutOfRangeException(nameof(x), "Chunk coordinates must be inside this world.");
-        return _chunks[z * ChunksX + x];
+        return _chunks[checked((int)(z * ChunksX + x))];
     }
 
-    public int SurfaceY(int x, int z)
+    public int SurfaceY(long x, long z)
     {
-        if ((uint)x >= Width || (uint)z >= Depth)
+        if(IsInfinite)return TryGetChunkAt(x,z,out var loaded)?loaded.SurfaceY(Streaming.Coordinates.Mod(x,16),Streaming.Coordinates.Mod(z,16)):-1;
+        if (x<0 || x>=Width || z<0 || z>=Depth)
             return -1;
-        return GetChunk(x / Chunk.Size, z / Chunk.Size).SurfaceY(x % Chunk.Size, z % Chunk.Size);
+        return GetChunk(x / Chunk.Size, z / Chunk.Size).SurfaceY((int)(x % Chunk.Size), (int)(z % Chunk.Size));
     }
 
-    public bool Contains(int x, int y, int z) =>
-        x >= 0 && x < Width && y >= 0 && y < Height && z >= 0 && z < Depth;
+    public bool Contains(long x, int y, long z) =>
+        y>=0 && y<Height && (IsInfinite?Streaming.Coordinates.Valid(x,z):x>=0 && x<Width && z>=0 && z<Depth);
 
-    public BlockType GetBlock(int x, int y, int z) =>
-        Contains(x, y, z) ? _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size]
-            .GetBlock(x % Chunk.Size, y, z % Chunk.Size) : BlockType.Air;
+    public BlockType GetBlock(long x, int y, long z)
+    {
+        if(!Contains(x,y,z))return BlockType.Air;
+        if(IsInfinite)return TryGetChunkAt(x,z,out var chunk)?chunk.GetBlock(Streaming.Coordinates.Mod(x,16),y,Streaming.Coordinates.Mod(z,16)):BlockType.Bedrock;
+        return _chunks[checked((int)((z / Chunk.Size) * ChunksX + x / Chunk.Size))].GetBlock((int)(x % Chunk.Size),y,(int)(z % Chunk.Size));
+    }
 
-    public bool IsSolid(int x, int y, int z) => Blocks.IsSolid(GetBlock(x, y, z));
+    public bool IsSolid(long x, int y, long z) => Blocks.IsSolid(GetBlock(x, y, z));
 
-    public bool SetBlock(int x, int y, int z, BlockType block)
+    public bool SetBlock(long x, int y, long z, BlockType block)
         => ChangeWithSupportDrops(new(x,y,z),block,LiveDrops,0,false,false);
 
-    private bool SetBlockCore(int x,int y,int z,BlockType block)
+    private bool SetBlockCore(long x,int y,long z,BlockType block)
     {
-        if (!Contains(x, y, z) || !Blocks.IsDefined(block)
+        if (!Contains(x, y, z) || IsInfinite && !TryGetChunkAt(x,z,out _) || !Blocks.IsDefined(block)
             || !_plantEdit && block==BlockType.DoubleTallGrassLower && (!Contains(x,y+1,z) || GetBlock(x,y+1,z)!=BlockType.Air || GetBlock(x,y-1,z)!=BlockType.Grass)
             || !_plantEdit && block==BlockType.DoubleTallGrassUpper && GetBlock(x,y-1,z)!=BlockType.DoubleTallGrassLower
             || block==BlockType.Sapling && !Vegetation.CanPlant
@@ -140,16 +151,18 @@ public sealed partial class World
             || GetBlock(x, y, z) == block || !Containers.CanChange(new Point3(x,y,z),block))
             return false;
 
-        int chunkX = x / Chunk.Size, chunkZ = z / Chunk.Size;
-        int localX = x % Chunk.Size, localZ = z % Chunk.Size;
+        long chunkX = Streaming.Coordinates.FloorDiv(x,Chunk.Size), chunkZ = Streaming.Coordinates.FloorDiv(z,Chunk.Size);
+        int localX = Streaming.Coordinates.Mod(x,Chunk.Size), localZ = Streaming.Coordinates.Mod(z,Chunk.Size);
         Chunk chunk = GetChunk(chunkX, chunkZ);
         BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
+        if(IsInfinite)MarkStreamedDirty(chunkX,chunkZ);
         Lighting.Changed(new(x,y,z),previous,block);
         Point3 changedCell=new(x,y,z);
+        if(IsInfinite)ReconcileDormantBlock(changedCell,previous,block);
         if(block==BlockType.Air && Blocks.IsRenderable(previous) && !Lava.Fluid(previous)
             && _blockChangeRoot!=changedCell && _doorPartnerEdit!=changedCell && !(_plantEdit && Blocks.DoubleGrass(previous)) && !(_bedEdit && Blocks.Bed(previous)))
-            Sounds?.Block(SoundKind.Break,previous,BlockSounds.Center(changedCell));
+            Sounds?.Block(SoundKind.Break,previous,Center(changedCell));
         Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
         DetailChanged(new Point3(x,y,z),previous,block);
@@ -168,9 +181,11 @@ public sealed partial class World
             if (localZ == Chunk.Size - 1) MarkDirty(chunkX, chunkZ + 1);
         }
         // Shared water corners also depend on diagonally adjacent chunks.
-        for (int cz = chunkZ - (localZ == 0 ? 1 : 0); cz <= chunkZ + (localZ == Chunk.Size - 1 ? 1 : 0); cz++)
-        for (int cx = chunkX - (localX == 0 ? 1 : 0); cx <= chunkX + (localX == Chunk.Size - 1 ? 1 : 0); cx++)
-            if ((uint)cx < ChunksX && (uint)cz < ChunksZ)
+        for (long cz = chunkZ - (localZ == 0 ? 1 : 0); cz <= chunkZ + (localZ == Chunk.Size - 1 ? 1 : 0); cz++)
+        for (long cx = chunkX - (localX == 0 ? 1 : 0); cx <= chunkX + (localX == Chunk.Size - 1 ? 1 : 0); cx++)
+            if(IsInfinite)
+            {if(TryGetChunkAt(cx*16,cz*16,out var neighbor)){neighbor.MarkWaterDirty();if(Lava.IsLava(previous)||Lava.IsLava(block))neighbor.MarkDirty();}}
+            else if (cx>=0 && cx<ChunksX && cz>=0 && cz<ChunksZ)
             {GetChunk(cx, cz).MarkWaterDirty();if(Lava.IsLava(previous)||Lava.IsLava(block))GetChunk(cx,cz).MarkDirty();}
         Revision++;
         Fluids.Changed(new Point3(x, y, z), previous, block);
@@ -183,19 +198,25 @@ public sealed partial class World
     }
 
     // Used only before meshes exist. Decorations span chunk edges without invalidation work.
-    internal void SetGeneratedBlock(int x, int y, int z, BlockType block)
+    internal void SetGeneratedBlock(long x, int y, long z, BlockType block)
     {
         if (!Contains(x, y, z)) throw new ArgumentOutOfRangeException(nameof(x));
         if (Blocks.Falls(block) && (y == 0 || !IsSolid(x, y - 1, z)))
             throw new InvalidOperationException("Generated Sand and Gravel require solid support.");
-        _chunks[(z / Chunk.Size) * ChunksX + x / Chunk.Size].SetBlock(x % Chunk.Size, y, z % Chunk.Size, block);
+        if(IsInfinite)
+        {
+            if(!TryGetChunkAt(x,z,out var chunk))throw new InvalidOperationException("Generation cannot write into a non-resident chunk.");
+            chunk.SetBlock(Streaming.Coordinates.Mod(x,16),y,Streaming.Coordinates.Mod(z,16),block);MarkStreamedDirty(chunk.X,chunk.Z);
+        }
+        else _chunks[checked((int)((z / Chunk.Size) * ChunksX + x / Chunk.Size))].SetBlock((int)(x % Chunk.Size), y, (int)(z % Chunk.Size), block);
         if(block==BlockType.Leaves)Vegetation.MarkNatural(new Point3(x,y,z));
     }
 
-    private void MarkDirty(int x, int z)
+    private void MarkDirty(long x, long z)
     {
-        if ((uint)x < ChunksX && (uint)z < ChunksZ)
-            _chunks[z * ChunksX + x].MarkDirty();
+        if(IsInfinite){if(TryGetChunkAt(x*16,z*16,out var chunk))chunk.MarkDirty();return;}
+        if (x>=0 && x<ChunksX && z>=0 && z<ChunksZ)
+            _chunks[checked((int)(z * ChunksX + x))].MarkDirty();
     }
 
     public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds,Point3? support=null)
@@ -211,12 +232,12 @@ public sealed partial class World
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
             || (definition.Solid && PlacementOverlaps(cell,block,playerBounds,proposed))
             || (definition.Solid && PlacementBlockedByMobs(cell,block,proposed))
-            || (definition.Solid && Gravity.Intersects(Bounds(cell)))
+            || (definition.Solid && Gravity.Intersects(LocalBounds(cell)))
             || (definition.NeedsGrass && !Blocks.SupportsPlant(GetBlock(cell.X, cell.Y - 1, cell.Z),block)))
             return false;
 
         if(!SetBlock(cell.X, cell.Y, cell.Z, block))return false;
-        Sounds?.Block(SoundKind.Place,block,BlockSounds.Center(cell));return true;
+        Sounds?.Block(SoundKind.Place,block,Center(cell));return true;
     }
 
     public static BoundingBox Bounds(Point3 cell) =>
@@ -231,16 +252,16 @@ public sealed partial class World
     public bool IntersectsSolid(BoundingBox bounds)
     {
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
-        for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+        for (int x = Math.Max(LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
         for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)-1); y <= Math.Min(Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-        for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
-        {int count=BlockBoxes(new(x,y,z),boxes,true);for(int i=0;i<count;i++)if(Overlaps(bounds,boxes[i]))return true;}
+        for (int z = Math.Max(LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+        {int count=BlockBoxes(GlobalCell(x,y,z),boxes,true);for(int i=0;i<count;i++)if(Overlaps(bounds,boxes[i]))return true;}
 
         return false;
     }
 }
 
-public readonly record struct Point3(int X, int Y, int Z)
+public readonly record struct Point3(long X, int Y, long Z)
 {
-    public static Point3 operator +(Point3 a, Point3 b) => new(a.X + b.X, a.Y + b.Y, a.Z + b.Z);
+    public static Point3 operator +(Point3 a, Point3 b) => new(checked(a.X + b.X), a.Y + b.Y, checked(a.Z + b.Z));
 }

@@ -3,10 +3,12 @@ using System.IO;
 
 namespace MDSM.Worlds;
 
-public enum WorldSize { Small, Normal, Large, Massive }
+public enum WorldSize { Small, Normal, Large, Massive, Infinite }
 
 public static class WorldSizes
 {
+    public static string Dimensions(this WorldSize size)=>size==WorldSize.Infinite?"INFINITE / 128 HIGH":$"{size} / {size.Width()} X 128 X {size.Width()}";
+    public static System.Collections.Generic.IReadOnlyList<WorldSize> Finite {get;}=Array.AsReadOnly(new[]{WorldSize.Small,WorldSize.Normal,WorldSize.Large,WorldSize.Massive});
     public static int Width(this WorldSize size) => size switch
     {
         WorldSize.Small => 256,

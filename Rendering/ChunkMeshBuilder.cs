@@ -135,7 +135,7 @@ internal sealed class ChunkMeshBuilder
             if (!definition.Renderable || definition.Shape == BlockShape.Fluid)
                 continue;
 
-            int worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
+            long worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = new(worldX, y, worldZ);
             if(World.OrientedBuilding(block))
             {AppendBuilding(world,new(worldX,y,worldZ),block,boxes);continue;}
@@ -328,9 +328,9 @@ internal sealed class ChunkMeshBuilder
             Vector3 min=new(x*.5f,y*.5f,z*.5f),max=min+new Vector3(.5f);
             foreach(var face in Faces)
             {
-                int nx=x+face.Offset.X,ny=y+face.Offset.Y,nz=z+face.Offset.Z;
+                long nx=x+face.Offset.X,nz=z+face.Offset.Z;int ny=y+face.Offset.Y;
                 if(nx>=0 && nx<2 && ny>=0 && ny<2 && nz>=0 && nz<2)
-                {if((mask&(1<<(nx+2*nz+4*ny)))!=0)continue;}
+                {if((mask&(1<<checked((int)(nx+2*nz+4*ny))))!=0)continue;}
                 else if(Blocks.IsOpaque(world.GetBlock(cell.X+face.Offset.X,cell.Y+face.Offset.Y,cell.Z+face.Offset.Z)))continue;
                 float u=face.Normal.X>0?1-max.Z:face.Normal.X<0?min.Z:face.Normal.Z<0?1-max.X:min.X;
                 float v=face.Normal.Y==0?1-max.Y:face.Normal.Y>0?min.Z:1-max.Z;

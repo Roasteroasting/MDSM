@@ -1236,3 +1236,185 @@ README.md is unchanged; no publishing commands, commits, dependencies or new
 artwork were introduced. Manual recommendations: middle-click common/special
 blocks and fluids while building, inspect located dungeons in existing saves,
 and test long-distance teleports and subsequent movement on representative worlds.
+## Infinite-world request: incomplete foundations (2026-11-14)
+
+**The complete Infinite-world feature has not been implemented.** Added isolated
+coordinate/noise/3D-density, compressed-region and bounded async lifecycle kernels
+under `Worlds/Streaming`, `Persistence/ChunkRegionStore.cs`, plus CPU/GPU test
+entry points. The actual game still uses finite arrays and float gameplay
+positions. Infinite is deliberately not exposed in world creation. Existing
+finite worlds and their save format are unchanged.
+
+See [INFINITE-WORLD-IMPLEMENTATION.md](./INFINITE-WORLD-IMPLEMENTATION.md) for the
+actual code, primary research sources, measured noise/GPU probes, recovery tests,
+limits and the substantial unfinished gameplay/rendering/simulation/persistence
+integration. The kernels must not be mistaken for completed infinite gameplay.
+The full regression suite passed **254/254** (the prior 250 plus four foundation
+groups). Builds and final focused/GPU checks pass; detailed final verification is
+recorded in the implementation document. No sustained Infinite-world performance,
+live precision, entity persistence or manual exploration claim is made.
+
+## Integrated Infinite-world continuation (2026-11-15)
+
+This supersedes the foundation-only status above: **Infinite is now selectable
+and playable through the ordinary creation, selection, loading and gameplay
+flow.** Existing finite worlds, dimensions, terrain generation, compressed v14
+saves and legacy readers remain on their established path; they are not converted.
+README.md is unchanged.
+
+Extended World/Chunk storage with sparse Int64 addresses and shared resident block
+arrays, using the existing streaming coordinator and region store. Default chunk
+radii are loaded 12, rendered 10 and simulated 6: at most 625 loaded chunks, 441
+initial terrain meshes and at most 529 with the retained reversal margin. Nearby
+requests, cancellation, bounded workers, revision checks, async CPU meshing and
+main-thread GPU uploads/disposal connect to the existing renderer. Worker meshes
+use immutable local halos; world-origin subtraction precedes float vertex output.
+Authoritative player/mob/drop/projectile coordinates are doubles, with the existing
+physics operating in a small moving local frame. Local/absolute block queries,
+raycasting, specialized collision/placement, commands, bobbing, audio, particles,
+weather/clouds and diagnostics now follow that frame. Missing terrain blocks
+movement/edits; teleportation loads its destination before applying it.
+
+The new Infinite-only, versioned generator combines the original density/noise
+foundations with deterministic coordinate-owned biome, cave/lava, deposit/ore,
+pond/river/lake, tree/vegetation, desert/snow, dungeon/chest and passive-animal
+passes. Java-style saturating noise coordinates genuinely produce Edge/Corner
+Far Lands; no artificial wall or reset to ordinary terrain is used. Generation
+continues beyond them. Signed indexing/physics/targeting were checked around the
+Far Lands, 1e12 and the actual engine-coordinate limits.
+
+Chunk snapshots now preserve gameplay ownership: natural leaves/decay, Saplings,
+crops/hydration, fire, fluids, falling blocks, containers, signs/orientations,
+animals/respawn timers, hostiles, dropped stacks and projectiles. Dormant states
+freeze and resume; neighbor removals reconcile frozen block state, and Peaceful
+also clears dormant loaded hostiles. High-coordinate death/automatic respawn
+preserves empty inventory and distant drops without generating them twice.
+
+WorldSaveManager dispatches Infinite worlds to a checksummed version-1 manifest
+and independently Zstandard-3-compressed 32x32 indexed regions. The manifest keeps
+inventory/equipment identities and durability, exact health, player/spawn poses,
+world options, time and weather. Lighting is reconstructed using the bounded
+packed light cache. Chunk schema 2 extends the block-only schema-1 reader.
+Prepared checkpoints have checksummed immutable records and an atomic replay plan;
+interrupted/failed commits recover without silently regenerating corrupt data.
+Checkpoint I/O/compression is asynchronous. Save and Return/exit wait for success,
+and request a fresh final checkpoint if an older autosave was already running.
+Finite serialization retains its original field widths/layout.
+
+Verification on the final source:
+
+- Debug and Release dotnet build: zero warnings, zero errors.
+- Final complete Release regression suite: **258/258 passed**; focused native
+  lifecycle/checkpoint/generation tests passed, including failed replacement,
+  recovery, corruption, snapshot isolation, dormant edits, Peaceful, death and
+  extreme-coordinate boundaries.
+- The existing full graphics aggregate passed. Lighting, commands, Bed sleep,
+  world rules, item dropping, mob movement, overnight feature graphics and all
+  six density GPU probes also passed. Two old menu fixtures now explicitly
+  verify Infinite in the five-size cycle, retaining their finite-world assertions.
+- The native DesktopGL test passed through the real creation menu, exploration,
+  Far Lands/farther teleports, hidden-HUD F2 PNG comparisons, async saves, actual
+  selection-menu reload at 1e12, inventory preservation and GPU cleanup.
+- GTX 970, 1920x1080, scripted 20-second Creative-flight route: 37,316 frames,
+  184.6 blocks traveled, mean interval 0.54 ms, 1% low 288.2 FPS and 0.1% low
+  114.4 FPS. Loaded chunks stayed within 625. Maximum estimated terrain/item/
+  falling/water buffers: 138,289,152 bytes (~132 MiB). Managed memory sample:
+  71,984,792 bytes. Warming every initial nearby mesh took 19.19 seconds; this
+  is not a claim that first playable terrain requires that entire warm-up.
+  Buffer estimates exclude textures/backbuffers/driver overhead and are not a
+  per-process VRAM measurement. Results apply to this scripted route only.
+- git diff --check passed. No publishing, commits, new dependencies or new artwork.
+
+See [INFINITE-WORLD-IMPLEMENTATION.md](./INFINITE-WORLD-IMPLEMENTATION.md) for the
+component map, storage/generation design, primary noise references and limits.
+The engine uses a practical +/-2^40 coordinate constraint, fixed distance defaults,
+active-area simulation and a 1 MiB decoded chunk-record budget; exceptionally
+dense metadata can produce a safe save error. Selectors/locate use the available
+area, not every region on disk. Optional legacy visual-precision artifacts were
+not added. Extended manual Survival play, terrain/water horizon inspection,
+complex farms/fluid/fire edits, physical controls and sustained Far Lands
+exploration remain recommended; scripted tests are not manual playtesting.
+
+## Infinite teleport and streaming corrections — 2026-11-15
+
+Reproduced the reported failure through the actual command UI with
+`/tp @p 12550824 128 0`: after 20 seconds the player remained at
+`(9.5, 80.01, 8.5)`, origin `(0, 0)`, with the correct destination still pending.
+The command screen paused the gameplay method that loads and commits teleports.
+Earlier tests called the executor and streaming coordinator directly and missed
+this integration defect.
+
+- Pending teleports now finish while the command screen remains open, without
+  advancing simulation time. Requested airborne feet coordinates are preserved.
+  `/tp x y z` and `/tp @p x y z` both work, including relative coordinates.
+  Feedback distinguishes loading from completion. Infinite accepts Y=128 in
+  either game mode; ordinary Survival gravity resumes after closing the screen.
+  F3 now reads authoritative doubles directly, avoiding a float round-trip while
+  a pending teleport has temporarily moved the rendering origin.
+- Retiring chunks have two bounded save slots separate from the two terrain-read/
+  generation slots. CPU lighting now runs with geometry in the existing two mesh
+  jobs, using immutable nine-chunk snapshots and pooled scratch arrays. Burning
+  Furnaces are copied as emitters. Validated results populate the live light cache
+  before graphics-thread uploads. Previously, unrelated arrivals and changing
+  priorities repeatedly restarted lighting; its tiny main-thread budget also
+  starved capped airborne rendering. Block-data revisions are separate from mesh
+  invalidations. Simulation ownership scans require a changed center/resident set.
+- Checkpoints share one durably flushed staging journal and commit region records
+  in batches of at most 64, sharing data/index flushes. Recovery remains
+  checksummed/idempotent and supports old per-chunk journals. Shutdown reuses a
+  completed current final checkpoint instead of writing every chunk again.
+  Permanent manifest, chunk, region, generator and finite save formats are unchanged.
+- The soil counter could become negative underground and restart a Grass/Dirt
+  layer inside solid terrain. Soil now begins only at real surface transitions;
+  covered and underwater surfaces receive Dirt. Features cannot leave Grass
+  beneath opaque blocks. Density/noise shapes are unchanged; only newly generated
+  chunks change, preserving saved terrain. Desert checks skip ineligible cells.
+- The previously requested legacy visual precision mode was absent. It is now
+  available through `/precision legacy`; `/precision modern` restores the default.
+  This application preference persists. Moving along a large-coordinate axis
+  demonstrates float camera snapping. Physics, targeting, F3, saves and the
+  existing Java-overflow Far Lands noise remain independent and precise. This
+  approximates camera jitter, not every historical vertex/texture artifact.
+
+Verification:
+
+- Debug and Release builds: zero warnings/errors. Full CPU suite: 259/259 checks
+  passed. Added coverage includes exposed soil, exact airborne Edge/Corner
+  teleports, pooled/live Torch and Furnace lighting equality, streaming lighting
+  progress, bounded multi-region batches, corrupt consolidated journals, old
+  recovery journals, and precision preference persistence. Existing checks remain.
+- Complete graphics aggregate, lighting graphics and command graphics passed.
+  The default-distance Infinite run covered F1/F2 pixels/texture restoration,
+  creation, flight, real command-bar submission, exact F3 text, negative Corner
+  rendering, rendering at 1e12, precision isolation, save/reload and GPU cleanup.
+  A rebuilt-executable teleport/F3 smoke test also passed. The short teleport-only
+  probe is not used for performance or residency measurements.
+- Standalone Release, GTX 970, 1920x1080: all 625 chunks/441 initial meshes warmed
+  in 18.20 s (first playable terrain arrives earlier). The 20-second uncapped
+  route covered 257.9 blocks, mean interval 2.04 ms, 1% low 87.0 FPS, 0.1% low
+  39.3 FPS. Airborne 60/144-cap runs each covered about 258 blocks with zero
+  loading-paused frames. At cap 60: mean 16.66 ms, lows 52.4/41.3 FPS. At cap 144:
+  mean 6.96 ms, lows 93.6/67.3 FPS. Peak residency was 625; estimated renderer
+  buffers peaked at 144,654,336 bytes (about 138 MiB), not driver-reported VRAM.
+  Managed memory sample: 119,206,400 bytes.
+- The unfixed Debug route advanced only 184.6 blocks in 20 seconds; corrected
+  runs advance the expected approximately 258. Direct FPS comparisons would be
+  misleading because the old run skipped gameplay updates and explored less.
+- Two checkpoints plus Save and Return took 9.74 s, compared with 27.98 s using
+  the first smaller-batch implementation. The earlier unbatched extended run
+  exhausted its overall test deadline while saving; its exact save duration was
+  not measured.
+
+Changed components: Core/Game1 and GameSettings; Gameplay/Camera and WorldCommands;
+Input/CommandCompletion; UI/Hud; Persistence/StreamingSession,
+InfiniteWorldPersistence and ChunkRegionStore; Rendering/StreamedWorldRenderer
+and StreamedMeshJob; Worlds/Chunk, BlockLighting, MeshSnapshot, StreamedGameplay
+and Streaming/{StreamingChunks,BetaDensityGenerator,InfiniteFeatures}; the three
+Infinite/streaming check files; and implementation summaries. README, artwork,
+dependencies, finite generation and physics constants are unchanged.
+
+Cold loading and checkpoints still take time, and measurable frame-time dips
+remain. These short scripted routes are not an endurance or physical-input
+playtest. Manual follow-up: command-bar teleports in existing Infinite saves;
+longer flights, turns and terrain horizons; water/mining across fresh boundaries;
+and walking inside Edge/Corner Far Lands. No publishing or commits were performed.

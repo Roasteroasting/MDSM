@@ -8,7 +8,7 @@ using MDSM.Audio;
 
 namespace MDSM.Entities;
 
-public sealed class PassiveMobPopulation
+public sealed partial class PassiveMobPopulation
 {
     public const int MaximumMobs = 4096; // Shared safety bound; initial populations remain area-based.
     public const double MinimumRespawnSeconds = 30, MaximumRespawnSeconds = 60, RetrySeconds = 5;
@@ -70,7 +70,7 @@ public sealed class PassiveMobPopulation
     {
         if (_mobs.Count >= MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
         Validate(state, _world.Size);
-        _mobs.Add(new PassiveMob(state, _random.Next()));
+        var mob=new PassiveMob(state,_random.Next());mob.Bind(_world);_mobs.Add(mob);
         if(!state.Bred)_living[(int)state.Species]++;
     }
 
@@ -119,6 +119,7 @@ public sealed class PassiveMobPopulation
         if (!float.IsFinite(elapsed) || elapsed <= 0) return;
         foreach (PassiveMob mob in _mobs)
         {
+            if(!_world.IsSimulated(_world.GlobalCell(mob.Position)))continue;
             float playerDistanceSquared=playerPosition.HasValue?Vector3.DistanceSquared(mob.Position,playerPosition.Value):float.PositiveInfinity;
             Vector3? direction=null;
             if(heldItem==Items.Wheat && playerDistanceSquared<=WheatFollowRange*WheatFollowRange)
@@ -165,7 +166,7 @@ public sealed class PassiveMobPopulation
         while (LastSpawnAttempts < MaximumSpawnAttemptsPerUpdate)
         {
             LastSpawnAttempts++; attempts++;
-            int x = _respawnRandom.Next(2, _world.Width - 2), z = _respawnRandom.Next(2, _world.Depth - 2);
+            int x = _world.IsInfinite?(int)player.X+_respawnRandom.Next(-80,81):_respawnRandom.Next(2, _world.Width - 2), z = _world.IsInfinite?(int)player.Z+_respawnRandom.Next(-80,81):_respawnRandom.Next(2, _world.Depth - 2);
             if (!Suitable(_world, species, x, z, out Vector3 feet)) continue;
             float distance = attempts <= MaximumSpawnAttemptsPerUpdate / 2 ? 24 : 12;
             if (Vector2.DistanceSquared(new Vector2(feet.X, feet.Z), new Vector2(player.X, player.Z)) < distance * distance) continue;
@@ -203,7 +204,7 @@ public sealed class PassiveMobPopulation
         if (mob.IsDead && _mobs.Remove(mob))
         {
             if(!mob.Bred){_living[(int)mob.Species]--;
-            _pending.Add(new MobRespawnState(mob.Species, MinimumRespawnSeconds + _respawnRandom.NextDouble() * (MaximumRespawnSeconds - MinimumRespawnSeconds)));}
+            _pending.Add(new MobRespawnState(mob.Species, MinimumRespawnSeconds + _respawnRandom.NextDouble() * (MaximumRespawnSeconds - MinimumRespawnSeconds),_world.IsInfinite?_world.GlobalCell(mob.Position):null));}
         }
         return true;
     }
@@ -238,7 +239,7 @@ public sealed class PassiveMobPopulation
         if (!MobDefinitions.IsDefined(state.Species) || (int)state.Species>=4) throw new InvalidDataException("Invalid passive mob species.");
         MobDefinition d = MobDefinitions.Get(state.Species); Vector3 p = state.Position;
         if (!float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z)
-            || p.X < d.HalfWidth || p.X > size.Width() - d.HalfWidth || p.Z < d.HalfWidth || p.Z > size.Width() - d.HalfWidth
+            || size!=WorldSize.Infinite && (p.X < d.HalfWidth || p.X > size.Width() - d.HalfWidth || p.Z < d.HalfWidth || p.Z > size.Width() - d.HalfWidth)
             || p.Y < -16 || p.Y > World.Height + 16 || !float.IsFinite(state.Yaw) || MathF.Abs(state.Yaw) > MathHelper.Pi
             || state.Health < 1 || state.Health > d.MaximumHealth
             || !double.IsFinite(state.WoolSeconds) || state.WoolSeconds<0 || state.WoolSeconds>360
@@ -250,7 +251,7 @@ public sealed class PassiveMobPopulation
     private PassiveMob Partner(PassiveMob mob)
     {
         Point3 key=BreedingCell(mob.Position);
-        for(int y=key.Y-1;y<=key.Y+1;y++)for(int z=key.Z-1;z<=key.Z+1;z++)for(int x=key.X-1;x<=key.X+1;x++)
+        for(int y=key.Y-1;y<=key.Y+1;y++)for(long z=key.Z-1;z<=key.Z+1;z++)for(long x=key.X-1;x<=key.X+1;x++)
         if(_breedingCells.TryGetValue(new(x,y,z),out var list))foreach(PassiveMob candidate in list)if(candidate!=mob && !candidate.IsDead && candidate.Species==mob.Species && !candidate.Baby && candidate.LoveSeconds>0 && Vector3.DistanceSquared(candidate.Position,mob.Position)<=64)return candidate;
         return null;
     }
@@ -266,7 +267,7 @@ public sealed class PassiveMobPopulation
             if(b==null || Vector3.DistanceSquared(a.Position,b.Position)>2.25f)continue;
             Vector3 p=(a.Position+b.Position)*.5f;BoundingBox box=PassiveMob.BoundsAt(a.Species,p);
             if(_world.IntersectsSolid(box)||Water.Intersects(_world,box)||Lava.Intersects(_world,box))continue;
-            a.Parent();b.Parent();_mobs.Add(new PassiveMob(new(a.Species,p,0,a.Definition.MaximumHealth,BabySeconds:900+_random.NextDouble()*1800,Bred:true),_random.Next()));
+            a.Parent();b.Parent();AddSaved(new(a.Species,p,0,a.Definition.MaximumHealth,BabySeconds:900+_random.NextDouble()*1800,Bred:true));
             if(_mobs.Count+_pending.Count>=cap)break;
         }
     }

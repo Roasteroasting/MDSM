@@ -124,7 +124,7 @@ internal static class CraftingChecks
         Require((byte)BlockType.CraftingTable == 24 && Table.Value == 24 && Blocks.IsSolid(BlockType.CraftingTable) && Blocks.IsOpaque(BlockType.CraftingTable), "Table IDs/properties wrong.");
         Require(Blocks.Tile(BlockType.CraftingTable, Vector3.Up) == 16 && Blocks.Tile(BlockType.CraftingTable, Vector3.Right) == 17
             && Blocks.Tile(BlockType.CraftingTable, Vector3.Down) == 7, "Table face mappings incorrect.");
-        foreach (WorldSize size in Enum.GetValues<WorldSize>())
+        foreach (WorldSize size in WorldSizes.Finite)
         {
             var world = new World(173, size, false); var session = Session(world);
             Require(Enumerable.Range(0, 36).All(i => Inventory.CreateNewWorld()[i].IsEmpty && session.Inventory[i].IsEmpty), "New world granted items.");

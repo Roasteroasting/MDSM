@@ -24,7 +24,10 @@ public sealed class DroppedItem
     public int Durability { get; private set; }
     public Guid InstanceId { get; }
     public ItemStack Stack => new(Item,Count,Durability,InstanceId);
-    public Vector3 Position { get; private set; }
+    private FramedPosition _pose;
+    public Vector3 Position {get=>_pose.Local;private set=>_pose.Local=value;}
+    public MDSM.Worlds.Streaming.WorldPosition AbsolutePosition=>_pose.Absolute;
+    internal void Bind(World world)=>_pose.Bind(world);
     public float VerticalVelocity { get; private set; }
     public float PickupDelay { get; internal set; }
     public DroppedItemState Capture() => new(Item, Count, Position, VerticalVelocity, PickupDelay,Durability,InstanceId);
@@ -47,9 +50,9 @@ public sealed class DroppedItem
             Vector3 next = Position + new Vector3(0, step, 0);
             var bounds = new BoundingBox(next - new Vector3(Radius), next + new Vector3(Radius));
             bool collided = false;
-            for (int x = Math.Max(0, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.Width - 1, (int)MathF.Floor(bounds.Max.X)); x++)
+            for (int x = Math.Max(world.LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
             for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-            for (int z = Math.Max(0, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.Depth - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
+            for (int z = Math.Max(world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
                 if (world.IsSolid(x, y, z) && World.Overlaps(bounds, World.Bounds(new Point3(x, y, z))))
                 {
                     next.Y = step < 0 ? Math.Max(next.Y, y + 1 + Radius) : Math.Min(next.Y, y - Radius);
@@ -63,7 +66,7 @@ public sealed class DroppedItem
     }
 }
 
-public sealed class DroppedItems
+public sealed partial class DroppedItems
 {
     // Corrupt-file/allocation bound, also enforced before mining changes any blocks.
     public const int MaximumEntities = 1_000_000;
@@ -91,7 +94,7 @@ public sealed class DroppedItems
         foreach (DroppedItemState state in saved)
         {
             Validate(state, world.Size);
-            _items.Add(new DroppedItem(state));
+            _items.Add(Make(state));
         }
     }
 
@@ -107,12 +110,12 @@ public sealed class DroppedItems
         }
         var stack=new ItemStack(item,count);
         var state = new DroppedItemState(item, count,
-            new Vector3(Math.Clamp(position.X, DroppedItem.Radius, _world.Width - DroppedItem.Radius), position.Y,
-                Math.Clamp(position.Z, DroppedItem.Radius, _world.Depth - DroppedItem.Radius)), 0, pickupDelay,stack.Durability,stack.InstanceId);
+            new Vector3(Math.Clamp(position.X, _world.LocalMinX + DroppedItem.Radius, _world.LocalMaxX - DroppedItem.Radius), position.Y,
+                Math.Clamp(position.Z, _world.LocalMinZ + DroppedItem.Radius, _world.LocalMaxZ - DroppedItem.Radius)), 0, pickupDelay,stack.Durability,stack.InstanceId);
         Validate(state, _world.Size);
         if (!CanSpawn()) throw new InvalidOperationException("Dropped-item limit reached.");
         if(!Items.LavaResistant(item) && Lava.Intersects(_world,new BoundingBox(state.Position-new Vector3(DroppedItem.Radius),state.Position+new Vector3(DroppedItem.Radius))))return;
-        _items.Add(new DroppedItem(state));
+        _items.Add(Make(state));
     }
 
     public bool TrySpawn(ItemStack stack, Vector3 position, float pickupDelay)
@@ -121,7 +124,7 @@ public sealed class DroppedItems
         var state=new DroppedItemState(stack.Item,stack.Count,position,0,pickupDelay,stack.Durability,stack.InstanceId);
         Validate(state,_world.Size);
         if(!Items.LavaResistant(stack.Item) && Lava.Intersects(_world,new BoundingBox(position-new Vector3(DroppedItem.Radius),position+new Vector3(DroppedItem.Radius))))return true;
-        _items.Add(new DroppedItem(state));
+        _items.Add(Make(state));
         return true;
     }
     public bool Wear(Guid id)
@@ -137,6 +140,7 @@ public sealed class DroppedItems
         for (int i = 0; i < _items.Count; i++)
         {
             DroppedItem current=_items[i];
+            if(!_world.IsSimulated(_world.GlobalCell(current.Position)))continue;
             if(!Items.LavaResistant(current.Item) && Lava.Intersects(_world,new BoundingBox(current.Position-new Vector3(DroppedItem.Radius),current.Position+new Vector3(DroppedItem.Radius))))
             {_items[i]=_items[^1];_items.RemoveAt(_items.Count-1);i--;continue;}
             _items[i].PickupDelay = Math.Max(0, _items[i].PickupDelay - elapsed);
@@ -216,6 +220,7 @@ public sealed class DroppedItems
         if (write < _items.Count) _items.RemoveRange(write, _items.Count - write);
     }
 
+    private DroppedItem Make(DroppedItemState state){var item=new DroppedItem(state);item.Bind(_world);return item;}
     public DroppedItemState[] Capture()
     {
         var states = new DroppedItemState[_items.Count];
@@ -234,8 +239,8 @@ public sealed class DroppedItems
         if(Items.Get(state.Item).Durability>0 && state.InstanceId==Guid.Empty)throw new InvalidDataException("Missing equipment identity.");
         if (!Items.IsDefined(state.Item) || state.Count < 1 || state.Count > ItemStack.Maximum
             || !float.IsFinite(p.X) || !float.IsFinite(p.Y) || !float.IsFinite(p.Z)
-            || p.X < DroppedItem.Radius || p.X > size.Width() - DroppedItem.Radius
-            || p.Z < DroppedItem.Radius || p.Z > size.Width() - DroppedItem.Radius || p.Y < -16 || p.Y > World.Height + 16
+            || size!=WorldSize.Infinite && (p.X < DroppedItem.Radius || p.X > size.Width() - DroppedItem.Radius
+            || p.Z < DroppedItem.Radius || p.Z > size.Width() - DroppedItem.Radius) || p.Y < -16 || p.Y > World.Height + 16
             || !float.IsFinite(state.VerticalVelocity) || MathF.Abs(state.VerticalVelocity) > 40
             || !float.IsFinite(state.PickupDelay) || state.PickupDelay < 0 || state.PickupDelay > DeliberatePickupDelay)
             throw new InvalidDataException("Save contains an invalid dropped item.");

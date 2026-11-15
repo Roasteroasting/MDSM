@@ -17,8 +17,8 @@ public sealed partial class World
         foreach(Point3 p in new[]{foot,head})
         {
             if(!Contains(p.X,p.Y,p.Z) || GetBlock(p.X,p.Y,p.Z)!=BlockType.Air || !SupportsVoxelTop(new(p.X,p.Y-1,p.Z))
-                || Overlaps(new(new(p.X,p.Y,p.Z),new(p.X+1,p.Y+9f/16,p.Z+1)),player)
-                || PlacementBlockedByMobs(p,BlockType.Bed) || Gravity.Intersects(Bounds(p)))return false;
+                || Overlaps(new(LocalPosition(p),LocalPosition(p)+new Vector3(1,9f/16,1)),player)
+                || PlacementBlockedByMobs(p,BlockType.Bed) || Gravity.Intersects(LocalBounds(p)))return false;
         }
         _bedEdit=true;
         try
@@ -29,7 +29,7 @@ public sealed partial class World
             Structures[head]=new(head,(byte)(facing&3),false,new(0,-1,0));
         }
         finally{_bedEdit=false;}
-        DirtyDetail(foot);DirtyDetail(head);Sounds?.Block(SoundKind.Place,BlockType.Bed,BlockSounds.Center(foot));return true;
+        DirtyDetail(foot);DirtyDetail(head);Sounds?.Block(SoundKind.Place,BlockType.Bed,Center(foot));return true;
     }
     private void BedChanged(Point3 cell,BlockType previous,BlockType next)
     {

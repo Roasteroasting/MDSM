@@ -17,7 +17,7 @@ internal static class RenderingPerformanceChecks
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
     public static void Regions()
     {
-        foreach (WorldSize size in Enum.GetValues<WorldSize>()) { CheckRegion(size); GC.Collect(); }
+        foreach (WorldSize size in WorldSizes.Finite) { CheckRegion(size); GC.Collect(); }
         var clock = new SimulationClock();
         Require(clock.Advance(.5) == 60 && clock.Advance(0) == 0, "Render stalls/pause must not discard or advance gameplay time.");
     }
@@ -100,7 +100,7 @@ internal static class RenderingPerformanceChecks
         int first = (int)camera.Position.Z / 16 * world.ChunksX + (int)camera.Position.X / 16;
         var meshes = (ChunkMesh[])typeof(WorldRenderer).GetField("_meshes", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(renderer);
         ChunkMesh oldMesh = meshes[first]; Require(oldMesh != null, "Nearby mesh absent.");
-        int ox = world.Chunks[first].OriginX, oz = world.Chunks[first].OriginZ;
+        int ox = checked((int)world.Chunks[first].OriginX), oz = checked((int)world.Chunks[first].OriginZ);
         var edit = new Point3(ox + 15, 125, oz + 15);
         world.SetBlock(edit.X, edit.Y, edit.Z, BlockType.WhiteWool);
         Warm(renderer, camera); Require(!meshes[first].NeedsBuild, "Seam edit failed to rebuild resident mesh.");

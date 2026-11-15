@@ -16,11 +16,12 @@ internal static class CommandCompletion
         while(end<text.Length && !char.IsWhiteSpace(text[end]))end++;
         string prefix=text[start..caret];string[] before=text[..start].Split(' ',StringSplitOptions.RemoveEmptyEntries);
         var options=new List<string>();
-        if(before.Length==0)options.AddRange(new[]{"/give","/spawn","/kill","/time","/gamemode","/help","/locate","/tp"});
+        if(before.Length==0)options.AddRange(new[]{"/give","/spawn","/kill","/time","/gamemode","/help","/locate","/tp","/precision"});
         else switch(before[0].ToLowerInvariant())
         {
+            case "/precision":if(before.Length==1)options.AddRange(new[]{"modern","legacy"});break;
             case "/locate":if(before.Length==1)options.Add("dungeon");break;
-            case "/tp":if(before.Length==1)options.Add("@p");else if(before.Length is >=2 and <=4)options.Add("~");break;
+            case "/tp":if(before.Length==1)options.Add("@p");if(before.Length>=1&&before.Length<=(before.Length>1&&before[1]=="@p"?4:3))options.Add("~");break;
             case "/give":
                 if(before.Length==1)options.Add("@p");
                 else if(before.Length==2)foreach(var item in Items.Obtainable)options.Add(WorldCommands.Key(Items.Name(item)));
@@ -35,7 +36,7 @@ internal static class CommandCompletion
                 if(before.Length==1)options.AddRange(new[]{"set","query"});
                 else if(before.Length==2 && before[1].Equals("set",StringComparison.OrdinalIgnoreCase))options.AddRange(new[]{"sunrise","day","noon","sunset","night","midnight"});break;
             case "/gamemode":if(before.Length==1)options.AddRange(new[]{"survival","creative"});break;
-            case "/help":if(before.Length==1)options.AddRange(new[]{"give","spawn","kill","time","gamemode","locate","tp","items","mobs"});break;
+            case "/help":if(before.Length==1)options.AddRange(new[]{"give","spawn","kill","time","gamemode","locate","tp","precision","items","mobs"});break;
         }
         options.RemoveAll(s=>!s.StartsWith(prefix,StringComparison.OrdinalIgnoreCase));options.Sort(StringComparer.Ordinal);return options.ToArray();
     }

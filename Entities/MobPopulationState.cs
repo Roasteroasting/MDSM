@@ -3,7 +3,7 @@ using System.IO;
 
 namespace MDSM.Entities;
 
-public readonly record struct MobRespawnState(MobSpecies Species, double RemainingSeconds);
+public readonly record struct MobRespawnState(MobSpecies Species, double RemainingSeconds, MDSM.Worlds.Point3? Home=null);
 
 // Per-world intended counts, separate from the live entities and their temporary AI state.
 public sealed record MobPopulationState(int[] Targets, MobRespawnState[] Pending)

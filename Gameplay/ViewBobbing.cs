@@ -10,6 +10,7 @@ public sealed class ViewBobbing
     private Vector3 _previous;
     private bool _initialized;
     private float _phase,_strength;
+    internal void Reframe(Vector3 delta){if(_initialized)_previous+=delta;}
     public Vector2 Offset { get; private set; }
     public void Update(Player player,bool enabled,float elapsed)=>UpdatePose(player.Position,player.Grounded,enabled,elapsed);
     internal void UpdatePose(Vector3 position,bool grounded,bool enabled,float elapsed)

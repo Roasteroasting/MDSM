@@ -1,7 +1,9 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.Xna.Framework;
+using MDSM.Worlds.Streaming;
 
 namespace MDSM.Worlds;
 
@@ -19,7 +21,7 @@ public sealed class BlockLighting
     private int Volume=>Slice*World.Height;
     internal const int PageSide=18;
     private readonly World _world;
-    private readonly Dictionary<int,LinkedListNode<Page>> _pages=new();
+    private readonly Dictionary<ChunkAddress,LinkedListNode<Page>> _pages=new();
     private readonly LinkedList<Page> _lru=new();
     private byte[] _light,_cost,_queued,_base;
     private byte[] _direct;
@@ -28,10 +30,25 @@ public sealed class BlockLighting
     private static readonly byte[] Costs=CreateCosts();
     private int[] _queue;
     private int _read,_write,_count;
-    private int _fieldStage,_fieldY,_fieldZ,_fieldOriginX,_fieldOriginZ;
+    private int _fieldStage,_fieldY,_fieldZ; private long _fieldOriginX,_fieldOriginZ;
     private bool _warming;
-    private int _warmX,_warmZ,_warmMinX,_warmMaxX,_warmMinZ,_warmMaxZ;
+    private bool _workerScratch;
+    internal void UseWorkerScratch()=>_workerScratch=true;
+    internal void ReleaseWorkerScratch()
+    {
+        if(!_workerScratch)return;
+        if(_light!=null)ArrayPool<byte>.Shared.Return(_light);
+        if(_cost!=null)ArrayPool<byte>.Shared.Return(_cost);
+        if(_queued!=null)ArrayPool<byte>.Shared.Return(_queued);
+        if(_direct!=null)ArrayPool<byte>.Shared.Return(_direct);
+        if(_queue!=null)ArrayPool<int>.Shared.Return(_queue);
+        if(_columnOffsets!=null)ArrayPool<int>.Shared.Return(_columnOffsets);
+        if(_columns!=null)ArrayPool<Chunk>.Shared.Return(_columns,true);
+        _light=_cost=_queued=_direct=null;_queue=_columnOffsets=null;_columns=null;_warming=false;
+    }
+    private long _warmX,_warmZ,_warmMinX,_warmMaxX,_warmMinZ,_warmMaxZ;
     private readonly int[] _warmRevisions=new int[9];
+    private readonly Chunk[] _warmSources=new Chunk[9];
     // Coalesce edits by chunk. A recalculation already covers the entire affected
     // light cone, so patch every cached page in that cone instead of rebuilding
     // the same overlapping neighborhood once for each of nine adjacent meshes.
@@ -40,12 +57,12 @@ public sealed class BlockLighting
     public long CachedBytes=>(long)_pages.Count*PageSide*PageSide*World.Height;
     public int BuiltPages { get; private set; }
     public int IncrementalUpdates {get;private set;}
-    internal sealed class Page(int x,int z)
+    internal sealed class Page(long x,long z)
     {
-        internal int X=x,Z=z;
+        internal long X=x,Z=z;
         internal readonly byte[] Data=new byte[PageSide*PageSide*World.Height];
         internal bool Dirty;
-        internal byte At(int x,int y,int z)=>y<0?(byte)0:y>=World.Height?(byte)0xe0:Data[(y*PageSide+z-Z+1)*PageSide+x-X+1];
+        internal byte At(long x,int y,long z)=>y<0?(byte)0:y>=World.Height?(byte)0xe0:Data[checked((int)((y*PageSide+z-Z+1)*PageSide+x-X+1))];
     }
     public BlockLighting(World world)=>_world=world;
     // Glass and thin open geometry transmit daylight; leaves/water attenuate it.
@@ -61,26 +78,39 @@ public sealed class BlockLighting
     {
         if(p.Y>=World.Height)return 0xe0;
         if(!_world.Contains(p.X,p.Y,p.Z))return p.Y<0?(byte)0:(byte)0xe0;
-        return GetPage(p.X/16,p.Z/16).At(p.X,p.Y,p.Z);
+        return GetPage(Coordinates.FloorDiv(p.X,16),Coordinates.FloorDiv(p.Z,16)).At(p.X,p.Y,p.Z);
     }
     public int Effective(Point3 p)
     { byte packed=Packed(p);return Math.Max(packed&15,Math.Max(0,(packed>>4)-(Maximum-_world.Time.SunlightLevel))); }
-    public int Effective(Vector3 p)=>Effective(new Point3((int)MathF.Floor(p.X),(int)MathF.Floor(p.Y),(int)MathF.Floor(p.Z)));
-    internal Page GetPage(int cx,int cz)
+    public int Effective(Vector3 p)=>Effective(_world.GlobalCell(p));
+    internal bool TryEffective(Point3 p,out int level)
     {
+        if(p.Y>=World.Height){level=_world.Time.SunlightLevel;return true;}
+        if(p.Y<0){level=0;return true;}
+        if(_pages.TryGetValue(ChunkAddress.At(p.X,p.Z),out var cached)&&!cached.Value.Dirty)
+        {byte light=cached.Value.At(p.X,p.Y,p.Z);level=Math.Max(light&15,Math.Max(0,(light>>4)-(Maximum-_world.Time.SunlightLevel)));return true;}
+        level=0;return false;
+    }
+    internal Page GetPage(long cx,long cz)
+    {
+        if(_snapshotPage!=null && cx==0 && cz==0)return _snapshotPage;
         RefreshEdits();
-        int key=cz*_world.ChunksX+cx;
+        var key=new ChunkAddress(cx,cz);
         if(_pages.TryGetValue(key,out var node))
         { _lru.Remove(node);_lru.AddLast(node);if(node.Value.Dirty)Build(node.Value);return node.Value; }
         Page page=RentPage(cx,cz);Build(page);return page;
     }
-    private Page RentPage(int cx,int cz)
+    private Page _snapshotPage;
+    internal void SetSnapshot(byte[] packed){_snapshotPage=new Page(0,0);packed.CopyTo(_snapshotPage.Data,0);}
+    internal void AcceptPage(long cx,long cz,ReadOnlySpan<byte> packed)
+    {var page=RentPage(cx,cz);packed.CopyTo(page.Data);page.Dirty=false;BuiltPages++;}
+    private Page RentPage(long cx,long cz)
     {
-        int key=cz*_world.ChunksX+cx;
+        var key=new ChunkAddress(cx,cz);
         if(_pages.TryGetValue(key,out var existing))return existing.Value;
         if(_pages.Count>=MaximumCachedChunks)
         {
-            var oldest=_lru.First;_pages.Remove(oldest.Value.Z/16*_world.ChunksX+oldest.Value.X/16);_lru.RemoveFirst();
+            var oldest=_lru.First;_pages.Remove(ChunkAddress.At(oldest.Value.X,oldest.Value.Z));_lru.RemoveFirst();
             Page recycled=oldest.Value;recycled.X=cx*16;recycled.Z=cz*16;recycled.Dirty=true;
             _pages.Add(key,oldest);_lru.AddLast(oldest);return recycled;
         }
@@ -88,17 +118,18 @@ public sealed class BlockLighting
     }
     // Cold prefetch work is resumable. Foreground queries still get an exact
     // synchronous result; cached queries do not disturb the pending scratch field.
-    internal bool PreparePage(int cx,int cz,double milliseconds)
+    internal bool PreparePage(long cx,long cz,double milliseconds)
     {
         RefreshEdits();
-        int key=cz*_world.ChunksX+cx;
+        var key=new ChunkAddress(cx,cz);
         if(_pages.TryGetValue(key,out var cached) && !cached.Value.Dirty)return true;
         if(!_warming || _warmX!=cx || _warmZ!=cz || !WarmUnchanged())
         {
             _warmX=cx;_warmZ=cz;
-            _warmMinX=Math.Max(0,cx-1);_warmMaxX=Math.Min(_world.ChunksX-1,cx+1);
-            _warmMinZ=Math.Max(0,cz-1);_warmMaxZ=Math.Min(_world.ChunksZ-1,cz+1);
-            int i=0;for(int z=_warmMinZ;z<=_warmMaxZ;z++)for(int x=_warmMinX;x<=_warmMaxX;x++)_warmRevisions[i++]=_world.GetChunk(x,z).Revision;
+            _warmMinX=_world.IsInfinite?cx-1:Math.Max(0,cx-1);_warmMaxX=_world.IsInfinite?cx+1:Math.Min(_world.ChunksX-1,cx+1);
+            _warmMinZ=_world.IsInfinite?cz-1:Math.Max(0,cz-1);_warmMaxZ=_world.IsInfinite?cz+1:Math.Min(_world.ChunksZ-1,cz+1);
+            int i=0;for(long z=_warmMinZ;z<=_warmMaxZ;z++)for(long x=_warmMinX;x<=_warmMaxX;x++)
+            {_world.TryGetChunkAt(x*16,z*16,out var source);_warmSources[i]=source;_warmRevisions[i++]=source?.BlockRevision??-1;}
             BeginField(cx*16-Halo,cz*16-Halo,Chunk.Size+2*Halo);_warming=true;
         }
         long deadline=Stopwatch.GetTimestamp()+(long)(Math.Max(.05,milliseconds)*Stopwatch.Frequency/1000);
@@ -107,27 +138,41 @@ public sealed class BlockLighting
     }
     private bool WarmUnchanged()
     {
-        int i=0;for(int z=_warmMinZ;z<=_warmMaxZ;z++)for(int x=_warmMinX;x<=_warmMaxX;x++)if(_warmRevisions[i++]!=_world.GetChunk(x,z).Revision)return false;
+        int i=0;for(long z=_warmMinZ;z<=_warmMaxZ;z++)for(long x=_warmMinX;x<=_warmMaxX;x++)
+        {_world.TryGetChunkAt(x*16,z*16,out var source);if(_warmSources[i]!=source||_warmRevisions[i++]!=(source?.BlockRevision??-1))return false;}
         return true;
     }
     internal void Changed(Point3 p,BlockType previous,BlockType next)
     { if(Transmission(previous)!=Transmission(next) || Emission(p,previous)!=Emission(p,next))Invalidate(p); }
     internal void Invalidate(Point3 p)
     {
+        if(_world.IsInfinite)
+        {
+            long cx=Coordinates.FloorDiv(p.X,16),cz=Coordinates.FloorDiv(p.Z,16);
+            for(long z=cz-1;z<=cz+1;z++)for(long x=cx-1;x<=cx+1;x++)
+            {
+                if(_pages.TryGetValue(new(x,z),out var node))node.Value.Dirty=true;
+                if(_world.TryGetChunkAt(x*16,z*16,out var chunk)){chunk.MarkDirty();chunk.MarkWaterDirty();}
+            }
+            // Publishing an unrelated distant chunk must not throw away the
+            // partially calculated page currently needed by the mesh builder.
+            if(_warming && cx>=_warmMinX&&cx<=_warmMaxX&&cz>=_warmMinZ&&cz<=_warmMaxZ)_warming=false;
+            return;
+        }
         if(BuiltPages==0)return; // No lit geometry/cache exists yet, including during generation/loading.
-        int minX=Math.Max(0,(p.X-Halo)/16),maxX=Math.Min(_world.ChunksX-1,(p.X+Halo)/16);
-        int minZ=Math.Max(0,(p.Z-Halo)/16),maxZ=Math.Min(_world.ChunksZ-1,(p.Z+Halo)/16);
+        int minX=checked((int)Math.Max(0,(p.X-Halo)/16)),maxX=checked((int)Math.Min(_world.ChunksX-1,(p.X+Halo)/16));
+        int minZ=checked((int)Math.Max(0,(p.Z-Halo)/16)),maxZ=checked((int)Math.Min(_world.ChunksZ-1,(p.Z+Halo)/16));
         bool cached=false;
         for(int z=minZ;z<=maxZ;z++)for(int x=minX;x<=maxX;x++)
         {
-            if(_pages.ContainsKey(z*_world.ChunksX+x))cached=true;
+            if(_pages.ContainsKey(new(x,z)))cached=true;
             else {_world.GetChunk(x,z).MarkDirty();_world.GetChunk(x,z).MarkWaterDirty();}
         }
         // Remote simulation edits retain dirty revisions but do not calculate
         // invisible light fields. A later cold query reconstructs them exactly.
         if(!cached)return;
-        int key=p.Z/16*_world.ChunksX+p.X/16;
-        Rectangle changed=new(p.X,p.Z,1,1);
+        int key=checked((int)(p.Z/16*_world.ChunksX+p.X/16));
+        Rectangle changed=new(checked((int)p.X),checked((int)p.Z),1,1);
         if(_edits.TryGetValue(key,out var previous))changed=Rectangle.Union(changed,previous);
         _edits[key]=changed;
         if(_edits.Count>64)
@@ -167,14 +212,14 @@ public sealed class BlockLighting
             for(int z=Math.Max(0,cz-1);z<=Math.Min(_world.ChunksZ-1,cz+1);z++)
             for(int x=Math.Max(0,cx-1);x<=Math.Min(_world.ChunksX-1,cx+1);x++)
             {
-                if(!_pages.TryGetValue(z*_world.ChunksX+x,out var node))continue;
+                if(!_pages.TryGetValue(new(x,z),out var node))continue;
                 Page page=node.Value;
-                Rectangle area=Rectangle.Intersect(affected,new(page.X-1,page.Z-1,PageSide,PageSide));
+                Rectangle area=Rectangle.Intersect(affected,new(checked((int)page.X)-1,checked((int)page.Z)-1,PageSide,PageSide));
                 bool different=false;
                 for(int y=0;y<World.Height;y++)for(int row=area.Top;row<area.Bottom;row++)
                 {
                     var value=_light.AsSpan(y*Slice+(row-originZ)*Side+area.Left-originX,area.Width);
-                    var previous=page.Data.AsSpan((y*PageSide+row-page.Z+1)*PageSide+area.Left-page.X+1,area.Width);
+                    var previous=page.Data.AsSpan(checked((int)((y*PageSide+row-page.Z+1)*PageSide+area.Left-page.X+1)),area.Width);
                     if(!value.SequenceEqual(previous)){different=true;value.CopyTo(previous);}
                 }
                 if(different){_world.GetChunk(x,z).MarkDirty();_world.GetChunk(x,z).MarkWaterDirty();}
@@ -192,13 +237,13 @@ public sealed class BlockLighting
             int wx=originX+x,wz=originZ+z;Page page=null;Chunk chunk=null;
             if((uint)wx<_world.Width && (uint)wz<_world.Depth)
             {
-                if(!_pages.TryGetValue(wz/16*_world.ChunksX+wx/16,out var node)||node.Value.Dirty)return false;
+                if(!_pages.TryGetValue(ChunkAddress.At(wx,wz),out var node)||node.Value.Dirty)return false;
                 page=node.Value;chunk=_world.GetChunk(wx/16,wz/16);
             }
             int sky=14,column=z*Side+x,offset=(wz&15)*16+(wx&15);
             for(int y=World.Height-1;y>=0;y--)
             {
-                BlockType block=chunk==null?BlockType.Air:(BlockType)chunk.Blocks[y*256+offset];
+                BlockType block=chunk==null?(_world.IsInfinite?BlockType.Bedrock:BlockType.Air):(BlockType)chunk.Blocks[y*256+offset];
                 int index=y*Slice+column,cost=Costs[(byte)block];_cost[index]=(byte)cost;
                 sky=sky==14 && cost==0?14:Math.Max(0,sky-Math.Max(1,cost));
                 int emit=block is BlockType.Torch or BlockType.Fire || Lava.IsLava(block)?14:Smelting.Machine(block)?Emission(new(wx,y,wz),block):0;
@@ -226,25 +271,27 @@ public sealed class BlockLighting
         }
         IncrementalUpdates++;return true;
     }
-    private void BuildField(int originX,int originZ,int side)
+    private void BuildField(long originX,long originZ,int side)
     {
         _warming=false;BeginField(originX,originZ,side);AdvanceField(long.MaxValue);
     }
-    private void BeginField(int originX,int originZ,int side)
+    private void BeginField(long originX,long originZ,int side)
     {
         _fieldOriginX=originX;_fieldOriginZ=originZ;
         Side=side;
-        _light??=new byte[MaximumVolume];_cost??=new byte[MaximumVolume];_queued??=new byte[MaximumVolume];_queue??=new int[MaximumVolume];
-        _direct??=new byte[MaximumSide*MaximumSide];_columns??=new Chunk[MaximumSide*MaximumSide];_columnOffsets??=new int[MaximumSide*MaximumSide];
+        _light??=Bytes(MaximumVolume);_cost??=Bytes(MaximumVolume);_queued??=Bytes(MaximumVolume);_queue??=Ints(MaximumVolume);
+        _direct??=Bytes(MaximumSide*MaximumSide);_columns??=_workerScratch?ArrayPool<Chunk>.Shared.Rent(MaximumSide*MaximumSide):new Chunk[MaximumSide*MaximumSide];_columnOffsets??=Ints(MaximumSide*MaximumSide);
         Array.Clear(_light,0,Volume);Array.Clear(_queued,0,Volume);_read=_write=_count=0;
         for(int z=0;z<Side;z++)for(int x=0;x<Side;x++)
         {
-            int wx=originX+x,wz=originZ+z,column=z*Side+x;
-            _columns[column]=(uint)wx<_world.Width && (uint)wz<_world.Depth?_world.GetChunk(wx/16,wz/16):null;
-            _columnOffsets[column]=(wz&15)*16+(wx&15);_direct[column]=14;
+            long wx=originX+x,wz=originZ+z;int column=z*Side+x;
+            _columns[column]=_world.TryGetChunkAt(wx,wz,out var resident)?resident:null;
+            _columnOffsets[column]=(int)((wz&15)*16+(wx&15));_direct[column]=14;
         }
         _fieldStage=1;_fieldY=World.Height-1;_fieldZ=0;
     }
+    private byte[] Bytes(int length)=>_workerScratch?ArrayPool<byte>.Shared.Rent(length):new byte[length];
+    private int[] Ints(int length)=>_workerScratch?ArrayPool<int>.Shared.Rent(length):new int[length];
     private bool AdvanceField(long deadline)
     {
         // Walk contiguous block rows instead of repeatedly striding through a chunk's
@@ -256,7 +303,7 @@ public sealed class BlockLighting
             for(int column=0;column<Slice;column++)
             {
                 int index=layer+column;Chunk chunk=_columns[column];
-                BlockType block=chunk==null?BlockType.Air:(BlockType)chunk.Blocks[chunkLayer+_columnOffsets[column]];
+                BlockType block=chunk==null?(_world.IsInfinite?BlockType.Bedrock:BlockType.Air):(BlockType)chunk.Blocks[chunkLayer+_columnOffsets[column]];
                 int cost=Costs[(byte)block],sky=_direct[column];_cost[index]=(byte)cost;
                 sky=sky==14 && cost==0?14:Math.Max(0,sky-Math.Max(1,cost));
                 _direct[column]=(byte)sky;

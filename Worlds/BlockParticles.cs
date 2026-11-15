@@ -10,6 +10,7 @@ public sealed class BlockParticles
     public const int Capacity=384;
     private readonly Particle[] _particles=new Particle[Capacity];
     private int _cursor;
+    internal void Reframe(Vector3 delta){for(int i=0;i<_particles.Length;i++)if(_particles[i].Life>0)_particles[i].Position+=delta;}
     public ReadOnlySpan<Particle> Active=>_particles;
     public void Burst(BlockType block,Vector3 position,bool landing=false)
     {

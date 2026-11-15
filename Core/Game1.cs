@@ -65,6 +65,8 @@ public class Game1 : Game
     private (string Id, WorldSave Save)? _created;
     private WorldRenderer _preparingRenderer;
     private volatile string _creationProgress;
+    private Task _infiniteSave;
+    private bool _returnAfterSave,_exitAfterSave,_exitCheckpointReady,_saveFinal,_needsFinalCheckpoint;
     public GameState State { get; private set; } = GameState.MainMenu;
 
     public Game1() : this(new WorldSaveManager()) { }
@@ -139,6 +141,8 @@ public class Game1 : Game
 
     private void ProcessInput(KeyboardState keyboard, MouseState mouse, bool back, GameTime gameTime, Point lookDelta)
     {
+        CompleteInfiniteSave();
+        if(_infiniteSave!=null&&(_returnAfterSave||_exitAfterSave)){RememberInput(keyboard,mouse);return;}
         _menu.UpdateMessage(gameTime.ElapsedGameTime.TotalSeconds);
         if((_noticeSeconds-=gameTime.ElapsedGameTime.TotalSeconds)<=0)_notice=null;
         _presentation.Update(keyboard, _previousKeyboard, IsActive, _session != null);
@@ -192,6 +196,20 @@ public class Game1 : Game
         }
         else if (State == GameState.Command)
         {
+            // Commands pause simulation, but an accepted teleport still needs
+            // asynchronous terrain loading and its owner-thread commit. Do not
+            // make the player close the command bar to execute the command.
+            if(_session.PendingTeleport.HasValue)
+            {
+                bool ready=_session.AdvanceStreaming(out bool reframed);
+                if(reframed){_playerAudio.Reset();_audio.StopAll();}
+                if(ready)
+                {
+                    _hud.InvalidateDebug();var destination=_session.Player.AbsolutePosition;
+                    _commandBar.Show(new(true,FormattableString.Invariant($"Teleported to {destination.X} {destination.Y} {destination.Z}.")));
+                }
+                else if(!_session.PendingTeleport.HasValue)_commandBar.Show(new(false,_session.StreamingNotice));
+            }
             _commandBar.Input.Update(keyboard, _previousKeyboard);
             if (Pressed(keyboard, Keys.Escape)) SetState(GameState.Playing);
             else if (Pressed(keyboard, Keys.Enter))
@@ -237,6 +255,7 @@ public class Game1 : Game
         Camera camera = _session.Camera;
         Player player = _session.Player;
         World world = _session.World;
+        if(world.IsInfinite){if(!_session.AdvanceStreaming(out bool reframed)){_notice=_session.StreamingNotice;_noticeSeconds=1;return;}if(reframed){_playerAudio.Reset();_audio.StopAll();}}
         camera.Look(lookDelta.X, lookDelta.Y);
         _session.Sounds.SetListener(camera.Position);
         Vector3 movement = Vector3.Zero;
@@ -383,6 +402,7 @@ public class Game1 : Game
                     _creationProgress = "ALLOCATING WORLD";
                     _creation = Task.Run(() =>
                     {
+                        if(selectedSize==WorldSize.Infinite)return _saves.CreateInfinite(seed,name,allowCheats,difficulty,mode);
                         var world = World.CreateNew(seed, selectedSize, text => _creationProgress = text);
                         world.AllowCheats = allowCheats; world.SavedDifficulty = difficulty; world.SavedGameMode = mode;
                         _creationProgress = "POPULATING PASSIVE MOBS";
@@ -467,16 +487,13 @@ public class Game1 : Game
                     SaveCurrentWorld();
                     break;
                 case MenuAction.SaveAndReturn:
+                    if(_infiniteSave!=null&&!_saveFinal)_needsFinalCheckpoint=true;
+                    _returnAfterSave=true;
                     if (SaveCurrentWorld())
                     {
-                        _renderer.Dispose();
-                        _renderer = null;
-                        _session = null;
-                        _saves.SetActiveWorld(null);
-                        _selection = null;
-                        SetState(GameState.MainMenu);
-                        _menu.Message("WORLD SAVED.",seconds:3);
+                        ReturnAfterSave();
                     }
+                    else if(_infiniteSave==null)_returnAfterSave=false;
                     break;
                 case MenuAction.Exit:
                     Exit();
@@ -498,6 +515,7 @@ public class Game1 : Game
 
     private void BeginWorld(string id, WorldSave save)
     {
+        _session?.CloseStreaming();
         if(_session!=null)_session.Sleep.Cancel(_session.Camera);
         _settings.GameMode = save.World.SavedGameMode ?? GameMode.Survival;
         _settings.Difficulty = save.World.SavedDifficulty;
@@ -531,6 +549,14 @@ public class Game1 : Game
                 _preparingRenderer = new WorldRenderer(GraphicsDevice, _atlas, _created.Value.Save.World);
             }
             WorldSave preparing = _created.Value.Save;
+            if(preparing.World.IsInfinite)
+            {
+                var w=preparing.World;w.ChunkLifecycle.AdoptOwner();var target=preparing.Health==0?w.InfiniteSpawn:preparing.ExactPosition??w.AbsolutePosition(preparing.PlayerPosition);
+                var center=MDSM.Worlds.Streaming.ChunkAddress.At((long)Math.Floor(target.X),(long)Math.Floor(target.Z));w.UpdateStreaming(center);bool chunksReady=true;
+                for(int z=-1;z<=1;z++)for(int x=-1;x<=1;x++){long bx=(center.X+x)*16,bz=(center.Z+z)*16;if(MDSM.Worlds.Streaming.Coordinates.Valid(bx,bz)&&MDSM.Worlds.Streaming.Coordinates.Valid(bx+15,bz+15))chunksReady&=w.IsLoaded(new(bx,0,bz));}
+                if(w.ChunkLifecycle.Error!=null)throw new IOException("Could not load Infinite terrain.",w.ChunkLifecycle.Error);
+                if(!chunksReady){_menu.Message("LOADING NEARBY INFINITE TERRAIN - PLEASE WAIT");return;}
+            }
             var preparingCamera = new Camera { Position = (preparing.Health == 0 ? preparing.World.Spawn : preparing.PlayerPosition)
                 + Vector3.Up * Player.StandingEyeHeight };
             preparingCamera.RestoreOrientation(preparing.Yaw, preparing.Pitch);
@@ -551,6 +577,8 @@ public class Game1 : Game
     private bool SaveCurrentWorld()
     {
         if (_session == null) return true;
+        if(_exitCheckpointReady)return true;
+        if(_infiniteSave!=null)return false;
         if(State==GameState.Sleeping)SetState(GameState.Paused);
         if (_session.Player.IsDead) EnterDeath();
         if (!_session.TryReturnInterfaceItems())
@@ -561,6 +589,10 @@ public class Game1 : Game
         }
         try
         {
+            if(_session.World.IsInfinite)
+            {
+                _saveFinal=_returnAfterSave||_exitAfterSave;_infiniteSave=_saves.BeginInfiniteSave(_session.Id,_session.Capture());_autosaveElapsed=0;_notice="SAVING WORLD...";_noticeSeconds=3600;return false;
+            }
             _saves.Save(_session.Id, _session.Capture());
             _autosaveElapsed = 0;
             _notice = "WORLD SAVED";
@@ -577,6 +609,24 @@ public class Game1 : Game
             _menu.Message("WORLD NOT SAVED. " + exception.Message, true);
             return false;
         }
+    }
+    private void ReturnAfterSave()
+    {
+        _session.CloseStreaming(checkpointIsCurrent:true);_renderer.Dispose();_renderer=null;_session=null;_saves.SetActiveWorld(null);_selection=null;
+        _returnAfterSave=false;SetState(GameState.MainMenu);_menu.Message("WORLD SAVED.",seconds:3);
+    }
+    private void CompleteInfiniteSave()
+    {
+        if(_infiniteSave==null||!_infiniteSave.IsCompleted)return;
+        var operation=_infiniteSave;_infiniteSave=null;bool success=false;
+        try{operation.GetAwaiter().GetResult();success=true;}
+        catch(Exception e)when(IsStorageError(e)){Pause();_returnAfterSave=_exitAfterSave=false;_notice="WORLD NOT SAVED";_noticeSeconds=3;_menu.Message("WORLD NOT SAVED. "+e.Message,true);}
+        finally{_session.World.ChunkLifecycle.FinishCheckpoint(success);}
+        if(!success)return;
+        if(_needsFinalCheckpoint){_needsFinalCheckpoint=false;SaveCurrentWorld();return;}
+        _autosaveElapsed=0;_notice="WORLD SAVED";_noticeSeconds=3;_menu.Message("WORLD SAVED.",seconds:3);
+        if(_returnAfterSave)ReturnAfterSave();
+        if(_exitAfterSave){_exitAfterSave=false;_exitCheckpointReady=true;Exit();}
     }
 
     private static bool IsStorageError(Exception exception) =>
@@ -693,6 +743,11 @@ public class Game1 : Game
 
     protected override void OnExiting(object sender, ExitingEventArgs args)
     {
+        if(_session?.World.IsInfinite==true&&!_exitCheckpointReady)
+        {
+            if(_infiniteSave!=null&&!_saveFinal)_needsFinalCheckpoint=true;
+            _exitAfterSave=true;SaveCurrentWorld();args.Cancel=true;base.OnExiting(sender,args);return;
+        }
         if (_creation != null || _created.HasValue)
         {
             args.Cancel = true; _menu.Message("WORLD CREATION IN PROGRESS. PLEASE WAIT."); return;
@@ -715,7 +770,8 @@ public class Game1 : Game
         if (_session != null)
         {
             Vector2 bob=State==GameState.Playing && _settings.ViewBobbing?_session.Bobbing.Offset:Vector2.Zero;
-            _session.Camera.PresentationOffset=_session.Camera.Right*bob.X+Vector3.Up*bob.Y;
+            _session.Camera.PresentationOffset=_session.Camera.Right*bob.X+Vector3.Up*bob.Y
+                +Camera.PrecisionOffset(_session.World.AbsolutePosition(_session.Camera.Position),_settings.LegacyVisualPrecision);
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, _session.World.Time.Sky, 1f, 0);
             _renderer.Brightness=_settings.Brightness;
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
@@ -730,7 +786,7 @@ public class Game1 : Game
                 BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
-                _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath);
+                _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath,_session.Player.AbsolutePosition);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);
@@ -763,6 +819,7 @@ public class Game1 : Game
 
     protected override void UnloadContent()
     {
+        _session?.CloseStreaming(checkpointIsCurrent:_exitCheckpointReady);
         ReleaseMouse();
         _mouseLook?.Dispose();
         _mouseLook = null;

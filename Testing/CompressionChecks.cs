@@ -120,7 +120,7 @@ internal static class CompressionChecks
         string directory=Path.Combine(AppContext.BaseDirectory,".compression-roundtrip-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
         try
         {
-            foreach(WorldSize size in Enum.GetValues<WorldSize>())
+            foreach(WorldSize size in WorldSizes.Finite)
             {
                 string path=Path.Combine(directory,size+".dat");byte[] expected=WriteSize(size,path);GC.Collect();GC.WaitForPendingFinalizers();GC.Collect();
                 ReadSize(path,expected);Console.WriteLine($"  {size} compressed all-state roundtrip: {new FileInfo(path).Length/1048576d:F3} MiB, complete v10 payload SHA-256 equality.");

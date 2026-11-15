@@ -8,7 +8,7 @@ using MDSM.Audio;
 namespace MDSM.Worlds;
 
 public readonly record struct CropState(Point3 Cell,double Remaining,double StageSeconds);
-public sealed class FarmingSimulation(World world)
+public sealed partial class FarmingSimulation(World world)
 {
     public const int MaximumCrops=65536,Budget=256;
     private sealed class Crop { public double Remaining,Interval,Due;public int Version;public bool Wet; }
@@ -22,7 +22,7 @@ public sealed class FarmingSimulation(World world)
     internal bool CanPlant=>_crops.Count<MaximumCrops;
     public bool Hydrated(Point3 p)
     {
-        for(int y=p.Y-1;y<=p.Y+1;y++)for(int z=p.Z-2;z<=p.Z+2;z++)for(int x=p.X-2;x<=p.X+2;x++)if(Water.IsWater(world.GetBlock(x,y,z)))return true;
+        for(int y=p.Y-1;y<=p.Y+1;y++)for(long z=p.Z-2;z<=p.Z+2;z++)for(long x=p.X-2;x<=p.X+2;x++)if(Water.IsWater(world.GetBlock(x,y,z)))return true;
         return false;
     }
     private void Queue(Point3 p){if(_queued.Add(p))_hydration.Enqueue(p);}
@@ -30,7 +30,7 @@ public sealed class FarmingSimulation(World world)
     {
         if(Blocks.Soil(next))Queue(p);
         if(Water.IsWater(old)!=Water.IsWater(next))
-            for(int y=p.Y-1;y<=p.Y+1;y++)for(int z=p.Z-2;z<=p.Z+2;z++)for(int x=p.X-2;x<=p.X+2;x++)
+            for(int y=p.Y-1;y<=p.Y+1;y++)for(long z=p.Z-2;z<=p.Z+2;z++)for(long x=p.X-2;x<=p.X+2;x++)
                 if(Blocks.Soil(world.GetBlock(x,y,z)))Queue(new(x,y,z));
         if(Blocks.Crop(old) && !Blocks.Crop(next))
         {
@@ -55,7 +55,7 @@ public sealed class FarmingSimulation(World world)
         if(Items.Get(inventory.Selected.Item).Tool!=ToolKind.Hoe || world.GetBlock(p.X,p.Y,p.Z) is not (BlockType.Dirt or BlockType.Grass)
             || world.GetBlock(p.X,p.Y+1,p.Z)!=BlockType.Air)return false;
         if(!world.SetBlock(p.X,p.Y,p.Z,Hydrated(p)?BlockType.FarmlandWet:BlockType.FarmlandDry))return false;
-        world.Sounds?.At(SoundKind.Till,BlockSounds.Center(p));if(!creative)inventory.WearSelected();return true;
+        world.Sounds?.At(SoundKind.Till,world.Center(p));if(!creative)inventory.WearSelected();return true;
     }
     public bool Plant(Point3 soil,Inventory inventory,bool creative=false)
     {
@@ -63,7 +63,7 @@ public sealed class FarmingSimulation(World world)
         if(crop==BlockType.Air || _crops.Count>=MaximumCrops || !Blocks.Soil(world.GetBlock(soil.X,soil.Y,soil.Z))
             || world.GetBlock(soil.X,soil.Y+1,soil.Z)!=BlockType.Air || !world.Contains(soil.X,soil.Y+1,soil.Z))return false;
         if(!world.SetBlock(soil.X,soil.Y+1,soil.Z,crop))return false;
-        world.Sounds?.At(SoundKind.Plant,BlockSounds.Center(soil));if(!creative)inventory.ConsumeSelected();return true;
+        world.Sounds?.At(SoundKind.Plant,world.Center(soil));if(!creative)inventory.ConsumeSelected();return true;
     }
     public void Update(double elapsed)
     {
@@ -78,6 +78,7 @@ public sealed class FarmingSimulation(World world)
         {
             _growth.Dequeue();LastProcessed++;
             if(!_crops.TryGetValue(entry.Cell,out var crop) || !crop.Wet || crop.Version!=entry.Version)continue;
+            if(!world.IsSimulated(entry.Cell)){crop.Due=_time+1;_growth.Enqueue((entry.Cell,crop.Version),crop.Due);continue;}
             Point3 p=entry.Cell;BlockType stage=world.GetBlock(p.X,p.Y,p.Z);
             if(!Blocks.Crop(stage)||Blocks.MatureCrop(stage))continue;
             world.SetBlock(p.X,p.Y,p.Z,stage+1);crop.Remaining=crop.Interval;crop.Due=due+crop.Interval;_growth.Enqueue((p,crop.Version),crop.Due);

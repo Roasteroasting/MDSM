@@ -25,7 +25,7 @@ internal static class WorldManagementChecks
                 Require(ReferenceEquals(world.GetChunk(chunk.X, chunk.Z), chunk), "Chunk lookup aliases another chunk.");
                 foreach (int local in new[] { 0, 15 })
                 {
-                    int x = chunk.OriginX + local, z = chunk.OriginZ + local;
+                    int x = checked((int)chunk.OriginX) + local, z = checked((int)chunk.OriginZ) + local;
                     Require(world.SetBlock(x, 63, z, BlockType.Gravel), "Valid edge coordinate rejected.");
                     Require(chunk.GetBlock(local, 63, local) == BlockType.Gravel, "World/local indexing disagrees.");
                 }
