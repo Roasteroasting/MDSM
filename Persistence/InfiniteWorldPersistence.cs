@@ -56,7 +56,7 @@ internal static class InfiniteWorldPersistence
         byte[] bytes=File.ReadAllBytes(path);if(bytes.Length<41||bytes.Length>1048576||!bytes.AsSpan(0,8).SequenceEqual(Magic)||!CryptographicOperations.FixedTimeEquals(bytes.AsSpan(8,32),SHA256.HashData(bytes.AsSpan(40))))throw new InvalidDataException("Invalid Infinite world manifest/checksum.");
         var s=StreamingJson.Decode<InfiniteManifest>(bytes[40..]);
         try{WorldSerializer.ValidateName(s.Name);}catch(ArgumentException e){throw new InvalidDataException("Invalid Infinite world name.",e);}
-        if(s.Version!=1||s.Generator!=BetaDensityGenerator.Version||!s.Position.Valid||!s.Spawn.Valid||s.Position.X>=Coordinates.MaximumBlock||s.Position.Z>=Coordinates.MaximumBlock||s.Spawn.X>=Coordinates.MaximumBlock||s.Spawn.Z>=Coordinates.MaximumBlock||s.Spawn.Y<0||s.Spawn.Y>144
+        if(s.Version!=1||s.Generator is <1 or >BetaDensityGenerator.Version||!s.Position.Valid||!s.Spawn.Valid||s.Position.X>=Coordinates.MaximumBlock||s.Position.Z>=Coordinates.MaximumBlock||s.Spawn.X>=Coordinates.MaximumBlock||s.Spawn.Z>=Coordinates.MaximumBlock||s.Spawn.Y<0||s.Spawn.Y>144
             ||!double.IsFinite(s.Position.X)||!double.IsFinite(s.Position.Y)||!double.IsFinite(s.Position.Z)||s.Position.Y< -16||s.Position.Y>256
             ||!double.IsFinite(s.Health)||s.Health<0||s.Health>20||!float.IsFinite(s.Yaw)||!float.IsFinite(s.Pitch)||s.Inventory?.Length!=36||s.Armor?.Length!=4||s.Selected is <0 or >8
             ||!Enum.IsDefined(s.Mode)||!Enum.IsDefined(s.Difficulty)||s.OriginX%16!=0||s.OriginZ%16!=0||!Coordinates.Valid(s.OriginX,s.OriginZ))throw new InvalidDataException("Invalid Infinite world/player data.");
@@ -66,7 +66,7 @@ internal static class InfiniteWorldPersistence
     {var s=Read(Path.Combine(directory,WorldSaveManager.FileName));return new(s.Name,s.Seed,Vector3.Zero,s.Yaw,s.Pitch,WorldSize.Infinite);}
     internal static WorldSave Load(string directory)
     {
-        Recover(directory);var s=Read(Path.Combine(directory,WorldSaveManager.FileName));var world=World.OpenStreamed(s.Seed,Path.Combine(directory,"regions"));
+        Recover(directory);var s=Read(Path.Combine(directory,WorldSaveManager.FileName));var world=World.OpenStreamed(s.Seed,Path.Combine(directory,"regions"),generatorVersion:s.Generator);
         var focus=s.Health==0?s.Spawn:s.Position;world.SetOrigin(focus.Chunk.BlockX,focus.Chunk.BlockZ);world.InfiniteSpawn=s.Spawn;world.AllowCheats=s.Cheats;world.SavedDifficulty=s.Difficulty;world.SavedGameMode=s.Mode;world.Climate.VariedGeneration=true;
         world.Time.Restore(s.Time);world.Weather.Restore(s.Weather);world.Weather.RestoreCenter(s.WeatherCenter);
         var inventory=new Inventory{SelectedSlot=s.Selected};for(int i=0;i<36;i++)inventory.SetSlot(i,s.Inventory[i]);for(int i=0;i<4;i++)inventory.SetEquipment(i,s.Armor[i]);
@@ -77,7 +77,7 @@ internal static class InfiniteWorldPersistence
     internal static System.Threading.Tasks.Task BeginSave(string directory,WorldSave save)
     {
         WorldSerializer.ValidateName(save.Name);
-        var w=save.World;var inventory=save.Inventory??new Inventory();var s=new InfiniteManifest{Name=save.Name,Seed=w.Seed,OriginX=w.OriginX,OriginZ=w.OriginZ,
+        var w=save.World;var inventory=save.Inventory??new Inventory();var s=new InfiniteManifest{Generator=w.ChunkLifecycle.GeneratorVersion,Name=save.Name,Seed=w.Seed,OriginX=w.OriginX,OriginZ=w.OriginZ,
             Position=save.ExactPosition??w.AbsolutePosition(save.PlayerPosition),Spawn=w.InfiniteSpawn,Yaw=save.Yaw,Pitch=save.Pitch,Health=save.ExactHealth<0?save.Health:save.ExactHealth,Burning=save.PlayerFire,
             Inventory=Enumerable.Range(0,36).Select(i=>inventory[i]).ToArray(),Armor=Enumerable.Range(0,4).Select(i=>inventory.Equipped(i)).ToArray(),Selected=inventory.SelectedSlot,
             Cheats=w.AllowCheats,Mode=w.SavedGameMode??GameMode.Survival,Difficulty=w.SavedDifficulty,Time=w.Time.Seconds,Weather=w.Weather.Capture(),WeatherCenter=w.Weather.Center};

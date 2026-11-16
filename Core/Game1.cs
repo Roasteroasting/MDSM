@@ -57,6 +57,7 @@ public class Game1 : Game
     private Point _menuCursor;
     private bool _awaitMouseRelease;
     private readonly HotbarScroll _hotbarScroll = new();
+    private readonly CreativeFlightInput _creativeFlight = new();
     private double _autosaveElapsed;
     private float _fallingInterpolation = 1;
     private double _noticeSeconds;
@@ -255,6 +256,9 @@ public class Game1 : Game
         Camera camera = _session.Camera;
         Player player = _session.Player;
         World world = _session.World;
+        _creativeFlight.Update(keyboard,_previousKeyboard,player.Creative,gameTime.ElapsedGameTime.TotalSeconds);
+        player.SetFlightEnabled(_creativeFlight.Flying);
+        if(_creativeFlight.FlightChanged)_pendingJump=false;
         if(world.IsInfinite){if(!_session.AdvanceStreaming(out bool reframed)){_notice=_session.StreamingNotice;_noticeSeconds=1;return;}if(reframed){_playerAudio.Reset();_audio.StopAll();}}
         camera.Look(lookDelta.X, lookDelta.Y);
         _session.Sounds.SetListener(camera.Position);
@@ -287,7 +291,7 @@ public class Game1 : Game
             held = false;
         }
         if (!held || _session.Mining.Target != _selection?.Cell) _session.Mining.Reset();
-        _pendingJump |= Pressed(keyboard, Keys.Space);
+        if(!_creativeFlight.FlightChanged)_pendingJump |= Pressed(keyboard, Keys.Space);
         int steps = _simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
         for (int i = 0; i < steps; i++)
         {
@@ -298,7 +302,7 @@ public class Game1 : Game
             world.Particles.Update(world,dt);
             world.Fire.Update(dt);
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
-                keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
+                _creativeFlight.FastFlight);
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
             _playerAudio.Update(player,world);
             _pendingJump = false;
@@ -515,6 +519,7 @@ public class Game1 : Game
 
     private void BeginWorld(string id, WorldSave save)
     {
+        _creativeFlight.Reset();
         _session?.CloseStreaming();
         if(_session!=null)_session.Sleep.Cancel(_session.Camera);
         _settings.GameMode = save.World.SavedGameMode ?? GameMode.Survival;
@@ -664,6 +669,7 @@ public class Game1 : Game
 
     private void SetState(GameState state)
     {
+        _creativeFlight.CancelSpaceTap();
         bool leavingBed=State==GameState.Sleeping && state!=GameState.Sleeping;
         bool leavingCommand=State==GameState.Command && state!=GameState.Command;
         bool leavingSign=State==GameState.SignEditing && state!=GameState.SignEditing;

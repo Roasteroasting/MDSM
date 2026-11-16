@@ -18,6 +18,9 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
     private readonly List<BlockEntityState> _chests=new();
     private readonly List<LocatedMob> _animals=new();
     private readonly Dictionary<(long X,long Z),Column> _profiles=new();
+    private readonly Dictionary<(long X,long Z),int> _surfaces=new();
+    private InfiniteWaterTerrain _water;
+    private InfiniteWaterTerrain WaterTerrain=>_water??=new(seed,Surface,terrain.PlanSurface,Raw,terrain.WaterPlans,cancellation);
     private byte[] _blocks;
     private byte[] _boundary;
     private readonly Climate _climate=new(seed){VariedGeneration=true};
@@ -45,15 +48,28 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
     private BlockType Raw(long x,int y,long z)
     {if(y<0||y>=128)return BlockType.Air;return (BlockType)Base(ChunkAddress.At(x,z))[Coordinates.Index(Coordinates.Mod(x,16),y,Coordinates.Mod(z,16))];}
     private int Surface(long x,long z)
-    {var data=Base(ChunkAddress.At(x,z));int lx=Coordinates.Mod(x,16),lz=Coordinates.Mod(z,16);for(int y=127;y>=0;y--)if(Blocks.IsSolid((BlockType)data[Coordinates.Index(lx,y,lz)]))return y;return -1;}
+    {
+        if(_surfaces.TryGetValue((x,z),out int cached))return cached;
+        var data=Base(ChunkAddress.At(x,z));int lx=Coordinates.Mod(x,16),lz=Coordinates.Mod(z,16),top=-1;
+        for(int y=127;y>=0;y--)if(Blocks.IsSolid((BlockType)data[Coordinates.Index(lx,y,lz)])){top=y;break;}
+        _surfaces.Add((x,z),top);return top;
+    }
+    private readonly Dictionary<ChunkAddress,InfiniteCaves> _caves=new();
     private bool Cave(long x,int y,long z)
-        =>y>=5&&y<=58&&Raw(x,y+5,z)!=BlockType.Air&&Math.Abs(Noise(seed^0x43415645,x/24.0,y/18.0,z/24.0))<.13&&Math.Abs(Noise(seed^0x54554e4c,x/33.0,y/21.0,z/33.0))<.16;
+    {
+        if(terrain.GenerationVersion==1)return y>=5&&y<=58&&Raw(x,y+5,z)!=BlockType.Air&&Math.Abs(Noise(seed^0x43415645,x/24.0,y/18.0,z/24.0))<.13&&Math.Abs(Noise(seed^0x54554e4c,x/33.0,y/21.0,z/33.0))<.16;
+        if(y<1||y>119)return false;
+        var at=ChunkAddress.At(x,z);
+        if(!_caves.TryGetValue(at,out var caves))
+        {caves=terrain.CavesForFeatures(at,(px,py,pz)=>TerrainAt(px,py,pz,Profile(px,pz),false),cancellation);_caves.Add(at,caves);}
+        return caves.Mask[Coordinates.Index(Coordinates.Mod(x,16),y,Coordinates.Mod(z,16))]!=0;
+    }
     private readonly record struct Column(int Surface,int Bed,int Water,double Edge,int Shore=-1);
     private Column Profile(long x,long z)
     {if(!_profiles.TryGetValue((x,z),out var column)){column=ComputeProfile(x,z);_profiles.Add((x,z),column);}return column;}
     private Column ComputeProfile(long x,long z)
     {
-        int top=Surface(x,z);if(top<57||top>85)return new(top,top,-1,0);
+        int top=Surface(x,z);if(terrain.GenerationVersion>=3||top<57||top>85)return new(top,top,-1,0);
         Column? lake=LakeColumn(x,z,top);if(lake.HasValue)return lake.Value;
         // A 128-block anchor lattice owns ponds. Only the nearest anchors can
         // affect a column, so broad water features cost no world-sized masks.
@@ -101,9 +117,16 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
         }
         return null;
     }
-    private BlockType TerrainAt(long x,int y,long z,Column column)
+    private BlockType TerrainAt(long x,int y,long z,Column column,bool carve=true)
     {
+        if(y<0||y>=128)return BlockType.Air;
         BlockType original=Raw(x,y,z);if(y==0)return BlockType.Bedrock;
+        if(terrain.GenerationVersion>=3)
+        {
+            BlockType shaped=WaterTerrain.At(x,y,z,original,column.Surface);
+            if(carve && shaped is (BlockType.Stone or BlockType.Dirt or BlockType.Grass) && Cave(x,y,z))return y<10?BlockType.LavaSource:BlockType.Air;
+            return shaped;
+        }
         if(column.Shore>=0)
         {
             if(y>column.Shore&&y<=column.Surface)return BlockType.Air;
@@ -115,23 +138,19 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
             if(y>column.Surface&&y<=column.Water)return BlockType.WaterSource;
             if(y==column.Bed&&Blocks.IsSolid(original))return (Hash(seed,x,0,z)%5) switch{0=>BlockType.Sand,1=>BlockType.Dirt,_=>BlockType.Gravel};
         }
-        if(original is BlockType.Stone or BlockType.Dirt or BlockType.Grass&&Cave(x,y,z))return y<10?BlockType.LavaSource:BlockType.Air;
+        if(carve && original is BlockType.Stone or BlockType.Dirt or BlockType.Grass&&Cave(x,y,z))return y<10?BlockType.LavaSource:BlockType.Air;
         if(y<=column.Surface&&y>column.Surface-3&&(original is BlockType.Grass or BlockType.Dirt)&&_climate.At(x,z)==Biome.Desert)return BlockType.Sand;
         return original;
     }
     private BlockType TerrainAt(long x,int y,long z)=>TerrainAt(x,y,z,Profile(x,z));
+    internal WaterColumn WaterProfile(long x,long z)=>WaterTerrain.Column(x,z);
     private BlockType At(long x,int y,long z)
     {if(y<0||y>=128)return BlockType.Air;if(ChunkAddress.At(x,z)==address)return (BlockType)_blocks[Coordinates.Index(Coordinates.Mod(x,16),y,Coordinates.Mod(z,16))];return TerrainAt(x,y,z);}
     private void Write(long x,int y,long z,BlockType block)
     {if(y>0&&y<128&&ChunkAddress.At(x,z)==address)_blocks[Coordinates.Index(Coordinates.Mod(x,16),y,Coordinates.Mod(z,16))]=(byte)block;}
     internal ChunkSnapshot Generate()
     {
-        _blocks=(byte[])Base(address).Clone();
-        for(int z=0;z<16;z++)for(int x=0;x<16;x++)
-        {
-            cancellation.ThrowIfCancellationRequested();long wx=address.BlockX+x,wz=address.BlockZ+z;Column column=Profile(wx,wz);
-            for(int y=1;y<128;y++)_blocks[Coordinates.Index(x,y,z)]=(byte)TerrainAt(wx,y,wz,column);
-        }
+        GenerateTerrain();
         DepositsAndOres();Dungeons();TreesAndPlants();Animals();
         // Exact support safeguard after every feature pass. Fill only cavities
         // directly below generated gravity blocks; never create initial falls.
@@ -142,7 +161,19 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
             if((BlockType)_blocks[index]==BlockType.Grass&&y<127&&Blocks.IsOpaque((BlockType)_blocks[Coordinates.Index(x,y+1,z)]))_blocks[index]=(byte)BlockType.Dirt;
         }
         var metadata=new ChunkGameplay{Vegetation=new(_leaves.ToArray(),Array.Empty<CellTimer>(),Array.Empty<CellTimer>()),Containers=_chests.ToArray(),Passive=_animals.ToArray()};
-        return new(address,BetaDensityGenerator.Version,_blocks,Metadata:StreamingJson.Encode(metadata));
+        return new(address,terrain.GenerationVersion,_blocks,Metadata:StreamingJson.Encode(metadata));
+    }
+    // Same production pipeline, exposed before decoration for deterministic
+    // diagnostics that distinguish density voids from actual cave carving.
+    internal byte[] GenerateTerrain(bool carve=true)
+    {
+        _blocks=(byte[])Base(address).Clone();
+        for(int z=0;z<16;z++)for(int x=0;x<16;x++)
+        {
+            cancellation.ThrowIfCancellationRequested();long wx=address.BlockX+x,wz=address.BlockZ+z;Column column=Profile(wx,wz);
+            for(int y=1;y<128;y++)_blocks[Coordinates.Index(x,y,z)]=(byte)TerrainAt(wx,y,wz,column,carve);
+        }
+        return _blocks;
     }
     private void DepositsAndOres()
     {

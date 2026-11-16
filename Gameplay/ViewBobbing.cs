@@ -15,7 +15,7 @@ public sealed class ViewBobbing
     internal void Reframe(Vector3 delta){if(_initialized)_previous+=delta;}
     public Vector2 Offset => Translation(_phase,_strength);
     public void Update(Player player,bool enabled,float elapsed,World world=null)
-        =>UpdatePose(player.Position,player.Grounded&&!player.Creative&&(world==null||!Water.Intersects(world,player.Bounds)),enabled,elapsed);
+        =>UpdatePose(player.Position,player.Grounded&&!player.Flying&&(world==null||!Water.Intersects(world,player.Bounds)),enabled,elapsed);
     internal void UpdatePose(Vector3 position,bool grounded,bool enabled,float elapsed)
     {
         if(!_initialized){_previous=position;_initialized=true;}

@@ -17,11 +17,26 @@ internal static class WorldRuleChecks
 {
     internal static readonly (string Name,Action Check)[] All =
     {
+        ("Infinite default and Legacy-only finite creation preserve old size identities", CreationSizes),
         ("World-specific cheats/difficulty/mode roundtrips, command gates and locked application", Rules),
         ("Genuine v12/v11/v10 rule migration, exact state preservation and invalid rule bytes", Migration),
         ("World creation rule layouts/defaults and global preference separation", LayoutAndPreferences)
     };
     private static void Check(bool ok,string message)=>CommandChecks.Check(ok,message);
+    public static void CreationSizes()
+    {
+        Check(WorldSizes.DefaultCreation==WorldSize.Infinite && WorldSizes.Creatable.SequenceEqual(new[]{WorldSize.Infinite,WorldSize.Large}),"Creation options/default are incorrect.");
+        Check(WorldSize.Infinite.Dimensions()=="Infinite" && WorldSize.Large.Dimensions()=="Legacy (1024x1024)","Creation labels changed.");
+        foreach(int direction in new[]{-1,1})
+        {
+            var selected=WorldSizes.DefaultCreation;
+            for(int i=0;i<20;i++){selected=WorldSizes.NextCreation(selected,direction);Check(selected==(i%2==0?WorldSize.Large:WorldSize.Infinite),"Creation cycling exposed a retired option or failed to wrap.");}
+        }
+        foreach(var size in WorldSizes.Finite)
+            Check(WorldSizes.FromDimensions(size.Width(),128,size.Width())==size,"Retired save dimensions are no longer recognized.");
+        Check(WorldSizes.FromDimensions(256,64,256)==WorldSize.Small && WorldSizes.FromDimensions(512,64,512)==WorldSize.Normal,"Older height migration identities changed.");
+        Check((int)WorldSize.Small==0&&(int)WorldSize.Normal==1&&(int)WorldSize.Large==2&&(int)WorldSize.Massive==3&&(int)WorldSize.Infinite==4,"Persistent world-size IDs changed.");
+    }
     public static void Rules()
     {
         foreach(bool cheats in new[]{false,true})foreach(Difficulty difficulty in Enum.GetValues<Difficulty>())foreach(GameMode mode in Enum.GetValues<GameMode>())

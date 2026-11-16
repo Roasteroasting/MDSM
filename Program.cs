@@ -1,4 +1,12 @@
-if(args.Length==1 && args[0]=="--menu-update-test")
+if(args.Length==1 && args[0]=="--infinite-water-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.InfiniteWaterChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--terrain-balance-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.TerrainBalanceChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--menu-update-test")
 {
     System.Environment.ExitCode=MDSM.Testing.MenuUpdateChecks.Run();
 }

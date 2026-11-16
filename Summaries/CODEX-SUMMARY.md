@@ -1640,3 +1640,340 @@ Verification: dotnet build --no-restore passed with zero warnings/errors;
 --audio-test passed 6/6 and --refinement-test passed 18/18. The missing-clip
 warning is expected from the audio suite's deliberate missing-assets fixture.
 No manual listening check, publishing or README edits.
+
+### Infinite terrain/cave balance correction - 2026-11-15
+
+Diagnosis and reference:
+- The prior Infinite density shaping used a symmetric (surface-y)*relief/16
+  term, with relief near 12. It lacked Beta's fourfold negative vertical
+  adjustment below the regional center, allowing density noise to hollow out
+  ordinary underground rock. The original elevation input also effectively
+  varied at enormous scales after octave weighting.
+- Infinite caves were intersections of two broad value-noise fields, limited
+  to Y=5..58, rather than curved tunnel walks. Every carved cell below Y=10
+  became lava. These fields could form broad connected sheets and chambers.
+- Technical references (Beta-era source mirror, not modern aquifer generation):
+  https://raw.githubusercontent.com/MadMockers/mc-dev/master/net/minecraft/server/ChunkProviderGenerate.java
+  https://raw.githubusercontent.com/MadMockers/mc-dev/master/net/minecraft/server/MapGenCaves.java
+
+Implementation:
+- BetaDensityGenerator version 2 retains the exact lower/upper/selector noise
+  frequencies, octave seeds and historical saturating lattice/extrapolation
+  behavior. Adds asymmetric underground density shaping, broad depth/stretch
+  controls, smooth regional mountainous relief and blended desert suppression.
+  Terrain remains interpolated 3D density, not a solid heightmap. Height, sea
+  level, top clearance and bedrock remain unchanged.
+- InfiniteCaves replays deterministically seeded neighboring owners, nested
+  system frequency, curved pitch/yaw walks, tapered sections, occasional rooms,
+  and branching tunnels. Only actual carved rock below Y=10 becomes lava.
+  Sections test pre-carve terrain water before carving. Each chunk writes its
+  own mask only; request order cannot change paths or boundary decisions.
+- Existing bounded lakes/ponds, rivers, ores, dungeons, vegetation and animals
+  continue through InfiniteFeatures. Terrain-before/after-carving diagnostics
+  reuse the production stage, without decorative structures skewing counts.
+- Separate shared FIFO caches retain at most 64 terrain arrays and 64 cave masks
+  per generator (about 2 MiB payload each); work remains on existing bounded
+  generation workers. No renderer, lighting or fluid simulation rewrite.
+
+Compatibility:
+- New Infinite worlds use generator 2. Existing Infinite worlds retain their
+  explicit manifest generator 1 for both saved and unexplored chunks, avoiding
+  terrain seams and regeneration. Finite worlds are unchanged.
+- Existing manifest/chunk schemas and compression remain unchanged. Both
+  generator IDs are accepted, a chunk must match its world's generator, and
+  every checkpoint/retirement writes the pinned version. No automatic upgrade.
+
+Measured diagnostics (six fixed chunks per seed, 1,536 columns each):
+Seed     old surface range/mean   new surface range/mean   base void Y31..45 old/new
+173      35..112 / 81.5           59..80 / 69.1             4.41% / 0.00%
+-907     10..113 / 55.5           58..82 / 64.2            27.28% / 0.00%
+137      31..112 / 73.2           58..96 / 70.6            14.40% / 0.00%
+Y46..60 new base void fractions are 0.02%, 1.55%, 2.33%, respectively,
+versus 15.13%, 47.87%, 34.80%. Y1..30 is solid in these base samples.
+These are representative fixed samples, not a universal biome/seed guarantee.
+Deep lava volume is not uniformly reduced for every seed (seed 173 has more
+lava in its carved tunnels); the change confines it to bounded tunnel sections.
+121 regional chunks (seed 173): 99 gentle chunks, 2 high-terrain chunks and
+17 sampled overhang columns. Artificial all-stone masks across 25 chunks contain
+80,508 carved cells and 4,530 face-adjacent X-boundary passage connections.
+
+Scripted DesktopGL check on GTX 970: passed real world creation, exploration,
+exact +/-12.55 million and 1e12 coordinate rendering, F3, hidden-HUD screenshots,
+checkpoints, return/reload and GPU cleanup. Initial default residency reached
+625 chunks / 441 meshes after 137 seconds; peak estimated mesh payload during
+exploration was 143,952,288 bytes (not measured driver VRAM). Twenty-second
+exploration: mean 1.55 ms, 1% low 61.3 FPS, 0.1% low 19.4 FPS; concurrent full
+CPU regression work makes these unsuitable for isolated performance comparison.
+At 60/144 FPS caps, scripted airborne travel covered all 258 intended blocks
+with zero loading frames. Generation/startup latency and frame-time tails remain
+practical limitations; this does not claim stutter-free sustained gameplay.
+
+Changed production files: Worlds/Streaming/BetaDensityGenerator.cs,
+InfiniteFeatures.cs, InfiniteCaves.cs, StreamingChunks.cs; Worlds/StreamedWorld.cs;
+Persistence/InfiniteWorldPersistence.cs. Tests: Testing/TerrainBalanceChecks.cs,
+Testing/PrototypeChecks.cs; CLI --terrain-balance-test in Program.cs.
+No README edits, publishing, dependency changes or terrain regeneration.
+
+Final carver/performance refinement: uses a local Java-compatible 48-bit LCG
+instead of allocating System.Random seed tables for every neighboring owner.
+Regional depth/stretch are sampled once per coarse X/Z column, not once per Y.
+Final sampled cave masks contain 19,250 cells and 1,018 cross-boundary contacts
+in 25 all-stone chunks (superseding the earlier prototype carver counts above).
+Final same-workload Debug measurements, six complete production chunks:
+version 1 = 710 ms / 5.3 MiB cumulative allocation;
+version 2 = 1,065 ms / 10.6 MiB cumulative allocation.
+This improves the initial version-2 implementation's 1,841 ms / 27.0 MiB,
+but remains about 50% more CPU work than version 1 in this small sample.
+These are microbenchmarks, not peak RAM, VRAM or sustained exploration results.
+
+Final DesktopGL rerun after allocation refinement also passed on GTX 970:
+625 chunks / 441 meshes reached in 96.58 s; sampled exploration peaked at
+130,699,968 estimated buffer bytes, with 129,246,584 managed bytes reported.
+20-second exploration mean 1.21 ms, 1% low 78.4 FPS, 0.1% low 25.6 FPS.
+60/144 FPS airborne traversal again had zero loading frames; +/-Far Lands and
+1e12 rendering, command teleport, hidden-HUD screenshots, checkpoints, reload
+and GPU disposal passed. This ran concurrently with Release CPU regression
+checks, so these are not isolated benchmarks or a stutter-free guarantee.
+No subjective visual or physical-input playtesting was performed. The earlier
+runtime figures above describe the initial carver, not the final rerun.
+
+Final verification: Debug and Release builds passed with zero warnings/errors;
+final Release --self-test passed 265/265 checks. Debug --terrain-balance-test,
+--streaming-foundation-test and --infinite-integration-test passed; the final
+full suite also includes their checks. --infinite-graphics-test passed both
+before and after the carver allocation refinement. git diff --check passed.
+No publishing commands were run. Remaining manual work: assess ordinary cave
+finding, mountain/ocean aesthetics and long-session exploration on varied seeds.
+Logs: bin/terrain-before.log, terrain-final.log, terrain-final-regression.log,
+terrain-final-graphics.log, terrain-build.log and terrain-release-build.log.
+
+### Infinite water and shoreline refinement (generator 3) - 2026-11-15
+
+Diagnosis: the base density fill, fixed-level shared pond/river influence and
+independent lake fill competed. Rivers could cut as much as eight blocks of
+land before their own depth, and beds/shores used per-block hash mixtures.
+There was no unified beach rule for ordinary sea filling. Generator 3 now uses
+one InfiniteWaterTerrain geometry/material stage before caves and decoration.
+The old feature rules remain reachable only for version-1/2 compatibility.
+
+Water geometry:
+- Sea filling stays at Y=62 (the existing SeaLevel=63 exclusive convention).
+  Lowland sea floors deepen toward interiors based on distance from actual
+  land, with broad bed variation. A bounded bracket/bisection search avoids
+  coarse probe-distance bands becoming underwater steps. Beds stay at Y>=42;
+  water edits touch no more than a 16-block surface cap, not deep cave density.
+- Separate coordinate-owned pond/lake plans choose a containing sampled rim
+  and stable water level. Their centers deepen gradually, with irregular
+  margins and blended banks. High intruding land remains islands/peninsulas.
+  Protected bank rings prevent a lower river from cutting an elevated pond
+  open. Intersecting water profiles do not independently raise water levels.
+- Rivers use jittered lowland nodes, three curved route candidates and one
+  whole-link acceptance decision. The winning corridor is checked at roughly
+  three-block intervals across its width. A ridge rejects the whole link, not
+  isolated columns. River half-width is roughly 2.2-4.2 blocks, center depth
+  3 blocks, with four-block blended banks. Lowland routes can meet sea-level
+  water and one another; no full hydrology or new fluid behavior was added.
+
+Materials:
+- Gentle shallow shores/beaches favor sand. Deeper beds use spatially coherent
+  dirt/gravel patches (36-block noise scale), not per-voxel random mixtures.
+  Rivers favor sediment with occasional broad sand patches. Steep wet coasts
+  preserve stone. Exposed banks above beaches return to grass or desert sand.
+  Materials are applied before ores, structures and vegetation, so structures
+  and player edits cannot be overwritten by the shoreline painter.
+- Existing generated gravity-block support safeguards remain active.
+
+Performance and organization:
+- New Worlds/Streaming/InfiniteWaterTerrain.cs contains immutable plan records,
+  their bounded shared cache and a request-local geometry/material context.
+  No world-wide scans, persistent full-world masks or GPU changes were added.
+- Plan probes sample the exact same interpolated density field without making
+  whole remote chunks. Regression checks compare these heights with real tiles.
+  Coarse density columns are shared by planning and chunk generation. Hot
+  cache-hit paths avoid factory/loop closure allocations; deep cave wetness
+  probes bypass surface planning below the bounded excavation cap.
+- Per-generator limits: 256 plans, 8,192 scalar heights, 512 coarse density
+  columns, 128 raw terrain chunks for v3 (4 MiB raw payload), and the existing
+  64 cave masks. Working column/material maps belong only to the active request.
+  GPU residency, fog, rendering distance and finite-world generation unchanged.
+
+Compatibility: generator field advances to 3 for newly created Infinite worlds.
+The existing manifest/chunk schemas, compression, IDs and storage are unchanged.
+Existing v1/v2 worlds stay pinned to their version for saved AND unexplored
+chunks; there is no regeneration or automatic upgrade. Density arrays for v3
+are byte-identical to v2. The Far Lands frequencies, octave sequence and Java
+saturation/extrapolation remain unchanged.
+
+Files added: Worlds/Streaming/InfiniteWaterTerrain.cs,
+Testing/InfiniteWaterChecks.cs. Modified: Worlds/Streaming/BetaDensityGenerator.cs,
+Worlds/Streaming/InfiniteFeatures.cs, Testing/TerrainBalanceChecks.cs,
+Testing/PrototypeChecks.cs, Program.cs, and this summary. README not edited.
+
+Diagnostics: across flat 512x512 profile fixtures sampled every two blocks,
+seeds 173/-907/137 retained separate lake, pond and river water (these are wet
+column samples, not feature counts). Lake maximum depth=9; maximum river cut=5.
+A gradual coast's maximum adjacent floor step=2; deep sediment transitions
+were 0, 0, 1 over each tested 29-block interval. Broad one-block flooding is
+explicitly checked to become >=8 blocks deep away from shores. Natural basin
+probes on three seeds reached max depths 16,16,17; real pond/lake/river/sea
+profiles passed sampled containment, cap bounds and sediment support checks.
+
+The new tests cover reverse-order/chunk-edge profile and material consistency,
+no hill trenching, no deep-rock opening, rocky coasts, coherent patches, source
+containment, exact planning heights, full production determinism, generated
+sediment support, v3 snapshot roundtrips and v2 record compatibility. Existing
+version-pinning tests now save/load and compare every block for both v1 and v2.
+CLI: --infinite-water-test; all checks also join --self-test.
+
+Final verification: Debug and Release dotnet build passed with zero warnings or
+errors; final Release --self-test passed 268/268. The focused water suite passed
+all three check groups. Final --infinite-graphics-test passed on GTX 970 at
+1080p, including generation, exploration, negative/positive Far Lands and 1e12
+positions, F3, hidden-HUD screenshots, checkpoint/reload and GPU disposal.
+Scripted initial default residency: 625 chunks / 441 meshes in 32.07 s.
+20-second exploration: mean 0.71 ms, 1% low 453.1 FPS, 0.1% low 138.9 FPS;
+peak estimated renderer payload 132,520,752 bytes, managed sample 119,899,528
+bytes. These are estimates/samples, not actual driver VRAM or peak process RAM.
+Airborne 60/144 FPS traversals recorded zero loading frames. Graphics ran
+alongside CPU regression work; this is not a sustained isolated benchmark.
+
+Generation cost remains a limitation: same six complete Release chunks measured
+v2 387 ms / 12.7 MiB cumulative allocation, v3 1,473 ms / 20.5 MiB. This cold,
+partly scattered sample includes new regional route/basin planning. Caches and
+worker counts are bounded, but do not interpret stable short gameplay samples
+as proof that generation has no additional cost. No baseline-vs-final isolated
+long-session performance claim is made.
+
+Logs: bin/infinite-water-final.log, bin/water-final-regression.log,
+bin/water-final-graphics.log, bin/water-build.log, bin/water-release-build.log.
+No manual physical-input or subjective visual playtesting performed. Remaining
+manual checks: long river walks and confluences, beach widths and rocky shores,
+desert/forest transitions, and prolonged fast exploration over varied seeds.
+No publishing commands, distribution builds, dependencies, artwork, save schema
+changes, README edits or existing-world regeneration.
+
+### Fix cross-shaped underwater ridges and dry sea-level dirt - 2026-11-15
+
+Confirmed causes:
+- The four cardinal-only coast-distance rays raised the sea floor in narrow
+  north/south/east/west arms around small land features. Sediment painting then
+  capped that retained terrain with gravel. These were unintended generated
+  ridges, not intentional structures. Before-fix reproduction: seed 173, twelve
+  blocks from an isolated island, axial floor Y=56 versus diagonal Y=49.
+- Base surface painting required Y>=63 even though solid terrain at Y=62 is
+  above the existing sea surface. The dry-land material fallback returned that
+  inherited Dirt unchanged. Snow/vegetation placement consequently skipped it.
+
+Correction:
+- Replace ray probing with an exact 2D Euclidean shoreline distance field.
+  Build only requested 16x16 output tiles, using a 36-block halo and two linear
+  squared-distance passes. Test solid land at sea level rather than treating
+  floating overhangs as shores. Cache at most 64 tiles (64 KiB float payload),
+  pool the bounded temporary field, and retain existing generation workers.
+  Geometry stays deterministic across signed chunk boundaries and cache order.
+- Permit sky-exposed Grass at Y=62 in the v3 base painter. Restore dry exposed
+  Dirt to Grass in the shoreline fallback, preserving desert Sand, true wet
+  sediments, beaches and rocky shores. Lower soil and buried soil remain Dirt.
+- No density/cave/Far Lands algorithm, block ID, save layout or renderer changes.
+  This is a v3 generation bugfix: v1/v2 behavior remains pinned and unchanged.
+  Already saved terrain is preserved, so stored pillars/dirt are not rewritten.
+
+Files: Worlds/Streaming/InfiniteWaterTerrain.cs,
+Worlds/Streaming/BetaDensityGenerator.cs, Testing/InfiniteWaterChecks.cs,
+and this summary. Existing uncommitted work was retained; README not edited.
+
+Regression checks cover radial versus axial isolated-island bed heights on
+three seeds, exact distance against brute-force Euclidean values across signed
+chunk boundaries/cache reuse, floating overhang exclusion, dry Y=62 soil, and
+all existing water profiles/production/containment checks. Density comparison
+allows exactly the intended exposed Y=62 Dirt-to-Grass change; all other base
+block differences still fail. The old ray regression failed before the fix.
+
+Debug and Release builds passed with zero warnings/errors. Scripted Release
+DesktopGL check passed on GTX 970 at 1080p: default residency 625 chunks / 441
+meshes, initial preparation 42.13s; 20s exploration mean 0.76ms, 1% low 367.7 FPS,
+0.1% low 115.3 FPS, maximum estimated renderer buffer payload 136,428,336 bytes.
+Airborne 60/144 FPS checks recorded zero loading frames; exact Far Lands/1e12
+teleports, hidden-HUD screenshots, checkpoints, reload and GPU cleanup passed.
+These are short scripted samples concurrent with CPU tests, not isolated
+long-session performance results or measured driver VRAM. No physical-input
+or subjective visual playtesting was performed; no publishing commands run.
+
+Final full Release regression suite passed 270/270 checks, including the new
+island-ridge, exact-distance/seam and exposed soil cases. git diff --check passed.
+Logs: bin/shore-before.log (reproduced failure), bin/shore-after.log,
+bin/shore-regression.log, bin/shore-graphics.log, bin/shore-fix-build.log,
+bin/shore-release-build.log. Saved-world edits were not performed.
+
+### Creative fast-flight toggle - 2026-11-15
+
+Left or Right Ctrl now toggles the existing 3x Creative flight speed on each
+fresh key press. Holding/releasing Ctrl leaves the selected speed unchanged.
+Input is sampled once per gameplay frame, outside fixed simulation steps; no
+Survival sprinting was added. Inventory/pause Ctrl presses do not toggle flight.
+New world entry and leaving Creative reset to normal flight. No save changes.
+
+Added Input/CreativeFlightInput.cs; integrated it in Core/Game1.cs and updated
+the Controls menu in UI/MenuInformation.cs. Extended GameplayRefinementChecks
+for both Ctrl keys, held/released input, repeated presses at 30/60/144/360 input
+updates per second, mode transitions and reset. Existing movement tests verify
+normal/boosted speed, collision and unchanged Survival walking/crouching.
+Build passed with zero warnings/errors; --gameplay-refinement-test passed 10/10;
+git diff --check passed. No physical-input playtest, publishing or README edits.
+
+### Double-tap Creative flight / gravity - 2026-11-15
+
+Two distinct Space presses within 0.3 seconds toggle Creative flight. Disabling
+flight reuses ordinary gravity, terminal velocity, ground movement, jumping,
+crouching, edge protection, stepping, swimming and collisions. Creative mode
+itself remains active, retaining invulnerability and all inventory/mining rules.
+Flight changes reset movement/fall tracking; the second tap does not queue a
+normal jump. Held Space cannot repeatedly toggle. Menus cancel a pending tap;
+world entry resets to flight. Flight state is transient, not new save data.
+Ctrl's speed toggle only affects actual flight. Walking Creative gets normal
+walking bob and movement audio. Existing Survival movement remains unchanged.
+
+Updated Input/CreativeFlightInput.cs, Core/Game1.cs, Gameplay/Player.cs,
+Gameplay/ViewBobbing.cs, Audio/PlayerAudio.cs, UI/MenuInformation.cs and
+Testing/GameplayRefinementChecks.cs. Tests cover double/slow/held taps, menus,
+mode reset, gravity matching Survival, safe landing, jumping, resumed hovering
+and 30/60/144/360-update timing. Build: zero warnings/errors; gameplay refinement
+10/10, collision 5/5, audio 6/6 and bobbing checks passed. Missing-asset audio
+warning is the expected fixture. No physical-input playtest, publishing or
+README edits; the full expensive world-generation suite was not repeated.
+
+### Infinite-first world creation and Legacy option - 2026-11-15
+
+World creation now defaults to Infinite and offers only Infinite and
+Legacy (1024x1024), in that order. Labels no longer show Infinite's height or
+the Legacy world's 128-block vertical dimension. Legacy still uses the existing
+WorldSize.Large identity and actual 1024x128x1024 dimensions.
+
+WorldSizes.Creatable is separate from the unchanged four-entry finite-size
+registry. Existing Small, Normal, Large and Massive enum IDs, dimension
+validation, older height migration, generation and serializers are unchanged.
+World listing/loading is not filtered by the new creation list. Existing Large
+worlds also display the Legacy label; player-assigned world names are untouched.
+No existing world was resized, regenerated, renamed or deleted.
+
+Updated Worlds/WorldSize.cs and UI/MenuController.cs. Added focused checks in
+Testing/WorldRuleChecks.cs for defaults, exact labels, both wrapping directions,
+all supported saved dimensions and persistent IDs. Updated Infinite/Mob/UI/world-
+rule graphics fixtures to the two-option selector; the isolated Massive notice
+artwork regression remains tested without exposing Massive as a creation option.
+Mob creation assertions now use Legacy's established 512-mob shared budget.
+The world-rule graphics harness uses a bounded 120-second elapsed deadline,
+rather than the old rendered-frame count, for creating the larger Legacy world.
+The interface graphics check's stale hold-Ctrl assumptions were updated to the
+already-implemented Ctrl toggle; no gameplay behavior changed for this task.
+
+Build passed with zero warnings/errors; --world-rules-test passed all 4 groups.
+README not edited. No save-format changes or publishing commands.
+
+Final graphical verification passed: --world-rules-graphics-test created and
+loaded the actual Legacy world, and --interface-graphics-test passed creation
+navigation, menu rendering, existing interfaces and all eight F1/F2 regression
+captures. Screenshot-failure messages are expected negative fixtures. No manual
+physical-input playtest was performed. git diff --check passed. Logs are
+bin/creation-sizes-build.log, creation-sizes-tests.log,
+creation-sizes-graphics.log and creation-sizes-interface.log.

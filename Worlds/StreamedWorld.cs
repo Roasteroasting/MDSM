@@ -40,10 +40,10 @@ public sealed partial class World
     {var p=new Microsoft.Xna.Framework.Vector3(chunk.OriginX-OriginX,0,chunk.OriginZ-OriginZ);return new(p,p+new Microsoft.Xna.Framework.Vector3(16,128,16));}
     public Microsoft.Xna.Framework.BoundingBox LocalBounds(Point3 cell)
     {var p=LocalPosition(cell);return new(p,p+Microsoft.Xna.Framework.Vector3.One);}
-    internal static World OpenStreamed(int seed,string regions,int loaded=12,int render=10,int simulation=6)
+    internal static World OpenStreamed(int seed,string regions,int loaded=12,int render=10,int simulation=6,int generatorVersion=BetaDensityGenerator.Version)
     {
         var world=new World(seed,WorldSize.Infinite,false);
-        world.ChunkLifecycle=new StreamingChunks(seed,regions,loaded,render,simulation);
+        world.ChunkLifecycle=new StreamingChunks(seed,regions,loaded,render,simulation,generatorVersion);
         world._slots=new Chunk[world.ChunkSlotCapacity];
         world.ChunkLifecycle.Published=world.Publish;
         world.ChunkLifecycle.Retiring=world.Retire;

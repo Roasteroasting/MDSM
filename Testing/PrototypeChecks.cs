@@ -153,6 +153,8 @@ internal static class PrototypeChecks
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,LandscapeUpdateChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,ExplorationChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,StreamingFoundationChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,TerrainBalanceChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteWaterChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteIntegrationChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,AudioChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SupportDropChecks.All));

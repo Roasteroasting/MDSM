@@ -24,6 +24,10 @@ public sealed class Player
     public GameSettings Settings { get; set; } = new();
     internal SoundEvents Sounds { get; set; }
     public bool Creative => Settings.GameMode == GameMode.Creative;
+    private bool _flightEnabled=true;
+    public bool Flying=>Creative&&_flightEnabled;
+    internal void SetFlightEnabled(bool enabled)
+    {if(_flightEnabled==enabled)return;_flightEnabled=enabled;StopMovement();Breath.Reset();}
     public BreathMeter Breath { get; } = new();
     public BurningStatus Burning {get;}=new();
     private bool _wasCreative, _canStep;
@@ -100,12 +104,12 @@ public sealed class Player
 
         Crouching = crouch;
         float dt = MathF.Min(elapsedSeconds, 0.1f);
-        if (_wasCreative != Creative) { StopMovement(); Breath.Reset(); _wasCreative = Creative; }
+        if (_wasCreative != Creative) { StopMovement(); Breath.Reset();if(!Creative)_flightEnabled=true; _wasCreative = Creative; }
         // Doors, settling blocks and restored saves can change collision beneath a
         // stationary body. Resolve that overlap before directional motion, including
         // gravity-free flight. A directional sweep must start outside solid geometry.
         if (!ResolvePenetration(world)) return;
-        if (Creative)
+        if (Flying)
         {
             Crouching = false;
             movement.Y = 0; if (movement.LengthSquared() > 1) movement.Normalize();
@@ -200,7 +204,7 @@ public sealed class Player
 
         Vector3 next = Position;
         if (axis == 0) next.X = Math.Clamp(next.X + amount, world.LocalMinX + HalfWidth, world.LocalMaxX - HalfWidth);
-        else if (axis == 1) next.Y = Creative ? Math.Clamp(next.Y + amount, 0, World.Height + 16) : next.Y + amount;
+        else if (axis == 1) next.Y = Flying ? Math.Clamp(next.Y + amount, 0, World.Height + 16) : next.Y + amount;
         else next.Z = Math.Clamp(next.Z + amount, world.LocalMinZ + HalfWidth, world.LocalMaxZ - HalfWidth);
 
         BoundingBox bounds = BoundsAt(next);
@@ -233,7 +237,7 @@ public sealed class Player
         // from below. Apply those existing world limits before searching for an exit.
         if (!float.IsFinite(Position.X) || !float.IsFinite(Position.Y) || !float.IsFinite(Position.Z)) return false;
         Vector3 bounded = new(Math.Clamp(Position.X, world.LocalMinX + HalfWidth, world.LocalMaxX - HalfWidth),
-            Creative ? Math.Clamp(Position.Y, 0, World.Height + 16) : Position.Y,
+            Flying ? Math.Clamp(Position.Y, 0, World.Height + 16) : Position.Y,
             Math.Clamp(Position.Z, world.LocalMinZ + HalfWidth, world.LocalMaxZ - HalfWidth));
         if (bounded != Position) { Position = bounded; StopMovement(); }
         if (!world.IntersectsSolid(Bounds)) return true;

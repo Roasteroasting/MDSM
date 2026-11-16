@@ -7,7 +7,19 @@ public enum WorldSize { Small, Normal, Large, Massive, Infinite }
 
 public static class WorldSizes
 {
-    public static string Dimensions(this WorldSize size)=>size==WorldSize.Infinite?"INFINITE / 128 HIGH":$"{size} / {size.Width()} X 128 X {size.Width()}";
+    public static string Dimensions(this WorldSize size)=>size switch
+    {
+        WorldSize.Infinite=>"Infinite",
+        WorldSize.Large=>"Legacy (1024x1024)",
+        _=>$"{size} / {size.Width()} X 128 X {size.Width()}"
+    };
+    public const WorldSize DefaultCreation=WorldSize.Infinite;
+    public static System.Collections.Generic.IReadOnlyList<WorldSize> Creatable {get;}=Array.AsReadOnly(new[]{WorldSize.Infinite,WorldSize.Large});
+    internal static WorldSize NextCreation(WorldSize current,int direction)
+    {
+        for(int i=0;i<Creatable.Count;i++)if(Creatable[i]==current)return Creatable[(i+direction+Creatable.Count)%Creatable.Count];
+        return DefaultCreation;
+    }
     public static System.Collections.Generic.IReadOnlyList<WorldSize> Finite {get;}=Array.AsReadOnly(new[]{WorldSize.Small,WorldSize.Normal,WorldSize.Large,WorldSize.Massive});
     public static int Width(this WorldSize size) => size switch
     {

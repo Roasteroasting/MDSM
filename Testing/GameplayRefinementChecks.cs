@@ -151,7 +151,56 @@ internal static class GameplayRefinementChecks
     }
     public static void Flight()
     {
+        var toggle=new MDSM.Input.CreativeFlightInput();
+        var released=default(Microsoft.Xna.Framework.Input.KeyboardState);
+        var left=new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.LeftControl);
+        var right=new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.RightControl);
+        foreach(int rate in new[]{30,60,144,360})
+        {
+            toggle.Reset();toggle.Update(left,released,true);
+            for(int i=0;i<rate;i++)toggle.Update(left,left,true);
+            toggle.Update(released,left,true);
+            Check(toggle.FastFlight,"Ctrl hold/release undid the fast-flight toggle.");
+            toggle.Update(right,released,true);Check(!toggle.FastFlight,"Second Ctrl press did not restore normal flight.");
+            toggle.Update(released,right,true);toggle.Update(right,released,true);Check(toggle.FastFlight,"Right Ctrl could not enable faster flight.");
+            toggle.Update(released,right,false);toggle.Update(left,released,false);
+            Check(!toggle.FastFlight,"Survival enabled or retained fast flight.");
+            toggle.Update(released,left,true);Check(!toggle.FastFlight,"Returning to Creative restored stale boost.");
+        }
+        toggle.Update(left,released,true);toggle.Reset();Check(!toggle.FastFlight,"World-entry reset retained fast flight.");
+        var space=new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.Space);
+        foreach(int rate in new[]{30,60,144,360})
+        {
+            toggle.Reset();toggle.Update(space,released,true,1.0/rate);
+            for(int i=0;i<rate;i++)toggle.Update(space,space,true,1.0/rate);
+            Check(toggle.Flying,"Holding Space toggled flight.");
+            toggle.Update(released,space,true,.01);toggle.Update(space,released,true,.01);
+            Check(toggle.Flying,"Slow second tap was treated as a double tap.");
+            toggle.Update(released,space,true,.05);toggle.Update(space,released,true,.05);
+            Check(!toggle.Flying&&toggle.FlightChanged,"Double Space did not disable Creative flight.");
+            toggle.Update(released,space,true,.05);toggle.Update(space,released,true,.05);
+            toggle.Update(released,space,true,.05);toggle.Update(space,released,true,.05);
+            Check(toggle.Flying,"Second double Space did not restore flight.");
+            toggle.Reset();toggle.Update(space,released,true);toggle.CancelSpaceTap();toggle.Update(space,released,true,.01);
+            Check(toggle.Flying,"Space taps crossed a menu transition.");
+            toggle.Update(space,released,false,.01);Check(toggle.Flying&&!toggle.FastFlight,"Survival changed Creative flight state.");
+        }
         var world=PigChecks.Flat();float last=0;
+        foreach(int rate in new[]{30,60,144,360})
+        {
+            var groundedCreative=new Player(new(10,25,10)){Settings=new(){GameMode=GameMode.Creative}};
+            var survival=new Player(new(10,25,10));groundedCreative.SetFlightEnabled(false);
+            for(int i=0;i<rate;i++){groundedCreative.Update(world,Vector3.Zero,false,1f/rate,fastFlight:true);survival.Update(world,Vector3.Zero,false,1f/rate);}
+            Check(groundedCreative.Position==survival.Position&&groundedCreative.Creative&&!groundedCreative.Flying,"Creative gravity differs from Survival or changes game mode.");
+            Check(groundedCreative.Health==20,"Creative gravity enabled fall damage.");
+            for(int i=0;i<rate;i++)groundedCreative.Update(world,Vector3.Zero,false,1f/rate);
+            Check(groundedCreative.Grounded&&groundedCreative.Health==20,"Creative landing applied fall damage or failed to settle.");
+            float floor=groundedCreative.Position.Y;groundedCreative.Update(world,Vector3.UnitX,true,1f/rate);
+            Check(groundedCreative.Position.Y>floor,"Grounded Creative could not jump.");
+            groundedCreative.SetFlightEnabled(true);float y=groundedCreative.Position.Y;
+            for(int i=0;i<rate;i++)groundedCreative.Update(world,Vector3.Zero,false,1f/rate);
+            Check(groundedCreative.Position.Y==y,"Restoring flight retained gravity or falling velocity.");
+        }
         foreach(int fps in new[]{30,60,144,360})
         {
             var player=new Player(new(20,5,20)){Settings=new(){GameMode=GameMode.Creative}};
@@ -164,7 +213,7 @@ internal static class GameplayRefinementChecks
             float travel=Player.MoveSpeed*Player.CreativeFlightBoostMultiplier;
             Check(Math.Abs(fast.Position.X-20-travel)<.003f && Math.Abs(fast.Position.Y-5-travel)<.003f,"Boosted flight depends on frame rate or misses vertical movement.");
             float x=fast.Position.X;fast.Update(world,Vector3.UnitX,false,1f/fps);
-            Check(Math.Abs(fast.Position.X-x-Player.MoveSpeed/fps)<.0001f,"Flight boost remained after releasing Ctrl.");
+            Check(Math.Abs(fast.Position.X-x-Player.MoveSpeed/fps)<.0001f,"Disabling flight boost did not restore default speed.");
             foreach(bool crouch in new[]{false,true})
             {
                 var normal=new Player(new(10,1,10));var control=new Player(new(10,1,10));

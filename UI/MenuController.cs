@@ -40,7 +40,7 @@ internal sealed class MenuController : IDisposable
     internal string CurrentMessage=>_message;
     public string NameText { get; private set; } = "";
     public string SeedText { get; private set; } = "";
-    public WorldSize SelectedSize { get; private set; } = WorldSize.Normal;
+    public WorldSize SelectedSize { get; private set; } = WorldSizes.DefaultCreation;
     public bool SelectedCheats { get; private set; }
     public Difficulty SelectedDifficulty { get; private set; } = Difficulty.Normal;
     public GameMode SelectedMode { get; private set; } = GameMode.Survival;
@@ -116,7 +116,7 @@ internal sealed class MenuController : IDisposable
         {
             NameText = "";
             SeedText = "";
-            SelectedSize = WorldSize.Normal;
+            SelectedSize = WorldSizes.DefaultCreation;
             SelectedCheats = false; SelectedDifficulty = Difficulty.Normal; SelectedMode = GameMode.Survival;
         }
         if (screen == GameState.WorldRename) NameText = ManagedWorld.Name;
@@ -328,7 +328,7 @@ internal sealed class MenuController : IDisposable
 
     private bool IsTextField => (_screen == GameState.WorldCreation && _focus < 2)
         || (_screen == GameState.WorldRename && _focus == 0);
-    private void CycleSize(int direction) => SelectedSize = (WorldSize)(((int)SelectedSize + direction + 5) % 5);
+    private void CycleSize(int direction) => SelectedSize = WorldSizes.NextCreation(SelectedSize,direction);
     private void CycleCreationOption(int option,int direction)
     {
         if(option==0)SelectedCheats=!SelectedCheats;

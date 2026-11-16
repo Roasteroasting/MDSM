@@ -61,7 +61,7 @@ internal static class InfiniteGraphicsChecks
             if(_stage==0)
             {
                 Console.WriteLine("Live Infinite GPU adapter: "+GraphicsAdapter.DefaultAdapter.Description);
-                Call("SetState",GameState.WorldCreation);Press(Keys.Tab);Press(Keys.Tab);Press(Keys.Right);Press(Keys.Right);Press(Keys.Right);
+                Call("SetState",GameState.WorldCreation);Press(Keys.Tab);Press(Keys.Tab);Press(Keys.Right);Press(Keys.Right);
                 var menu=Field<MenuController>("_menu");Require(menu.SelectedSize==WorldSize.Infinite,"Infinite cannot be selected through real creation input.");
                 typeof(MenuController).GetProperty(nameof(MenuController.NameText)).SetValue(menu,"Infinite graphics");typeof(MenuController).GetProperty(nameof(MenuController.SeedText)).SetValue(menu,"173");
                 typeof(MenuController).GetProperty(nameof(MenuController.SelectedCheats)).SetValue(menu,true);typeof(MenuController).GetProperty(nameof(MenuController.SelectedMode)).SetValue(menu,GameMode.Creative);

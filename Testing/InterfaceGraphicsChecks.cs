@@ -98,13 +98,16 @@ internal static class InterfaceGraphicsChecks
                     if(pixels[y*320+x].R>200 && pixels[y*320+x].G>160 && pixels[y*320+x].B<180)count++;
                 return count;
             }
-            Require(GoldPixels()==0,"Notice rendered for Large.");Press(Keys.Right);
+            Require(GoldPixels()==0,"Notice rendered for Legacy.");
+            // Retain the old notice artwork regression through an isolated
+            // fixture; Massive is no longer reachable through creation input.
+            typeof(MenuController).GetProperty(nameof(MenuController.SelectedSize)).SetValue(Menu,WorldSize.Massive);
             Require(Menu.SelectedSize==WorldSize.Massive && GoldPixels()>500,"Massive notice text failed to render at 320x240.");
             using(var image=File.Create(Path.Combine(AppContext.BaseDirectory,"massive-notice.png")))target.SaveAsPng(image,320,240);
             GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=Field<MDSM.Rendering.TextureAtlas>("_atlas").Texture;
             Press(Keys.Left);Require(GoldPixels()==0,"Notice did not hide immediately after leaving Massive.");
             Call("SetState",GameState.MainMenu);Input();
-            Console.WriteLine("PASS: Massive-only performance notice renders/hides immediately through real size input at 320x240.");
+            Console.WriteLine("PASS: Legacy/Infinite creation navigation and isolated Massive notice rendering at 320x240.");
         }
         private void VerifyCrafting()
         {

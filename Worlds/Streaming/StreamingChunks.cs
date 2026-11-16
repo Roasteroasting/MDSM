@@ -21,7 +21,7 @@ internal sealed record ChunkSnapshot(ChunkAddress Address,int GeneratorVersion,b
         using var reader=new BinaryReader(new MemoryStream(bytes,false));
         int schema=reader.ReadInt32();if(schema is <1 or >2)throw new InvalidDataException("Unsupported chunk snapshot schema.");
         int generator=reader.ReadInt32();var address=new ChunkAddress(reader.ReadInt64(),reader.ReadInt64());int length=reader.ReadInt32();
-        if(generator!=BetaDensityGenerator.Version || address!=expected || length!=32768 || bytes.Length<28+length)throw new InvalidDataException("Invalid chunk identity/generator/length.");
+        if(generator is <1 or >BetaDensityGenerator.Version || address!=expected || length!=32768 || bytes.Length<28+length)throw new InvalidDataException("Invalid chunk identity/generator/length.");
         byte[] blocks=reader.ReadBytes(length);foreach(byte block in blocks)if(!Worlds.Blocks.IsDefined((BlockType)block))throw new InvalidDataException("Invalid chunk block ID.");
         byte[] metadata=null;if(schema==2){int count=reader.ReadInt32();if(count<0 || count>ChunkRegionStore.MaximumPayload-32768 || reader.BaseStream.Length-reader.BaseStream.Position!=count)throw new InvalidDataException("Invalid chunk metadata length.");if(count>0)metadata=reader.ReadBytes(count);}
         if(reader.BaseStream.Position!=reader.BaseStream.Length)throw new InvalidDataException("Unexpected chunk snapshot tail.");
@@ -75,11 +75,12 @@ internal sealed class StreamingChunks : IAsyncDisposable
     internal Action<Resident> Resuming;
     internal ChunkAddress? Center=>_center;
     internal void Dirty(ChunkAddress address){Owner();if(_loaded.TryGetValue(address,out var chunk))chunk.Revision++;}
-    internal StreamingChunks(int seed,string directory,int loaded=12,int render=10,int simulation=6)
+    internal int GeneratorVersion=>_generator.GenerationVersion;
+    internal StreamingChunks(int seed,string directory,int loaded=12,int render=10,int simulation=6,int generatorVersion=BetaDensityGenerator.Version)
     {
         if(loaded is <2 or >32 || render<0 || simulation<0 || render>loaded-2 || simulation>loaded-2)throw new ArgumentOutOfRangeException(nameof(loaded));
         LoadedDistance=loaded;RenderDistance=render;SimulationDistance=simulation;
-        _store=new(directory);_generator=new(seed);
+        _store=new(directory);_generator=new(seed,generatorVersion);
     }
     private void Owner(){if(Environment.CurrentManagedThreadId!=_owner)throw new InvalidOperationException("Chunk lifecycle must run on its owner thread.");ObjectDisposedException.ThrowIf(_disposed,this);}
     internal bool TryGet(ChunkAddress address,out Resident resident){Owner();return _loaded.TryGetValue(address,out resident);}
@@ -160,7 +161,12 @@ internal sealed class StreamingChunks : IAsyncDisposable
             async Task<ChunkSnapshot> Load()
             {
                 byte[] stored=await _store.ReadAsync(address,token).ConfigureAwait(false);
-                if(stored!=null)return ChunkSnapshot.Decode(address,stored);
+                if(stored!=null)
+                {
+                    var snapshot=ChunkSnapshot.Decode(address,stored);
+                    if(snapshot.GeneratorVersion!=GeneratorVersion)throw new InvalidDataException("Chunk generator does not match world manifest.");
+                    return snapshot;
+                }
                 return await Task.Run(()=>_generator.GenerateComplete(address,token),token).ConfigureAwait(false);
             }
             _loading.Add(new(address,Load(),cancellation));
@@ -169,12 +175,12 @@ internal sealed class StreamingChunks : IAsyncDisposable
     private bool IsSaving(Resident chunk){foreach(var job in _saving)if(job.Chunk==chunk)return true;return false;}
     private bool IsLoading(ChunkAddress address){foreach(var job in _loading)if(job.Address==address)return true;return false;}
     private void Save(Resident chunk)
-    {byte[] blocks=(byte[])chunk.Blocks.Clone();byte[] metadata=chunk.FrozenMetadata??Capturing?.Invoke(chunk)??chunk.Metadata;long revision=chunk.Revision;_saving.Add(new(chunk,revision,_store.WriteAsync(chunk.Address,new ChunkSnapshot(chunk.Address,BetaDensityGenerator.Version,blocks,Metadata:metadata).Encode())));}
+    {byte[] blocks=(byte[])chunk.Blocks.Clone();byte[] metadata=chunk.FrozenMetadata??Capturing?.Invoke(chunk)??chunk.Metadata;long revision=chunk.Revision;_saving.Add(new(chunk,revision,_store.WriteAsync(chunk.Address,new ChunkSnapshot(chunk.Address,GeneratorVersion,blocks,Metadata:metadata).Encode())));}
     internal List<ChunkSnapshot> CaptureCheckpoint()
     {
         Owner();_checkpointBusy=true;
         var snapshots=new List<ChunkSnapshot>(_loaded.Count);
-        foreach(var r in _loaded.Values)snapshots.Add(new(r.Address,BetaDensityGenerator.Version,(byte[])r.Blocks.Clone(),Metadata:r.FrozenMetadata??Capturing?.Invoke(r)??r.Metadata));
+        foreach(var r in _loaded.Values)snapshots.Add(new(r.Address,GeneratorVersion,(byte[])r.Blocks.Clone(),Metadata:r.FrozenMetadata??Capturing?.Invoke(r)??r.Metadata));
         return snapshots;
     }
     internal async Task WriteCheckpointAsync(List<ChunkSnapshot> snapshots)
@@ -196,7 +202,7 @@ internal sealed class StreamingChunks : IAsyncDisposable
         var pending=new List<(ChunkAddress Address,byte[] Bytes)>();
         foreach(var chunk in _loaded.Values)if(!checkpointIsCurrent&&(chunk.Dirty || Capturing!=null))
         {
-            try{pending.Add((chunk.Address,new ChunkSnapshot(chunk.Address,BetaDensityGenerator.Version,(byte[])chunk.Blocks.Clone(),Metadata:chunk.FrozenMetadata??Capturing?.Invoke(chunk)??chunk.Metadata).Encode()));}catch(Exception e){errors.Add(e);}
+            try{pending.Add((chunk.Address,new ChunkSnapshot(chunk.Address,GeneratorVersion,(byte[])chunk.Blocks.Clone(),Metadata:chunk.FrozenMetadata??Capturing?.Invoke(chunk)??chunk.Metadata).Encode()));}catch(Exception e){errors.Add(e);}
         }
         try
         {

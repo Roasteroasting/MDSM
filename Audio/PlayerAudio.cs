@@ -22,7 +22,7 @@ public sealed class PlayerAudio
             _swimDistance+=delta.Length();
             if(_swimDistance>=.85f){_swimDistance%=.85f;world.Sounds?.Local(SoundKind.Swim);}
         }
-        else if(!player.Creative && !player.IsDead)
+        else if(!player.Flying && !player.IsDead)
         {
             _peak=Math.Max(_peak,player.Position.Y);
             if(player.Grounded && !_grounded && _peak-player.Position.Y>.15f)

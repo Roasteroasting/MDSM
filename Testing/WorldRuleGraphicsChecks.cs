@@ -26,7 +26,8 @@ internal static class WorldRuleGraphicsChecks
     {
         private const BindingFlags Private=BindingFlags.Instance|BindingFlags.NonPublic;
         private readonly string _root;
-        private int _stage,_frames;
+        private int _stage;
+        private readonly System.Diagnostics.Stopwatch _creationWait=new();
         public bool Verified{get;private set;}
         public CheckGame(string root):base(new WorldSaveManager(Path.Combine(root,"Worlds")),new SettingsStore(Path.Combine(root,"settings.json")))
         {_root=root;Content.RootDirectory=Path.Combine(AppContext.BaseDirectory,"Content");}
@@ -54,15 +55,17 @@ internal static class WorldRuleGraphicsChecks
                 Press(Keys.Left);Check(!Menu.SelectedCheats,"Cheats keyboard toggle did not turn off.");
                 Click(WorldCreationLayout.Option(GraphicsDevice.Viewport,1));Click(WorldCreationLayout.Option(GraphicsDevice.Viewport,2));
                 Check(Menu.SelectedDifficulty==Difficulty.Hard && Menu.SelectedMode==GameMode.Creative,"New creation options did not cycle.");
-                Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Massive,"Size fixture failed.");
+                Check(Menu.SelectedSize==WorldSize.Infinite,"Creation did not default to Infinite.");
+                Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Large,"Legacy size fixture failed.");
                 foreach(Point size in new[]{new Point(320,240),new(640,480),new(1280,720)})Snapshot(size,"world-rules-creation");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Infinite,"Infinite world selection failed.");
-                Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Small,"Small world selection failed.");
-                Click(WorldCreationLayout.Button(GraphicsDevice.Viewport,0));Check(Field<object>("_creation")!=null,"Create button failed to start generation.");_stage=1;
+                Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Large,"Legacy selection wrap failed.");
+                Click(WorldCreationLayout.Button(GraphicsDevice.Viewport,0));Check(Field<object>("_creation")!=null,"Create button failed to start generation.");_creationWait.Restart();_stage=1;
             }
             else if(_stage==1)
             {
-                Input();if(++_frames>3600)throw new InvalidOperationException("World creation did not complete.");
+                Input();if(_creationWait.Elapsed.TotalSeconds>120)throw new InvalidOperationException("World creation did not complete: "+Menu.CurrentMessage);
+                if(State!=GameState.Playing)System.Threading.Thread.Sleep(1);
                 if(State==GameState.Playing)
                 {
                     Check(!Session.World.AllowCheats && Session.World.SavedDifficulty==Difficulty.Hard && Session.World.SavedGameMode==GameMode.Creative

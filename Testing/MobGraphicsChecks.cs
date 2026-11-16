@@ -100,16 +100,17 @@ internal static class MobGraphicsChecks
                     Call("SetState", GameState.WorldCreation); MenuController menu = Field<MenuController>("_menu");
                     foreach (char ch in "Mixed new world") menu.TextInput(ch);
                     Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch); Press(Keys.Tab);
-                    foreach (WorldSize size in new[] { WorldSize.Large, WorldSize.Massive, WorldSize.Infinite, WorldSize.Small, WorldSize.Normal })
-                    { Press(Keys.Right); Require(menu.SelectedSize == size, "Create menu did not cycle all five sizes."); }
+                    Require(menu.SelectedSize==WorldSize.Infinite,"Create menu did not default to Infinite.");
+                    foreach (WorldSize size in new[] { WorldSize.Large, WorldSize.Infinite, WorldSize.Large, WorldSize.Infinite })
+                    { Press(Keys.Right); Require(menu.SelectedSize == size, "Create menu did not restrict selection to Legacy and Infinite."); }
                     Press(Keys.Left);
                     Call("HandleMenuAction", MenuAction.CreateWorld);
                     var creationWait = System.Diagnostics.Stopwatch.StartNew();
                     while (State != GameState.Playing && creationWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
-                    Require(State == GameState.Playing && Session.Mobs.Entities.Count == 32 && Session.Mobs.Entities.Select(m => m.Species).Distinct().Count() == 4,
+                    Require(State == GameState.Playing && Session.Mobs.Entities.Count == 512 && Session.Mobs.Entities.Select(m => m.Species).Distinct().Count() == 4,
                         "Creation menu did not use one shared mixed population budget.");
                     Require(Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty), "New-world menu granted starting items.");
-                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 32, "Initial save omitted mixed species.");
+                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 512, "Initial save omitted mixed species.");
                     string reloadId = Session.Id; Vector3 reloadPosition = Session.Player.Position;
                     Session.World.SetBlock(15, 125, 15, BlockType.WhiteWool);
                     Call("HandleMenuAction", MenuAction.SaveAndReturn);
@@ -118,7 +119,7 @@ internal static class MobGraphicsChecks
                     var loadingWait = System.Diagnostics.Stopwatch.StartNew();
                     while (State != GameState.Playing && loadingWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
                     Require(State == GameState.Playing && Session.Id == reloadId && Session.Player.Position == reloadPosition
-                        && Session.World.GetBlock(15, 125, 15) == BlockType.WhiteWool && Session.Mobs.Entities.Count == 32
+                        && Session.World.GetBlock(15, 125, 15) == BlockType.WhiteWool && Session.Mobs.Entities.Count == 512
                         && Field<WorldRenderer>("_renderer").PendingChunks == 0, "Background loading/nearby mesh preparation changed saved state or entered an incomplete world.");
                     break;
                 case 11: Verified = true; Exit(); break;

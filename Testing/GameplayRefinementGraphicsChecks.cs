@@ -88,9 +88,10 @@ internal static class GameplayRefinementGraphicsChecks
         {
             (Keys:new[]{Keys.Space},Multiplier:1f),
             (Keys:new[]{Keys.Space,Keys.LeftControl},Multiplier:Player.CreativeFlightBoostMultiplier),
-            (Keys:new[]{Keys.Space,Keys.RightControl},Multiplier:Player.CreativeFlightBoostMultiplier),
+            (Keys:new[]{Keys.Space,Keys.RightControl},Multiplier:1f),
             (Keys:new[]{Keys.Space,Keys.LeftControl,Keys.RightControl},Multiplier:Player.CreativeFlightBoostMultiplier),
-            (Keys:new[]{Keys.Space},Multiplier:1f)
+            (Keys:new[]{Keys.Space},Multiplier:Player.CreativeFlightBoostMultiplier),
+            (Keys:new[]{Keys.Space,Keys.RightControl},Multiplier:1f)
         })
         {
             float before=live.Player.Position.Y;
