@@ -116,6 +116,7 @@ internal sealed class MajorLakeGenerator
                 int depth = 1 + (int)MathF.Round((plan.Depth - 1) * MathF.Sin(t * MathHelper.PiOver2));
                 deepest = Math.Max(deepest, depth); int bed = waterY - depth;
                 _world.SetGeneratedBlock(wx, bed, wz, variation % 9 == 0 ? BlockType.Sand : variation % 3 == 0 ? BlockType.Dirt : BlockType.Gravel);
+                SandstoneSurface.UnderSand(_world,wx,bed,wz);
                 for (int y = bed + 1; y <= Math.Max(top, waterY); y++)
                     _world.SetGeneratedBlock(wx, y, wz, y <= waterY ? BlockType.WaterSource : BlockType.Air);
                 plan.Modified[i] = true;
@@ -130,6 +131,7 @@ internal sealed class MajorLakeGenerator
                 BlockType surface = distance <= 2 ? variation % 6 < 2 ? BlockType.Sand : variation % 6 == 2 ? BlockType.Gravel
                     : variation % 6 == 3 ? BlockType.Dirt : BlockType.Grass : BlockType.Grass;
                 _world.SetGeneratedBlock(wx, bank, wz, surface);
+                SandstoneSurface.UnderSand(_world,wx,bank,wz);
                 if (surface == BlockType.Grass)
                     for (int y = bank - 1; y >= bank - _terrain.DirtDepth(wx, wz); y--) _world.SetGeneratedBlock(wx, y, wz, BlockType.Dirt);
                 plan.Modified[i] = true;

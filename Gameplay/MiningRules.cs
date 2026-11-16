@@ -11,6 +11,7 @@ public static class MiningRules
     public static MiningProfile Profile(BlockType block) => block switch
     {
         BlockType.Stone => new(MiningCategory.Mineral,1.5f,ToolTier.Wood),
+        BlockType.Sandstone => new(MiningCategory.Mineral,.8f,ToolTier.Wood),
         BlockType.Cobblestone or BlockType.CobblestoneSlab or BlockType.CobblestoneStairs or BlockType.DoubleCobblestoneSlab or BlockType.MossyCobblestone => new(MiningCategory.Mineral,2,ToolTier.Wood),
         BlockType.CoalOre => new(MiningCategory.Mineral,3,ToolTier.Wood),
         BlockType.IronOre => new(MiningCategory.Mineral,3,ToolTier.Stone),
@@ -29,7 +30,7 @@ public static class MiningRules
         if(Blocks.Get(block).MiningSeconds<0)return -1;
         MiningProfile profile=Profile(block);ItemDefinition tool=Items.Get(held.Item);
         if(block==BlockType.Leaves && tool.Tool==ToolKind.Shears)return .10f;
-        if(profile.Category==MiningCategory.Mineral && tool.Tool!=ToolKind.Pickaxe)return -1;
+        if(profile.Category==MiningCategory.Mineral && tool.Tool!=ToolKind.Pickaxe && block!=BlockType.Sandstone)return -1;
         float efficiency=Suitable(profile,tool)?tool.Efficiency:1;
         float penalty=profile.Required>tool.Tier && profile.Category==MiningCategory.Mineral?4:1;
         // Preserve tier ratios and hand hardness; appropriate tools now take 1.6x longer.

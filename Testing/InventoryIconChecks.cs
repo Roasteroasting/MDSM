@@ -33,6 +33,22 @@ internal static class InventoryIconChecks
         C(Math.Abs(slab-.5f)<.00001,"Slab icon lost half-height geometry.");
         builder.AppendInventoryItem(BlockType.Door);C(builder.Vertices.Take(builder.VertexCount).Max(v=>v.Position.Y)-builder.Vertices.Take(builder.VertexCount).Min(v=>v.Position.Y)>1.9f,"Door lost a half.");
         builder.AppendInventoryItem(BlockType.Torch);C(builder.VertexCount==36,"Torch is not a six-face cuboid.");
+        foreach(var block in new[]{BlockType.Fence,BlockType.FenceGate})
+        {
+            builder.AppendInventoryItem(block);var canonical=builder.Vertices.Take(builder.VertexCount).ToArray();
+            var held=new ViewModelGeometry();held.Build(new(ViewModelKind.Cube,Items.FromBlock(block)));
+            C(held.VertexCount==canonical.Length&&canonical.Length==(block==BlockType.Fence?108:180),"Held fence/gate uses obsolete geometry.");
+            for(int i=0;i<canonical.Length;i++)
+            {
+                Vector3 expected=(canonical[i].Position-Vector3.One*.5f)*(MDSM.Entities.DroppedItem.Radius*2)*3.5f;
+                C(Vector3.Distance(held.Vertices[i].Position,expected)<.00001f&&held.Vertices[i].TextureCoordinate==canonical[i].TextureCoordinate&&held.Vertices[i].Color==canonical[i].Color,"Held geometry/UVs differ from corrected inventory model.");
+            }
+            var drops=new ChunkMeshBuilder();drops.AppendItem(BlockType.Stone,Vector3.Zero);
+            var prefix=drops.Vertices.Take(drops.VertexCount).ToArray();int first=drops.VertexCount;
+            drops.AppendItem(block,new Vector3(5,6,7));
+            C(drops.VertexCount==first+canonical.Length&&drops.Vertices.Take(first).SequenceEqual(prefix),"Appending fence/gate destroyed earlier dropped-item geometry.");
+            for(int i=0;i<canonical.Length;i++)C(Vector3.Distance(drops.Vertices[first+i].Position,new Vector3(5,6,7)+(canonical[i].Position-Vector3.One*.5f)*(MDSM.Entities.DroppedItem.Radius*2))<.00001f,"Dropped fence/gate scale or anchor changed.");
+        }
     }
     private static void C(bool v,string message){if(!v)throw new InvalidOperationException(message);}
     private sealed class Preview:Game
@@ -89,6 +105,18 @@ internal static class InventoryIconChecks
             _batch.End();
             using var shot=File.Create(Path.Combine(AppContext.BaseDirectory,"inventory-icons-preview.png"));
             var pixels=new Color[960*900];GraphicsDevice.GetBackBufferData(pixels);using var texture=new Texture2D(GraphicsDevice,960,900);texture.SetData(pixels);texture.SaveAsPng(shot,960,900);
+            using(var held=new FirstPersonRenderer(GraphicsDevice,_atlas))
+            foreach(var block in new[]{BlockType.Fence,BlockType.FenceGate})
+            {
+                GraphicsDevice.Clear(Color.CornflowerBlue);var inventory=new Inventory();inventory.SetSlot(0,new(Items.FromBlock(block),1));
+                // The preview's explicit readback/SetData calls can disturb the
+                // native DesktopGL binding; restore it before testing rendering.
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=_atlas.Texture;
+                held.Draw(MDSM.Core.GameState.Playing,inventory);GraphicsDevice.GetBackBufferData(pixels);
+                C(pixels.Count(p=>p!=Color.CornflowerBlue)>100,"Held fence/gate was not visible in the real first-person pass.");
+                C(pixels.Count(p=>p.R>70&&p.R>p.B*1.2f&&p.G>p.B*1.1f)>100,"Held fence/gate lost its wood texture.");
+                texture.SetData(pixels);using var file=File.Create(Path.Combine(AppContext.BaseDirectory,block==BlockType.Fence?"held-fence.png":"held-gate.png"));texture.SaveAsPng(file,960,900);
+            }
             Console.WriteLine("PASS: Cached block/special geometry, alpha borders, 2D classification and render-target/state restoration; preview saved.");Exit();
         }
         protected override void Dispose(bool disposing)

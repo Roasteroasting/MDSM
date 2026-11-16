@@ -36,6 +36,13 @@ internal sealed class ChunkMeshBuilder
         float size = DroppedItem.Radius * 2;
         Vector3 origin = center - new Vector3(DroppedItem.Radius);
         BlockDefinition definition = Blocks.Get(block);
+        if(definition.Shape is BlockShape.Fence or BlockShape.Gate)
+        {
+            int first=VertexCount;
+            AppendFenceItem(definition.Shape);
+            for(int i=first;i<VertexCount;i++)Vertices[i].Position=origin+Vertices[i].Position*size;
+            return;
+        }
         if(definition.Shape==BlockShape.Cactus)AppendCactus(origin,size,null);
         else if (definition.Shape is BlockShape.Cross or BlockShape.Torch)
         {
@@ -49,15 +56,9 @@ internal sealed class ChunkMeshBuilder
             if(definition.Shape==BlockShape.Sign){Box(new(0,.5f,.4375f),new(1,1,.5625f),7,true);Box(new(.4375f,0,.4375f),new(.5625f,.5f,.5625f),7,true);}
             else {Box(Vector3.Zero,new(1,.5f,1),definition.SideTile,true);if(definition.Shape==BlockShape.Stairs)Box(new(0,.5f,0),new(1,1,.5f),definition.SideTile,true);}
         }
-        else if(definition.Shape is BlockShape.Fence or BlockShape.Gate or BlockShape.Door)
+        else if(definition.Shape==BlockShape.Door)
         {
-            if(definition.Shape==BlockShape.Door)
-            {DoorBox(origin,origin+new Vector3(1,1,.1875f)*size,definition.SideTile,Vector3.Right);DoorBox(origin+Vector3.Up*size,origin+new Vector3(1,2,.1875f)*size,42,Vector3.Right);}
-            else
-            {
-                Box(new(.375f,0,.375f),new(.625f,1,.625f),7);
-                Box(new(0,.3f,.4375f),new(1,.45f,.5625f),7);Box(new(0,.7f,.4375f),new(1,.85f,.5625f),7);
-            }
+            DoorBox(origin,origin+new Vector3(1,1,.1875f)*size,definition.SideTile,Vector3.Right);DoorBox(origin+Vector3.Up*size,origin+new Vector3(1,2,.1875f)*size,42,Vector3.Right);
         }
         else if(definition.Shape==BlockShape.Pane)
         {
@@ -90,6 +91,15 @@ internal sealed class ChunkMeshBuilder
         Clear();var shape=Blocks.Get(block).Shape;
         if(shape==BlockShape.Torch){AppendTorch(null,new(0,0,0));return;}
         if(shape==BlockShape.Bed){AppendBed(new(0,0,0),0,false);AppendBed(new(0,0,-1),0,true);return;}
+        if(shape is BlockShape.Fence or BlockShape.Gate){AppendFenceItem(shape);return;}
+        AppendItem(block,Vector3.Zero);
+        float height=shape==BlockShape.Farmland?15f/16:shape==BlockShape.Snow?1f/8:1;
+        for(int i=0;i<VertexCount;i++)Vertices[i].Position=Vertices[i].Position/(DroppedItem.Radius*2)*new Vector3(1,height,1);
+        if(shape==BlockShape.Stairs)for(int i=0;i<VertexCount;i++)Vertices[i].Position=Vector3.Transform(Vertices[i].Position,Matrix.CreateRotationY(MathHelper.Pi));
+    }
+
+    private void AppendFenceItem(BlockShape shape)
+    {
         if(shape==BlockShape.Fence)
         {
             Box(new(.375f,0,.375f),new(.625f,1,.625f));
@@ -101,19 +111,9 @@ internal sealed class ChunkMeshBuilder
             Box(new(.125f,.3f,.4375f),new(.875f,.45f,.5625f));Box(new(.125f,.7f,.4375f),new(.875f,.85f,.5625f));
             Box(new(.4375f,.3f,.4375f),new(.5625f,.85f,.5625f));return;
         }
-        AppendItem(block,Vector3.Zero);
-        float height=shape==BlockShape.Farmland?15f/16:shape==BlockShape.Snow?1f/8:1;
-        for(int i=0;i<VertexCount;i++)Vertices[i].Position=Vertices[i].Position/(DroppedItem.Radius*2)*new Vector3(1,height,1);
-        if(shape==BlockShape.Stairs)for(int i=0;i<VertexCount;i++)Vertices[i].Position=Vector3.Transform(Vertices[i].Position,Matrix.CreateRotationY(MathHelper.Pi));
         void Box(Vector3 min,Vector3 max)
         {
-            foreach(var face in Faces)
-            {
-                Vector3 extent=max-min;
-                float u=face.Normal.X==0?min.X:min.Z,v=face.Normal.Y==0?1-max.Y:min.Z;
-                var region=new Rectangle((int)(u*16),(int)(v*16),Math.Max(1,(int)((face.Normal.X==0?extent.X:extent.Z)*16)),Math.Max(1,(int)((face.Normal.Y==0?extent.Y:extent.Z)*16)));
-                AddQuad(min+face.A*extent,min+face.B*extent,min+face.C*extent,min+face.D*extent,7,new Color(new Vector3(face.Shade)),false,region);
-            }
+            AppendWoodBox(min,max,Vector3.Zero);
         }
     }
 
@@ -208,6 +208,20 @@ internal sealed class ChunkMeshBuilder
                     for(int i=0;i<count;i++)DoorBox(boxes[i].Min,boxes[i].Max,definition.SideTile,hinge);
                     continue;
                 }
+                if(definition.Shape==BlockShape.Gate)
+                {
+                    var bounds=boxes[0];Vector3 extent=bounds.Max-bounds.Min;bool thinX=extent.X<extent.Z;
+                    Box(new(0,0,0),new(.125f,1,1));Box(new(.875f,0,0),new(1,1,1));
+                    Box(new(.125f,.3f,0),new(.875f,.45f,1));Box(new(.125f,.7f,0),new(.875f,.85f,1));Box(new(.4375f,.3f,0),new(.5625f,.85f,1));
+                    continue;
+                    void Box(Vector3 min,Vector3 max)
+                    {
+                        if(thinX){min=new(min.Z,min.Y,min.X);max=new(max.Z,max.Y,max.X);}
+                        AppendWoodBox(bounds.Min+min*extent,bounds.Min+max*extent,position);
+                    }
+                }
+                if(definition.Shape==BlockShape.Fence)
+                {for(int i=0;i<count;i++)AppendWoodBox(boxes[i].Min,boxes[i].Max,position);continue;}
                 for(int i=0;i<count;i++)foreach(Face face in Faces)
                 {
                     if(definition.Shape==BlockShape.Snow)
@@ -371,6 +385,19 @@ internal sealed class ChunkMeshBuilder
         }
     }
 
+    private void AppendWoodBox(Vector3 min,Vector3 max,Vector3 origin)
+    {
+        Vector3 size=max-min,localMin=min-origin,localMax=max-origin;
+        foreach(var face in Faces)
+        {
+            float u=face.Normal.X>0?1-localMax.Z:face.Normal.X<0?localMin.Z:face.Normal.Z<0?1-localMax.X:localMin.X;
+            float v=face.Normal.Y==0?1-localMax.Y:face.Normal.Y>0?localMin.Z:1-localMax.Z;
+            int width=Math.Max(1,(int)MathF.Round((face.Normal.X==0?size.X:size.Z)*16));
+            int height=Math.Max(1,(int)MathF.Round((face.Normal.Y==0?size.Y:size.Z)*16));
+            var region=new Rectangle(Math.Clamp((int)MathF.Round(u*16),0,16-width),Math.Clamp((int)MathF.Round(v*16),0,16-height),width,height);
+            AddQuad(min+face.A*size,min+face.B*size,min+face.C*size,min+face.D*size,7,new Color(new Vector3(face.Shade)),false,region);
+        }
+    }
     private void DoorBox(Vector3 min,Vector3 max,int tile,Vector3 hinge)
     {
         Vector3 size=max-min;bool thinX=size.X<size.Z;

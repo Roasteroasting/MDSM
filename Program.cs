@@ -1,4 +1,8 @@
-if(args.Length==1 && args[0]=="--inventory-icon-test")
+if(args.Length==1 && args[0]=="--sandstone-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.SandstoneChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--inventory-icon-test")
 {
     System.Environment.ExitCode=MDSM.Testing.InventoryIconChecks.Run();
 }

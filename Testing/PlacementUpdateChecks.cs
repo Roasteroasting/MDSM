@@ -21,6 +21,7 @@ internal static class PlacementUpdateChecks
     private static readonly Point3[] Directions={new(-1,0,0),new(1,0,0),new(0,0,-1),new(0,0,1)};
     private static void Check(bool value,string message){if(!value)throw new InvalidOperationException(message);}
     public static readonly (string Name,Action Check)[] All={
+        ("Placed Fence/Gate plank UVs, connections and all open/closed directions",FenceUvs),
         ("Decorative underside rejection without consumption and valid Torch attachments",Placement),
         ("Glass Pane registry, offset recipe, stacks, Creative catalog and drops",RecipeAndDrops),
         ("All 16 pane connections, shape collision/raycast, mesh UVs and internal faces",PaneShapes),
@@ -49,6 +50,45 @@ internal static class PlacementUpdateChecks
                 && inventory.Selected.Count==(creative?4:3),"Valid floor decoration failed.");world.SetBlock(20,1,20,BlockType.Air);
         }
         TorchChecks.PlacementAndPersistence();TorchChecks.Uvs();
+    }
+    public static void FenceUvs()
+    {
+        var world=PigChecks.Flat();var mesh=new ChunkMeshBuilder();Point3 cell=new(20,1,20);
+        var directions=new[]{new Point3(-1,0,0),new(1,0,0),new(0,0,-1),new(0,0,1)};
+        for(int mask=0;mask<16;mask++)
+        {
+            world.SetBlock(cell.X,cell.Y,cell.Z,BlockType.Fence);
+            for(int i=0;i<4;i++)world.SetBlock(cell.X+directions[i].X,cell.Y,cell.Z+directions[i].Z,(mask&(1<<i))!=0?BlockType.Stone:BlockType.Air);
+            mesh.Build(world,world.GetChunk(1,1));Verify();
+            Check(WoodVertices()==(1+2*BitOperations.PopCount((uint)mask))*36,"Fence lost connected rails.");
+        }
+        foreach(var d in directions)world.SetBlock(cell.X+d.X,cell.Y,cell.Z+d.Z,BlockType.Air);
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];
+        for(byte facing=0;facing<4;facing++)foreach(bool open in new[]{false,true})
+        {
+            world.SetBlock(cell.X,cell.Y,cell.Z,BlockType.Air);
+            Check(world.PlaceStructure(cell,BlockType.FenceGate,facing,new(0,-1,0),new Player(new(30,1,30)).Bounds),"Gate UV fixture failed.");
+            if(open)world.Toggle(cell);mesh.Build(world,world.GetChunk(1,1));Verify();
+            Check(WoodVertices()==180,"Gate lost posts or rails.");
+            int count=world.BlockBoxes(cell,boxes,true);
+            Check(open?count==0:count==1&&boxes[0].Max.Y==2.5f,"Gate collision barrier changed.");
+        }
+        int WoodVertices()=>mesh.Vertices.Take(mesh.VertexCount).Count(IsWood);
+        bool IsWood(VertexPositionColorTexture v)=>(int)(v.TextureCoordinate.Y*16)*16+(int)(v.TextureCoordinate.X*16)==7;
+        void Verify()
+        {
+            var vertices=mesh.Vertices.Take(mesh.VertexCount).Where(IsWood).ToArray();Check(vertices.Length>0,"World fence/gate still uses sprite artwork.");
+            for(int i=0;i<vertices.Length;i+=6)
+            {
+                var quad=vertices.Skip(i).Take(6).ToArray();Vector3 min=quad[0].Position,max=min;
+                foreach(var v in quad){min=Vector3.Min(min,v.Position);max=Vector3.Max(max,v.Position);}
+                Vector3 extent=max-min;
+                float width=extent.X<.00001f?extent.Z:extent.X,height=extent.Y<.00001f?extent.Z:extent.Y;
+                float u=(quad.Max(v=>v.TextureCoordinate.X)-quad.Min(v=>v.TextureCoordinate.X))*256;
+                float vspan=(quad.Max(v=>v.TextureCoordinate.Y)-quad.Min(v=>v.TextureCoordinate.Y))*256;
+                Check(u==Math.Max(1,MathF.Round(width*16))-1&&vspan==Math.Max(1,MathF.Round(height*16))-1,"Fence/Gate face stretches a full tile over narrow geometry.");
+            }
+        }
     }
     public static void RecipeAndDrops()
     {

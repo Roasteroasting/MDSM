@@ -303,12 +303,21 @@ internal sealed class InfiniteWaterTerrain(int seed,Func<long,long,int> surface,
         // Water only edits a bounded surface cap. Cave wetness probes below
         // that cap must not initialize expensive remote surface feature plans.
         if(y<top-16)return original;
-        if(top is <45 or >88)return y>=top-2 && original is (BlockType.Grass or BlockType.Dirt) && _climate.At(x,z)==Biome.Desert?BlockType.Sand:original;
+        if(top is <45 or >88)
+        {
+            if(_climate.At(x,z)!=Biome.Desert)return original;
+            if(raw(x,top,z) is not (BlockType.Grass or BlockType.Dirt))return original;
+            if(y>=top-2 && original is (BlockType.Grass or BlockType.Dirt))return BlockType.Sand;
+            return y<top-2 && original is (BlockType.Stone or BlockType.Dirt)
+                ?SandstoneSurface.Layer(seed,x,z,top-3-y)?BlockType.Sandstone:BlockType.Stone:original;
+        }
         WaterColumn c=Column(x,z);
         if(y>c.Floor && y<=Math.Max(c.Original,c.Level))return y<=c.Level?BlockType.WaterSource:BlockType.Air;
-        if(y>c.Floor||y<c.Floor-2||!Blocks.IsSolid(original))return original;
+        if(y>c.Floor||y<c.Floor-5||!Blocks.IsSolid(original))return original;
         if(!_materials.TryGetValue((x,z),out var material))
         {material=Material(x,z,c);_materials.Add((x,z),material);}
+        if(y<c.Floor-2)return material==BlockType.Sand && original is (BlockType.Stone or BlockType.Dirt)
+            ?SandstoneSurface.Layer(seed,x,z,c.Floor-3-y)?BlockType.Sandstone:BlockType.Stone:original;
         if(y==c.Floor)return material;
         return material==BlockType.Stone?BlockType.Stone:material==BlockType.Sand?BlockType.Sand:BlockType.Dirt;
     }

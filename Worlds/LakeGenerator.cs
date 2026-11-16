@@ -176,6 +176,7 @@ public sealed class LakeGenerator
                 int depth = Math.Min(maximumDepth, 1 + (distance[z*width+x]-1) / (maximumDepth > 3 ? 2 : 1));
                 int bed = waterY-depth;
                 world.SetGeneratedBlock(wx,bed,wz, variation%7 == 0 ? BlockType.Sand : variation%3 == 0 ? BlockType.Dirt : BlockType.Gravel);
+                SandstoneSurface.UnderSand(world,wx,bed,wz);
                 for (int y = bed+1; y <= top; y++) world.SetGeneratedBlock(wx,y,wz,y <= waterY ? BlockType.WaterSource : BlockType.Air);
             }
             else if (distance[z*width+x]<=-2)
@@ -188,6 +189,7 @@ public sealed class LakeGenerator
                     : variation%5 == 2 ? BlockType.Gravel : variation%5 == 3 ? BlockType.Dirt : BlockType.Grass);
                 if (world.GetBlock(wx,bank,wz) == BlockType.Grass)
                     for (int y = bank-1; y >= bank-_terrain.DirtDepth(wx,wz); y--) world.SetGeneratedBlock(wx,y,wz,BlockType.Dirt);
+                SandstoneSurface.UnderSand(world,wx,bank,wz);
             }
         }
         occupied.Add(bounds); return true;

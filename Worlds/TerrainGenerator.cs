@@ -93,7 +93,7 @@ public sealed class TerrainGenerator
                 || Math.Abs(heights[Math.Min(world.Depth-1,worldZ+1)*world.Width+worldX]-heights[Math.Max(0,worldZ-1)*world.Width+worldX])>=4);
             for (int y = 0; y <= top; y++)
                 chunk.SetBlock(x, y, z, y == 0 ? BlockType.Bedrock : rock?BlockType.Stone:desert && y>=top-3?BlockType.Sand:y == top ? BlockType.Grass
-                    : y >= top - dirt ? BlockType.Dirt : BlockType.Stone);
+                    : desert?(SandstoneSurface.Layer(_seed,worldX,worldZ,top-4-y)?BlockType.Sandstone:BlockType.Stone):y >= top - dirt ? BlockType.Dirt : BlockType.Stone);
         }
     }
 
