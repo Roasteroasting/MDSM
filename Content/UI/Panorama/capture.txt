@@ -1,0 +1,1 @@
+Generated in-game panorama. Seed 1866941503; finite Normal; spawn {X:256.5 Y:95.01 Z:256.5}; eye {X:220.5 Y:99 Z:240.5}; 1024x1024 per face; direction order -Z,+X,+Z,-X,+Y,-Y. Regenerate with --capture-menu-panorama from the project root.

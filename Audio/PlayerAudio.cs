@@ -10,13 +10,21 @@ public sealed class PlayerAudio
     private bool _initialized,_water,_grounded;
     private Vector3 _feet;
     private float _distance,_swimDistance,_peak;
-    public void Reset()=>_initialized=false;
-    public void Update(Player player,World world)
+    private double _waterSoundCooldown;
+    public void Reset(){_initialized=false;_waterSoundCooldown=0;}
+    public void Update(Player player,World world,float elapsedSeconds=1f/120)
     {
         bool water=Water.Intersects(world,player.Bounds);
+        if(float.IsFinite(elapsedSeconds)&&elapsedSeconds>0)_waterSoundCooldown=Math.Max(0,_waterSoundCooldown-elapsedSeconds);
         Vector3 delta=player.Position-_feet;
-        if(!_initialized || delta.LengthSquared()>9){_initialized=true;_distance=_swimDistance=0;_peak=player.Position.Y;Remember();return;}
-        if(water!=_water){world.Sounds?.Local(water?SoundKind.WaterEnter:SoundKind.WaterExit);_distance=_swimDistance=0;}
+        if(!_initialized || delta.LengthSquared()>9){_initialized=true;_distance=_swimDistance=0;_peak=player.Position.Y;_waterSoundCooldown=0;Remember();return;}
+        if(water!=_water)
+        {
+            // Surface strokes remain audible, but never produce a splash pair
+            // on every crossing. This clock advances only with active gameplay.
+            if(_waterSoundCooldown<=.00001){world.Sounds?.Local(water?SoundKind.WaterEnter:SoundKind.WaterExit,.35f);_waterSoundCooldown=1;}
+            _distance=_swimDistance=0;
+        }
         if(water)
         {
             _swimDistance+=delta.Length();

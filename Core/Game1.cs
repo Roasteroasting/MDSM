@@ -304,7 +304,7 @@ public class Game1 : Game
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
                 _creativeFlight.FastFlight);
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
-            _playerAudio.Update(player,world);
+            _playerAudio.Update(player,world,dt);
             _pendingJump = false;
             camera.Position = player.EyePosition;
             if (player.IsDead) { EnterDeath(); return; }

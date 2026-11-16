@@ -100,8 +100,10 @@ internal static class InterfaceChecks
                 Require(lines.All(line => line.Length * 6 * MenuInformation.Scale(viewport) <= area.Width - 16), "Information text leaves the panel.");
                 string text = string.Join(' ', lines);
                 if (state == GameState.About)
-                    foreach (string phrase in new[] { "MDSM", "Mojang Don't Sue Me", "Minecraft Indev-inspired finite-world voxel sandbox game.",
-                        "Mark Arnold (Roasteroasting)", "codebase was written using GPT-6.1 Sol", "game textures were AI-generated." })
+                    foreach (string phrase in new[] { "MDSM (Mojang Don't Sue Me)", "Beta era of Minecraft's history", "continous active development",
+                        "Mark Arnold", "Rusty or Roasteroasting on Github", "GPT-6.1 with heavy human oversight and direction",
+                        "some block textures and all item textures were drawn by hand", "other block textures were AI-generated",
+                        "placeholder art that I aim to replace in the future." })
                         Require(text.Contains(phrase, StringComparison.Ordinal), "About acknowledgement is missing: " + phrase);
                 else
                     foreach (string phrase in new[] { "W / A / S / D", "Mouse movement", "Left mouse (hold)", "Right mouse", "Space - Jump",

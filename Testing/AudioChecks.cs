@@ -187,6 +187,22 @@ internal static class AudioChecks
         var stuck=new Player(new(20.7f,1,20.5f));var observer=new PlayerAudio();observer.Update(stuck,wall.World);
         for(int tick=0;tick<120;tick++){stuck.Update(wall.World,Vector3.Right,false,1f/120);observer.Update(stuck,wall.World);}
         Check(Count(wall.Sounds,SoundKind.Step)==0,"Keyboard against a wall made footsteps.");
+        var surface=Session();
+        for(int y=1;y<=5;y++)for(int z=10;z<=20;z++)for(int x=10;x<=90;x++)surface.World.SetGeneratedBlock(x,y,z,BlockType.WaterSource);
+        foreach(int fps in new[]{30,60,144,360})
+        {
+            var bobber=new Player(new(15.5f,1,15.5f));var audio=new PlayerAudio();audio.Update(bobber,surface.World);surface.Sounds.Clear();
+            for(int tick=0;tick<fps*20;tick++){bobber.Update(surface.World,Vector3.Right,false,1f/fps,swimUp:true);audio.Update(bobber,surface.World,1f/fps);}
+            var transitions=Drain(surface.Sounds).Where(e=>SoundCatalog.Groups[e.Group].Kind is SoundKind.WaterEnter or SoundKind.WaterExit).ToArray();
+            Check(transitions.Length>=8&&transitions.Length<=20&&transitions.All(e=>e.Gain==.35f),"Surface splashes became silent, too frequent, or too loud.");
+        }
+        var enter=new Player(new(9.5f,1,15.5f));var enterAudio=new PlayerAudio();enterAudio.Update(enter,surface.World);surface.Sounds.Clear();
+        for(int tick=0;tick<120;tick++){enter.Update(surface.World,Vector3.Right,false,1f/120);enterAudio.Update(enter,surface.World);}
+        var entry=Drain(surface.Sounds).Where(e=>SoundCatalog.Groups[e.Group].Kind==SoundKind.WaterEnter).ToArray();
+        Check(entry.Length==1&&entry[0].Gain==.35f,"Genuine water entry is missing or too loud.");
+        for(int tick=0;tick<240;tick++){enter.Update(surface.World,Vector3.Left,false,1f/120);enterAudio.Update(enter,surface.World);}
+        var exit=Drain(surface.Sounds).Where(e=>SoundCatalog.Groups[e.Group].Kind==SoundKind.WaterExit).ToArray();
+        Check(exit.Length==1&&exit[0].Gain==.35f,"Genuine water exit is missing or too loud.");
     }
     public static void Settings()
     {

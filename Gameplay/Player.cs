@@ -32,6 +32,8 @@ public sealed class Player
     public BurningStatus Burning {get;}=new();
     private bool _wasCreative, _canStep;
     private float _verticalSpeed;
+    private bool _surfaceSwimming;
+    private bool _surfaceDiving;
     private Vector3 _horizontalSpeed;
     private readonly FallTracker _fall = new();
     private double _health;
@@ -92,7 +94,7 @@ public sealed class Player
     }
     public void StopMovement()
     {
-        _verticalSpeed = 0; _horizontalSpeed=Vector3.Zero; Grounded = false; Crouching = false; _canStep=false; _fall.Reset(Position.Y);
+        _verticalSpeed = 0; _surfaceSwimming=false; _surfaceDiving=false; _horizontalSpeed=Vector3.Zero; Grounded = false; Crouching = false; _canStep=false; _fall.Reset(Position.Y);
     }
     public void StopCrouching() => Crouching = false;
 
@@ -130,6 +132,10 @@ public sealed class Player
             movement.Normalize();
 
         bool swimming = Water.Intersects(world, Bounds);
+        float surface=0, surfaceDisplacement=0;
+        bool surfaceStroke=(swimUp||jump)&&(swimming||(_surfaceSwimming&&!Grounded))&&TrySwimSurface(world,out surface);
+        _surfaceSwimming=surfaceStroke;
+        if(!surfaceStroke)_surfaceDiving=false;
         bool jumping = jump && Grounded && !swimming;
         bool protectEdge = Crouching && Grounded && !jumping && HasSupport(world, Position);
         if (jumping)
@@ -138,7 +144,42 @@ public sealed class Player
             Sounds?.Local(SoundKind.Jump);
         }
 
-        if (swimming)
+        if(surfaceStroke)
+        {
+            // Complete one stroke before pushing up again: simply touching water
+            // on the return cannot restart it. Airborne motion uses normal gravity.
+            _fall.Reset(Position.Y);
+            float offset=Position.Y-surface,initial=offset;
+            int strokes=Math.Max(1,(int)MathF.Ceiling(dt*240));float stepTime=dt/strokes;
+            for(int i=0;i<strokes;i++)
+            {
+                if(_surfaceDiving && offset<=-.28f)_surfaceDiving=false;
+                if(!_surfaceDiving && offset>=0)
+                {
+                    _surfaceDiving=true;
+                    // A deliberate swim into a low bank needs a stronger exit
+                    // stroke than bobbing in open water. Clearance is still swept
+                    // by ordinary movement collision, including overhead blocks.
+                    Vector3 ahead=Position+movement*.2f;
+                    if(movement.LengthSquared()>0 && world.IntersectsSolid(BoundsAt(ahead))
+                        && !world.IntersectsSolid(BoundsAt(ahead+Vector3.Up*1.2f)))
+                        _verticalSpeed=JumpSpeed;
+                }
+                if(!_surfaceDiving){_verticalSpeed=3.6f;offset+=_verticalSpeed*stepTime;}
+                else if(offset>=0)
+                {offset+=_verticalSpeed*stepTime-.5f*Gravity*stepTime*stepTime;_verticalSpeed-=Gravity*stepTime;}
+                else
+                {
+                    // Water brakes descent; the next stroke starts only after a
+                    // meaningful dip, rather than at the air/water contact boundary.
+                    float decay=MathF.Exp(-24*stepTime),relative=_verticalSpeed+.65f;
+                    offset+=-.65f*stepTime+relative*(1-decay)/24;
+                    _verticalSpeed=-.65f+relative*decay;
+                }
+            }
+            surfaceDisplacement=offset-initial;
+        }
+        else if (swimming)
         {
             _fall.Reset(Position.Y);
             _verticalSpeed = swimUp || jump ? 2.8f : MathF.Max(-2, _verticalSpeed * MathF.Exp(-3 * dt) - 4 * dt);
@@ -151,7 +192,7 @@ public sealed class Player
             Vector3 change=target-_horizontalSpeed;float acceleration=(swimming?12:Grounded?60:12)*dt;
             _horizontalSpeed+=change.LengthSquared()<=acceleration*acceleration?change:Vector3.Normalize(change)*acceleration;
         }
-        Vector3 displacement = _horizontalSpeed*dt + new Vector3(0, _verticalSpeed * dt, 0);
+        Vector3 displacement = _horizontalSpeed*dt + new Vector3(0, surfaceStroke ? surfaceDisplacement : _verticalSpeed * dt, 0);
         // Each step is narrower than a block, so fast falls cannot tunnel through terrain.
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.2f));
         Vector3 step = displacement / steps;
@@ -176,6 +217,21 @@ public sealed class Player
 
         if (!IsDead && Position.Y < -16)
             MoveToSpawn(world); // Existing void recovery grants no healing or new damage type.
+    }
+
+    private bool TrySwimSurface(World world,out float surface)
+    {
+        surface=float.NegativeInfinity;
+        var bounds=Bounds;
+        for(int x=(int)MathF.Floor(bounds.Min.X);x<=(int)MathF.Floor(bounds.Max.X);x++)
+        for(int z=(int)MathF.Floor(bounds.Min.Z);z<=(int)MathF.Floor(bounds.Max.Z);z++)
+        for(int y=(int)MathF.Floor(Position.Y-.45f);y<=(int)MathF.Floor(Position.Y+.6f);y++)
+        {
+            if(!Water.IsWater(world.GetBlock(world.OriginX+x,y,world.OriginZ+z))||Water.IsWater(world.GetBlock(world.OriginX+x,y+1,world.OriginZ+z)))continue;
+            float height=y+(Water.CornerHeight(world,x,y,z)+Water.CornerHeight(world,x+1,y,z)+Water.CornerHeight(world,x,y,z+1)+Water.CornerHeight(world,x+1,y,z+1))*.25f;
+            if(height>=Position.Y-.45f&&height<=Position.Y+.6f)surface=MathF.Max(surface,height);
+        }
+        return float.IsFinite(surface);
     }
 
     private static bool HasSupport(World world, Vector3 feet) => world.IntersectsSolid(new BoundingBox(

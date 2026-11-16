@@ -27,8 +27,9 @@ public sealed class Camera
     internal static Vector3 PrecisionOffset(Worlds.Streaming.WorldPosition eye,bool legacy)
         =>legacy?new((float)((double)(float)eye.X-eye.X),(float)((double)(float)eye.Y-eye.Y),(float)((double)(float)eye.Z-eye.Z)):Vector3.Zero;
 
+    internal float FieldOfView { get; set; } = 75;
     public Matrix Projection(float aspectRatio) =>
-        Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(75), aspectRatio, 0.05f, FarPlane);
+        Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(FieldOfView), aspectRatio, 0.05f, FarPlane);
 
     public void Look(int deltaX, int deltaY)
     {

@@ -34,6 +34,13 @@ internal static class InventoryLayout
     public static Rectangle Equipment(Viewport v,int slot,bool creative=false)=>creative?At(v,true,slot<2?53:107,slot%2==0?33:60,18,18):At(v,false,7,7+slot*18,18,18);
     public static Rectangle Browser(Viewport v)=>Panel(v,true);
     public static Rectangle BrowserSearch(Viewport v)=>At(v,true,80,32,89,11);
+    internal static Rectangle CreativeDelete(Viewport v)=>At(v,true,173,139,18,18);
+    internal static Rectangle BrowserTrack(Viewport v)
+    {
+        var track=At(v,true,174,45,12,112);
+        track.X=(int)MathF.Round((BrowserSlot(v,8).Right+Panel(v,true).Right-track.Width)/2f);
+        return track;
+    }
     public static int BrowserRows(Viewport v)=>5;
     public static Rectangle BrowserSlot(Viewport v,int slot)=>At(v,true,8+slot%9*18,45+slot/9*18,18,18);
     internal static Rectangle CreativeTab(Viewport v,bool items)=>At(v,true,170,items?2:162,24,29);
@@ -139,21 +146,28 @@ internal sealed class InventoryScreen : IDisposable
         bool right = mouse.RightButton == ButtonState.Pressed && previous.RightButton == ButtonState.Released;
         bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2;
         int rows=session.ActiveContainer?.Block==BlockType.Chest?session.ActiveContainer.SlotCount/9:0;
+        if(creative&&!_creativeItems&&(left||right)&&InventoryLayout.CreativeDelete(viewport).Contains(mouse.Position))
+        {
+            if(interaction.DeleteCursor())session.Sounds.Local(SoundKind.InventoryMove);
+            Message="";return;
+        }
         if(left && creative && (InventoryLayout.CreativeTab(viewport,true).Contains(mouse.Position)||InventoryLayout.CreativeTab(viewport,false).Contains(mouse.Position))){_creativeItems=InventoryLayout.CreativeTab(viewport,true).Contains(mouse.Position);SearchFocused=false;return;}
         if(left)SearchFocused=creative && _creativeItems && InventoryLayout.BrowserSearch(viewport).Contains(mouse.Position);
         if(creative && _creativeItems && InventoryLayout.BrowserSearch(viewport).Contains(mouse.Position))return;
         if (creative && _creativeItems && InventoryLayout.Browser(viewport).Contains(mouse.Position) && mouse.Y<InventoryLayout.Slot(viewport,0,true).Y)
         {
             int browserRows = InventoryLayout.BrowserRows(viewport);
-            var track=InventoryLayout.At(viewport,true,174,45,12,112);
+            var track=InventoryLayout.BrowserTrack(viewport);
             if(mouse.LeftButton==ButtonState.Released)_dragScroll=false;
             if(left&&track.Contains(mouse.Position))_dragScroll=true;
             if(_dragScroll){_creativeScroll=(int)Math.Round(Math.Clamp((mouse.Y-track.Y)/(double)Math.Max(1,track.Height),0,1)*Math.Max(0,(_filteredCount+8)/9-browserRows));return;}
             _creativeScroll = Math.Clamp(_creativeScroll - (mouse.ScrollWheelValue-previous.ScrollWheelValue)/120,0,Math.Max(0,(_filteredCount+8)/9-browserRows));
-            if (left) for (int slot=0;slot<browserRows*9;slot++)
+            if (left||right) for (int slot=0;slot<browserRows*9;slot++)
             {
                 int visible=_creativeScroll*9+slot;if(visible>=_filteredCount)break;int index=_filtered[visible];
                 if(!InventoryLayout.BrowserSlot(viewport,slot).Contains(mouse.Position))continue;
+                if(interaction.DeleteCursor()){session.Sounds.Local(SoundKind.InventoryMove);Message="";return;}
+                if(!left)return;
                 int granted=CreativeCatalog.Grant(interaction.Inventory,CatalogIcons[index].Item,shift);
                 if(granted>0)session.Sounds.Local(SoundKind.InventoryMove);
                 Message=granted==0?"INVENTORY FULL.":$"GRANTED {granted} {Items.Name(CatalogIcons[index].Item)}";
@@ -264,13 +278,13 @@ internal sealed class InventoryScreen : IDisposable
                 if(items)for(int y=0;y<3;y++)for(int x=0;x<3;x++)Fill(InventoryLayout.At(viewport,true,174+x*5,10+y*5,3,3),MdsmUiStyle.Ink);
                 else {Fill(InventoryLayout.At(viewport,true,176,169,12,15),MdsmUiStyle.Light);Fill(InventoryLayout.At(viewport,true,179,173,6,3),MdsmUiStyle.Accent);}
             }
-            var title=InventoryLayout.At(viewport,true,8,33,64,9);Text(_creativeItems?"ITEMS":"PACK",title.X,title.Y,_menuScale,MdsmUiStyle.Ink);
+            var title=InventoryLayout.At(viewport,true,8,34,64,9);Text(_creativeItems?"ITEMS":"PACK",title.X,title.Y,_menuScale,MdsmUiStyle.Ink);
         }
         else
         {
             MdsmUiStyle.Frame(_sprites,_pixel,panel,_menuScale);
             string title=container!=null?(container.Block==BlockType.Chest?(rows==6?"LARGE CHEST":"CHEST"):Blocks.Get(container.Block).Name):crafting.Width==3?"WORKBENCH":"PACK";
-            var heading=InventoryLayout.At(viewport,false,container==null&&crafting.Width==2?31:7,5,140,9,rows);Text(title,heading.X,heading.Y,_menuScale,MdsmUiStyle.Ink);
+            var heading=InventoryLayout.At(viewport,false,container==null&&crafting.Width==2?31:7,6,140,9,rows);Text(title,heading.X,heading.Y,_menuScale,MdsmUiStyle.Ink);
             if(container==null){var caption=InventoryLayout.At(viewport,false,crafting.Width==2?90:29,crafting.Width==2?17:6,80,8);if(crafting.Width==2)Text("ASSEMBLE",caption.X,caption.Y,_menuScale,MdsmUiStyle.Accent);MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.Arrow(viewport,crafting.Width),MdsmUiStyle.Accent);}
             else if(Smelting.Machine(container.Block))MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.At(viewport,false,79,35,24,17),MdsmUiStyle.Light);
             if(container!=null||crafting.Width==3){var captionPack=InventoryLayout.At(viewport,false,7,(rows>0?74+(rows-3)*18:73),100,8,rows);Text("INVENTORY",captionPack.X,captionPack.Y,_menuScale,MdsmUiStyle.Light);}
@@ -306,15 +320,28 @@ internal sealed class InventoryScreen : IDisposable
         if(creative)
         {
             // Both tabs show only real game data; no reference sprite decorations.
+            if(!_creativeItems)
+            {
+                Rectangle trash=InventoryLayout.CreativeDelete(viewport);int edge=_menuScale;
+                Fill(trash,new Color(23,13,12));
+                Fill(new(trash.X+edge,trash.Y+edge,trash.Width-edge,trash.Height-edge),new Color(140,63,39));
+                Fill(new(trash.X+edge,trash.Y+edge,trash.Width-edge*2,trash.Height-edge*2),new Color(67,17,5));
+                if(trash.Contains(mouse.Position))Fill(trash,Color.White*.15f);
+                for(int n=-3;n<=3;n++)
+                {
+                    Fill(new(trash.Center.X+n*edge,trash.Center.Y+n*edge,edge,edge),new Color(180,71,35));
+                    Fill(new(trash.Center.X+n*edge,trash.Center.Y-n*edge,edge,edge),new Color(180,71,35));
+                }
+            }
 
             if(_creativeItems)
             {
                 Rectangle search=InventoryLayout.BrowserSearch(viewport);Fill(search,SearchFocused?MdsmUiStyle.Light:MdsmUiStyle.Inset);
-                Text(PixelFont.Fit(SearchText.Length==0?"SEARCH...":SearchText.ToUpperInvariant(),Math.Max(1,(search.Width-4)/(6*_menuScale))),search.X+2,search.Y+2,_menuScale,Color.White);
+                Text(PixelFont.Fit(SearchText.Length==0?"SEARCH...":SearchText.ToUpperInvariant(),Math.Max(1,(search.Width-4*_menuScale)/(6*_menuScale))),search.X+2*_menuScale,search.Center.Y-7*_menuScale/2,_menuScale,Color.White);
                 int browserRows=InventoryLayout.BrowserRows(viewport);_creativeScroll=Math.Clamp(_creativeScroll,0,Math.Max(0,(_filteredCount+8)/9-browserRows));
-                var track=InventoryLayout.At(viewport,true,174,45,12,112);Fill(track,MdsmUiStyle.Inset);
+                var track=InventoryLayout.BrowserTrack(viewport);Fill(track,MdsmUiStyle.Inset);
                 int maxScroll=Math.Max(0,(_filteredCount+8)/9-browserRows);int thumbHeight=Math.Max(8,track.Height*browserRows/Math.Max(browserRows,(_filteredCount+8)/9));
-                Fill(new(track.X,track.Y+(maxScroll==0?0:(track.Height-thumbHeight)*_creativeScroll/maxScroll),track.Width,thumbHeight),MdsmUiStyle.Accent);
+                MdsmUiStyle.ScrollThumb(_sprites,_pixel,new(track.X,track.Y+(maxScroll==0?0:(track.Height-thumbHeight)*_creativeScroll/maxScroll),track.Width,thumbHeight),_menuScale);
                 for(int slot=0;slot<browserRows*9;slot++)
                 {
                     int visible=_creativeScroll*9+slot;var bounds=InventoryLayout.BrowserSlot(viewport,slot);

@@ -13,8 +13,20 @@ internal static class MdsmUiStyle
         Fill(r,Edge);Fill(new(r.X+scale,r.Y+scale,r.Width-2*scale,r.Height-2*scale),Panel);
         Fill(new(r.X+2*scale,r.Y+2*scale,r.Width-4*scale,scale),Light);
         Fill(new(r.X+2*scale,r.Bottom-3*scale,r.Width-4*scale,scale),Inset);
-        for(int x=r.X+5*scale;x<r.Right-5*scale;x+=12*scale)Fill(new(x,r.Y+4*scale,2*scale,scale),Light*.35f);
         Fill(new(r.X,r.Y,scale,scale),Color.Transparent);
+    }
+    internal static void ScrollThumb(SpriteBatch batch,Texture2D pixel,Rectangle r,int scale)
+    {
+        batch.Draw(pixel,r,Accent);
+        // Recessed grip ridges retain an even margin at every UI scale.
+        int inset=System.Math.Max(1,2*scale),gap=3*scale;
+        for(int y=r.Y+gap;y+2*scale<=r.Bottom-gap;y+=gap)
+        {
+            int width=r.Width-2*inset;
+            if(width<=2)break;
+            batch.Draw(pixel,new Rectangle(r.X+inset+1,y,width-2,2*scale),new Color(193,144,85));
+            batch.Draw(pixel,new Rectangle(r.X+inset,y+1,width,System.Math.Max(1,2*scale-2)),new Color(193,144,85));
+        }
     }
     internal static Texture2D Hotbar(GraphicsDevice device)
     {

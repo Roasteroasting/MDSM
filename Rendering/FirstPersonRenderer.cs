@@ -25,9 +25,11 @@ internal readonly record struct ViewModelSelection(ViewModelKind Kind, ItemId It
 
 internal static class ViewModelLayout
 {
-    // Leave the centered crosshair, hearts, and entire hotbar clear even in small windows.
+    // Items share the camera projection; HUD elements are composed afterward.
+    // The empty arm retains its separately framed presentation.
     public static Rectangle Bounds(Viewport viewport,bool arm=false)
     {
+        if(!arm)return viewport.Bounds;
         if(arm&&viewport.Width>=640)
         {
             int armWidth=(int)Math.Min(viewport.Width*.36f,viewport.Height*.66f),armHeight=(int)(viewport.Height*.42f);
@@ -38,8 +40,7 @@ internal static class ViewModelLayout
         bool besideHotbar = left > InventoryLayout.HotbarSlot(viewport, 8).Right + 8;
         int bottom = besideHotbar ? viewport.Height : InventoryLayout.HotbarSlot(viewport, 0).Top - 28;
         int height = Math.Max(1, (int)Math.Min(viewport.Height * 0.42f, bottom - viewport.Height * 0.4f));
-        // The empty arm reaches the right edge, while retaining the existing
-        // vertical anchor. Held items keep their original inset and framing.
+        // The empty arm reaches the right edge, retaining its vertical anchor.
         return new Rectangle(viewport.X + (arm?viewport.Width-width:left),
             viewport.Y + bottom - height, width, height);
     }
@@ -76,7 +77,12 @@ internal sealed class ViewModelGeometry
         else
         {
             if (!Items.TryGetBlock(selection.Item, out BlockType block)) return;
-            _builder.AppendItem(block, Vector3.Zero);
+            if(block==BlockType.Torch)
+            {
+                _builder.AppendInventoryItem(block);
+                for(int i=0;i<_builder.VertexCount;i++)_builder.Vertices[i].Position=(_builder.Vertices[i].Position-Vector3.One*.5f)*.25f;
+            }
+            else _builder.AppendItem(block, Vector3.Zero);
         }
         for (int i = 0; i < VertexCount; i++)
             Vertices[i].Position *= new Vector3(3.5f);
@@ -92,11 +98,15 @@ internal sealed class FirstPersonRenderer : IDisposable
     private readonly Texture2D _armTexture;
     private DynamicVertexBuffer _buffer;
     private readonly ViewModelGeometry _geometry = new();
+    private readonly HeldSpriteMeshes _sprites;
+    private int _drawCount;
+    private Matrix? _itemFacing;
     private ViewModelSelection _previous = new(ViewModelKind.Hidden, default);
 
     public FirstPersonRenderer(GraphicsDevice device, TextureAtlas atlas)
     {
         _device = device; _atlas = atlas;
+        _sprites=new HeldSpriteMeshes(device,atlas.ItemAtlas);
         _armTexture=new Texture2D(device,4,12);
         var skin=new Color[48];for(int i=0;i<skin.Length;i++){uint hash=unchecked((uint)i*747796405u+2891336453u);hash=(hash^(hash>>16))*2246822519u;byte tone=(byte)(245+hash%11);skin[i]=new Color(tone,tone,tone);}_armTexture.SetData(skin);
         _effect = new AlphaTestEffect(device)
@@ -114,15 +124,19 @@ internal sealed class FirstPersonRenderer : IDisposable
         if (selection != _previous)
         {
             _geometry.Build(selection);
-            if (_buffer.VertexCount < _geometry.VertexCount)
+            var vertices=selection.Kind==ViewModelKind.Sprite?_sprites.Get(selection.Item):_geometry.Vertices;
+            _drawCount=selection.Kind==ViewModelKind.Sprite?vertices.Length:_geometry.VertexCount;
+            _itemFacing=selection.Kind==ViewModelKind.Sprite&&!Items.TryGetBlock(selection.Item,out _)
+                ?HeldItemPose.SpriteFacing(_sprites.FacingVertices(selection.Item),HeldItemPose.World(selection,Matrix.Identity,Matrix.Identity)):null;
+            if (_buffer.VertexCount < _drawCount)
             {
                 int capacity = _buffer.VertexCount;
-                while (capacity < _geometry.VertexCount) capacity *= 2;
+                while (capacity < _drawCount) capacity *= 2;
                 var replacement = new DynamicVertexBuffer(_device, typeof(VertexPositionColorTexture), capacity, BufferUsage.WriteOnly);
                 _buffer.Dispose();
                 _buffer = replacement;
             }
-            _buffer.SetData(_geometry.Vertices, 0, _geometry.VertexCount, SetDataOptions.Discard);
+            _buffer.SetData(vertices, 0, _drawCount, SetDataOptions.Discard);
             _previous = selection;
         }
         Viewport original = _device.Viewport;
@@ -134,7 +148,9 @@ internal sealed class FirstPersonRenderer : IDisposable
             _device.SamplerStates[0] = SamplerState.PointClamp;
             _device.BlendState = BlendState.Opaque;
             _device.DepthStencilState = DepthStencilState.Default;
-            _device.RasterizerState = RasterizerState.CullCounterClockwise;
+            // Reflected held models reverse triangle winding; the arm is unchanged.
+            _device.RasterizerState = selection.Kind==ViewModelKind.Sprite?RasterizerState.CullNone
+                :selection.Kind==ViewModelKind.Arm?RasterizerState.CullCounterClockwise:RasterizerState.CullClockwise;
             // The world is finished. Clear depth while retaining its color, then draw in camera space.
             _device.Clear(ClearOptions.DepthBuffer, Color.Transparent, 1, 0);
             _device.Viewport = new Viewport(bounds);
@@ -144,8 +160,10 @@ internal sealed class FirstPersonRenderer : IDisposable
             // not bob * model; never reuse the world camera View here.
             _effect.View = walkingBob??Matrix.Identity;
             _effect.DiffuseColor=new Vector3(light);
-            _effect.Projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(50), bounds.Width / (float)bounds.Height, 0.05f, 10);
-            _effect.World = Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(selection.Kind==ViewModelKind.Arm?-.25f:0.25f) * Matrix.CreateRotationZ(selection.Kind==ViewModelKind.Arm?.45f:-0.1f)
+            _effect.Projection = Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(selection.Kind==ViewModelKind.Arm?50:70), bounds.Width / (float)bounds.Height, 0.05f, 10);
+            _effect.World = selection.Kind!=ViewModelKind.Arm
+                ? HeldItemPose.World(selection,swing??Matrix.Identity,equip??Matrix.Identity,_itemFacing)
+                : Matrix.CreateRotationY(-0.6f) * Matrix.CreateRotationX(-.25f) * Matrix.CreateRotationZ(.45f)
                 * Matrix.CreateScale(selection.Kind==ViewModelKind.Arm?(original.Width>=640?3.2f:1.65f):1)
                 * (swing??Matrix.Identity) * (equip??Matrix.Identity) * Matrix.CreateTranslation(selection.Kind==ViewModelKind.Arm?.25f:0,selection.Kind==ViewModelKind.Arm?(original.Width>=640?-.95f:-.35f):0, -2.2f);
             _device.SetVertexBuffer(_buffer);
@@ -153,7 +171,7 @@ internal sealed class FirstPersonRenderer : IDisposable
             {
                 pass.Apply();
                 _device.Textures[0]=_effect.Texture;
-                _device.DrawPrimitives(PrimitiveType.TriangleList, 0, _geometry.VertexCount / 3);
+                _device.DrawPrimitives(PrimitiveType.TriangleList, 0, _drawCount / 3);
             }
         }
         finally

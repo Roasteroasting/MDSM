@@ -133,6 +133,62 @@ internal static class WaterChecks
         foreach (var vertex in vertices) Require(vertex.Color.A > 0 && vertex.Color.A < 255 && vertex.TextureCoordinate.X > 0
             && vertex.TextureCoordinate.X < 1 && vertex.TextureCoordinate.Y > 0 && vertex.TextureCoordinate.Y < 1, "Water opacity or point-sampled UVs are invalid.");
     }
+    public static void SurfaceBobbing()
+    {
+        var world=Floor();
+        for(int z=10;z<=30;z++)for(int x=10;x<=110;x++)for(int y=1;y<=5;y++)world.SetGeneratedBlock(x,y,z,BlockType.WaterSource);
+        float surface=5+Water.Height(BlockType.WaterSource);double referencePeriod=0;
+        foreach(bool travelling in new[]{false,true})foreach(int fps in new[]{30,60,144,360})
+        {
+            var player=new Player(new(15.5f,1,15.5f));float minimum=float.MaxValue,maximum=0,windowMin=float.MaxValue,windowMax=0;
+            int sign=0,peaks=0;double firstPeak=0,lastPeak=0;
+            for(int frame=0;frame<fps*30;frame++)
+            {
+                float before=player.Position.Y;player.Update(world,travelling?Vector3.Right:Vector3.Zero,false,1f/fps,swimUp:true);
+                Require(!world.IntersectsSolid(player.Bounds)&&player.Health==20,"Surface swimming damaged or embedded the player.");
+                if(frame<fps*4)continue;
+                float change=player.Position.Y-before;int direction=Math.Abs(change)>.00001f?Math.Sign(change):0;
+                if(direction!=0)
+                {
+                    if(sign>0&&direction<0){double time=frame/(double)fps;if(peaks++==0)firstPeak=time;lastPeak=time;}
+                    sign=direction;
+                }
+                minimum=Math.Min(minimum,player.Position.Y);maximum=Math.Max(maximum,player.Position.Y);
+                windowMin=Math.Min(windowMin,player.Position.Y);windowMax=Math.Max(windowMax,player.Position.Y);
+                if((frame+1)%(fps*2)==0)
+                {
+                    Require(windowMin<surface-.2f&&windowMax>surface+.02f,"Held Space stopped producing complete in/out strokes during extended travel.");
+                    windowMin=float.MaxValue;windowMax=0;
+                }
+            }
+            double period=(lastPeak-firstPeak)/(peaks-1);
+            Require(peaks>20&&period>.5&&period<1.2,$"Surface strokes are missing or excessively rapid: peaks={peaks}, period={period}, Y={minimum}..{maximum}.");
+            Require(maximum>surface+.18f&&maximum<surface+.35f&&minimum>surface-.4f,"Surface stroke lift is insufficient or excessive.");
+            if(referencePeriod==0)referencePeriod=period;else Require(Math.Abs(referencePeriod-period)<.05,"Stroke timing depends on frame rate or horizontal travel.");
+            if(travelling)Require(player.Position.X>60,"Travel test did not cross the water surface.");
+            float floating=player.Position.Y;for(int i=0;i<fps;i++)player.Update(world,Vector3.Zero,false,1f/fps);
+            Require(player.Position.Y<floating-.5f,"Releasing Space did not resume sinking.");
+            Console.WriteLine($"Surface strokes {fps} Hz, travelling={travelling}: period {period:F3}s, Y {minimum:F3}..{maximum:F3}");
+        }
+        foreach(int fps in new[]{30,60,144,360})
+        {
+            // Source water ends slightly below the full-block shore's top face.
+            for(int z=10;z<=30;z++)for(int x=50;x<=55;x++)for(int y=1;y<=6;y++)world.SetGeneratedBlock(x,y,z,BlockType.Stone);
+            var player=new Player(new(47.5f,5.6f,15.5f));
+            for(int i=0;i<fps*4&&player.Position.X<=51;i++)player.Update(world,Vector3.Right,false,1f/fps,swimUp:true);
+            Require(player.Position.X>51&&player.Position.Y>=6&&!world.IntersectsSolid(player.Bounds),$"Held Space could not climb a full-block shoreline: {fps} Hz {player.Position}.");
+            for(int z=10;z<=30;z++)for(int x=49;x<=55;x++)world.SetGeneratedBlock(x,8,z,BlockType.Stone);
+            var covered=new Player(new(47.5f,5.6f,15.5f));
+            for(int i=0;i<fps*4;i++)
+            {
+                covered.Update(world,Vector3.Right,false,1f/fps,swimUp:true);
+                Require(!world.IntersectsSolid(covered.Bounds),"Shore exit stroke bypassed overhead collision.");
+            }
+            Require(covered.Position.X<50,"Shore exit stroke climbed without headroom.");
+            for(int z=10;z<=30;z++)for(int x=49;x<=55;x++)world.SetGeneratedBlock(x,8,z,BlockType.Air);
+            for(int z=10;z<=30;z++)for(int x=50;x<=55;x++){world.SetGeneratedBlock(x,6,z,BlockType.Air);for(int y=1;y<=5;y++)world.SetGeneratedBlock(x,y,z,BlockType.WaterSource);}
+        }
+    }
     public static void Swimming()
     {
         var world = Floor();

@@ -74,14 +74,11 @@ internal static class MenuInformation
 
     private static readonly string[] About =
     {
-        "MDSM",
-        "Mojang Don't Sue Me",
+        "MDSM (Mojang Don't Sue Me) is a voxel sandbox game inspired by roughly the Beta era of Minecraft's history, and is in continous active development. While nominally a simple Minecraft clone, the long-term intent is for it to grow into a game entirely of its own, with a wealth of sufficiently distinctive and derivative mechanics and features.",
         "",
-        "A Minecraft Indev-inspired finite-world voxel sandbox game.",
+        "The project author is me, Mark Arnold, also known as Rusty or Roasteroasting on Github and other places.",
         "",
-        "Project author: Mark Arnold (Roasteroasting)",
-        "",
-        "The codebase was written using GPT-6.1 Sol, and the game textures were AI-generated."
+        "Most of the codebase has been written by GPT-6.1 with heavy human oversight and direction; some block textures and all item textures were drawn by hand, while a number of other block textures were AI-generated. All existing AI art in the game is considered placeholder art that I aim to replace in the future."
     };
 
     public static bool IsInformation(GameState state) => state is GameState.Controls or GameState.About;

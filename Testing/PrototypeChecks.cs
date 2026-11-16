@@ -109,6 +109,7 @@ internal static class PrototypeChecks
             ("Fluid boundaries, chunk invalidation, clocks, and bounded scheduling", WaterChecks.BoundariesAndScheduling),
             ("Water surface levels, shared corners, transparent faces, and terrain culling", WaterChecks.Geometry),
             ("Player swimming/fall resistance and passive pig water collisions", WaterChecks.Swimming),
+            ("Smooth water surface buoyancy across frame rates", WaterChecks.SurfaceBobbing),
             ("Deterministic all-size lakes, restrained basins, beaches, spawn and stability", WaterChecks.Lakes),
             ("Extreme seeds, sealed lakes, digging shore/bottom, and solid displacement", WaterChecks.LakeEditsAndSeeds),
             ("All-size active water round trips, resumed flow, and saved terrain preservation", WaterChecks.Persistence),

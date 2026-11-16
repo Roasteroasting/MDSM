@@ -110,6 +110,14 @@ public sealed class InventoryInteraction(Inventory inventory)
     public Inventory Inventory { get; } = inventory;
     public ItemStack Cursor { get; private set; }
     private int _originalSlot = -1;
+    // Only explicit Creative UI actions call this. Ordinary outside clicks,
+    // closing interfaces and Survival transfers retain their existing safety.
+    internal bool DeleteCursor()
+    {
+        bool deleted=!Cursor.IsEmpty;
+        Cursor=default;_originalSlot=-1;
+        return deleted;
+    }
 
     public void Click(int slot, bool right)
     {

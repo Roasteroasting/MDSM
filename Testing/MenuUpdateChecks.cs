@@ -42,6 +42,7 @@ internal static class MenuUpdateChecks
         protected override void Draw(GameTime time)
         {
             var atlas=new TextureAtlas(Content);using var screen=new InventoryScreen(GraphicsDevice,atlas);var world=PigChecks.Flat();var session=new GameSession("preview",new(world,"Menu preview",new(30,1,30),0,0));
+            CreativeDeletionChecks.Graphics(GraphicsDevice,atlas);
             foreach(var size in new[]{new Point(320,240),new(1280,720)})foreach(string mode in new[]{"inventory","crafting","chest","double","furnace","creative-items","creative-inventory"})
             {
                 session.CloseInterface();session.TryOpenCrafting(mode=="crafting"?3:2);session.ApplySettings(new GameSettings{GameMode=mode.StartsWith("creative")?GameMode.Creative:GameMode.Survival});screen.Open();

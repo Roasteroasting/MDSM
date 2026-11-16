@@ -16,6 +16,7 @@ namespace MDSM.UI;
 internal sealed class MenuController : IDisposable
 {
     private readonly SpriteBatch _sprites;
+    private MenuPanorama _panorama;
     private readonly Texture2D _pixel;
     private readonly TextureAtlas _atlas;
     private readonly GameSettings _settings;
@@ -23,6 +24,7 @@ internal sealed class MenuController : IDisposable
     private int _soundSlider=-1;
     private GameState _screen;
     private int _focus;
+    private bool _keyboardNavigation;
     private int _selected;
     private int _scroll;
     private int _informationScroll;
@@ -106,6 +108,7 @@ internal sealed class MenuController : IDisposable
     {
         _screen = screen;
         _focus = 0;
+        _keyboardNavigation = false;
         _selectAll = false;
         _draggingSlider = false;
         _soundSlider=-1;
@@ -147,7 +150,7 @@ internal sealed class MenuController : IDisposable
         _messageSeconds=seconds;
     }
     public void UpdateMessage(double elapsed)
-    {if(double.IsFinite(elapsed) && elapsed>0 && (_messageSeconds-=elapsed)<=1e-9)_message="";}
+    {_panorama?.Update(elapsed);if(double.IsFinite(elapsed) && elapsed>0 && (_messageSeconds-=elapsed)<=1e-9)_message="";}
 
     public void TextInput(char character)
     {
@@ -176,6 +179,8 @@ internal sealed class MenuController : IDisposable
         _mouse = mouse.Position;
         bool Pressed(Keys key) => keyboard.IsKeyDown(key) && previousKeyboard.IsKeyUp(key);
         bool click = mouse.LeftButton == ButtonState.Pressed && previousMouse.LeftButton == ButtonState.Released;
+        if(mouse.Position!=previousMouse.Position || click)_keyboardNavigation=false;
+        if(Pressed(Keys.Tab)||Pressed(Keys.Up)||Pressed(Keys.Down)||Pressed(Keys.Left)||Pressed(Keys.Right))_keyboardNavigation=true;
         if (Pressed(Keys.Escape))
             return _screen==GameState.Sleeping?MenuAction.LeaveBed:_screen == GameState.Paused ? MenuAction.Resume
                 : _screen is GameState.MainMenu or GameState.Death ? MenuAction.None : MenuAction.Back;
@@ -392,6 +397,8 @@ internal sealed class MenuController : IDisposable
     public void Draw(Viewport viewport, string worldName = null,float sleepFade=0)
     {
         int scale = _screen == GameState.WorldCreation ? WorldCreationLayout.Scale(viewport) : viewport.Width >= 900 ? 2 : 1;
+        bool backdrop = _screen is not (GameState.Paused or GameState.Death or GameState.Sleeping) && worldName == null;
+        if(backdrop){_panorama ??= new MenuPanorama(_sprites.GraphicsDevice);_panorama.Draw(viewport);}
         _sprites.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp,
             DepthStencilState.None, RasterizerState.CullNone);
         if(_screen==GameState.Sleeping)
@@ -404,12 +411,10 @@ internal sealed class MenuController : IDisposable
             Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.7f);
         else
         {
-            const int tileSize = 64;
-            Rectangle dirt = TextureAtlas.Source(Blocks.Tile(BlockType.Dirt, Vector3.Up));
-            for (int y = 0; y < viewport.Height; y += tileSize)
-            for (int x = 0; x < viewport.Width; x += tileSize)
-                _sprites.Draw(_atlas.Texture, new Rectangle(x, y, tileSize, tileSize), dirt, Color.White);
-            Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), Color.Black * 0.5f);
+            Fill(new Rectangle(0, 0, viewport.Width, viewport.Height), MdsmUiStyle.Edge * .42f);
+            // A subtle curtain keeps text readable without obscuring the landscape.
+            for(int band=0;band<12;band++)
+                Fill(new(0,viewport.Height*band/12,viewport.Width,viewport.Height*(band+1)/12-viewport.Height*band/12),Color.Black*(.04f+Math.Abs(band-5.5f)*.025f));
         }
         string title = _screen switch
         {
@@ -429,8 +434,8 @@ internal sealed class MenuController : IDisposable
         int titleY = _screen==GameState.Settings?8:MenuInformation.IsInformation(_screen) ? 20
             : _screen == GameState.WorldSelection ? 38
             : _screen == GameState.WorldCreation && viewport.Height < 400 ? 12 : Math.Max(20, viewport.Height / 2 - 210);
-        Center(title, viewport, titleY + 3, titleScale, Color.Black * 0.7f);
-        Center(title, viewport, titleY, titleScale, Color.White);
+        if(_screen==GameState.MainMenu)MenuChrome.Logo(_sprites,_pixel,viewport,titleY);
+        else { Center(title, viewport, titleY + 2, titleScale, MdsmUiStyle.Edge); Center(title, viewport, titleY, titleScale, MdsmUiStyle.Ink); }
         if (_screen == GameState.Paused)
             Center(PixelFont.Fit(worldName ?? "", 44), viewport, viewport.Height / 2 - 140, scale, Color.LightGray);
 
@@ -451,22 +456,23 @@ internal sealed class MenuController : IDisposable
             Choice(SettingsLayout.Choice(viewport,1),$"MODE: {_settings.GameMode}",4,enabled:WorldOptionsEnabled);
             void Choice(Rectangle bounds,string label,int focus,bool? checkedValue=null,bool enabled=true)
             {
-                Fill(bounds,!enabled?new Color(38,38,38):_focus==focus?new Color(84,91,94):new Color(38,44,52));
+                MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),enabled,keyboardFocus:_keyboardNavigation&&_focus==focus);
                 int indent=checkedValue.HasValue?26:6;
                 int textScale=label.Length*6*scale<=bounds.Width-indent-6?scale:1;
                 if(checkedValue.HasValue)
                 {
                     Fill(new(bounds.X+6,bounds.Center.Y-6,12,12),Color.LightGray);
-                    Fill(new(bounds.X+8,bounds.Center.Y-4,8,8),checkedValue.Value?Color.LightGoldenrodYellow:new Color(24,29,35));
+                    Fill(new(bounds.X+8,bounds.Center.Y-4,8,8),checkedValue.Value?MdsmUiStyle.Accent:MdsmUiStyle.Inset);
                 }
                 Text(label,bounds.X+indent,bounds.Center.Y-3*textScale,textScale,enabled?Color.White:Color.Gray);
             }
             void DrawSlider(Rectangle bounds,string label,float value,int focus)
             {
-                Fill(bounds,_focus==focus?new Color(235,216,135):new Color(74,80,89));
-                Fill(new(bounds.X+3,bounds.Y+3,bounds.Width-6,bounds.Height-6),new Color(24,29,35));
+                MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),inset:true,keyboardFocus:_keyboardNavigation&&_focus==focus);
+                Fill(new(bounds.X+8,bounds.Center.Y-2,bounds.Width-16,4),MdsmUiStyle.Edge);
                 int thumb=bounds.Left+8+(int)MathF.Round(value*(bounds.Width-17));
-                Fill(new(thumb-5,bounds.Y+3,11,bounds.Height-6),new Color(92,103,113));
+                Fill(new(thumb-5,bounds.Y+3,11,bounds.Height-6),MdsmUiStyle.Light);
+                Fill(new(thumb-2,bounds.Y+5,4,2),MdsmUiStyle.Accent);
                 int textScale=label.Length*6*scale<=bounds.Width-16?scale:1;
                 Text(label,bounds.Center.X-label.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
             }
@@ -476,7 +482,7 @@ internal sealed class MenuController : IDisposable
         {
             EnsureInformation(viewport);
             Rectangle area = MenuInformation.Content(viewport);
-            Fill(area, Color.Black * 0.45f);
+            MenuChrome.Control(_sprites,_pixel,area,inset:true);
             int rows = MenuInformation.VisibleRows(viewport);
             for (int row = 0; row < rows && row + _informationScroll < _informationLines.Length; row++)
                 Text(_informationLines[row + _informationScroll], area.X + 8,
@@ -498,8 +504,7 @@ internal sealed class MenuController : IDisposable
                 string value=option==0?(SelectedCheats?"ON":"OFF"):option==1?SelectedDifficulty.ToString():SelectedMode.ToString();
                 int textScale=label.Length*6*scale<=bounds.Width?scale:1;
                 Text(label,bounds.Center.X-label.Length*3*textScale,bounds.Top-9*textScale,textScale,Color.LightGray);
-                Fill(bounds,_focus==option+3?new Color(235,216,135):new Color(74,80,89));
-                Fill(new(bounds.X+2,bounds.Y+2,bounds.Width-4,bounds.Height-4),new Color(24,29,35));
+                MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),keyboardFocus:_keyboardNavigation&&_focus==option+3);
                 Text(value,bounds.Center.X-value.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
             }
             if (WorldCreationLayout.NoticeVisible(_screen, SelectedSize))
@@ -527,14 +532,14 @@ internal sealed class MenuController : IDisposable
         if (_screen == GameState.WorldSelection)
         {
             Rectangle area = ListBounds(viewport);
-            Fill(area, Color.Black * 0.35f);
+            MenuChrome.Control(_sprites,_pixel,area,inset:true);
             int rows = area.Height / 60;
             if (_worlds.Count == 0) Center("NO SAVED WORLDS YET", viewport, area.Y + 22, scale, Color.LightGray);
             for (int row = 0; row < rows && row + _scroll < _worlds.Count; row++)
             {
                 int index = row + _scroll;
                 var bounds = new Rectangle(area.X + 2, area.Y + row * 60 + 2, area.Width - 4, 56);
-                Fill(bounds, index == _selected ? new Color(84, 91, 94) : new Color(43, 50, 58));
+                MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),keyboardFocus:index==_selected);
                 Text(PixelFont.Fit(_worlds[index].Name, (bounds.Width - 16) / (6 * scale)), bounds.X + 8, bounds.Y + 8, scale, Color.White);
                 Text(PixelFont.Fit(_worldDetails[index], (bounds.Width - 16) / 6), bounds.X + 8, bounds.Y + 35, 1,
                     _worlds[index].Error == null ? Color.LightGray : Color.Salmon);
@@ -558,9 +563,7 @@ internal sealed class MenuController : IDisposable
         for(int i=0;i<Buttons.Length;i++)
         {
             Rectangle bounds=ButtonBounds(viewport,i);bool active=CanActivate(Buttons[i].Action);
-            bool highlighted=_focus==i+FocusOffset || bounds.Contains(_mouse);
-            Fill(bounds,highlighted && active?new Color(235,216,135):new Color(74,80,89));
-            Fill(new(bounds.X+3,bounds.Y+3,bounds.Width-6,bounds.Height-6),new Color(38,44,52));
+            MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),active,keyboardFocus:_keyboardNavigation&&_focus==i+FocusOffset);
             Text(Buttons[i].Text,bounds.Center.X-Buttons[i].Text.Length*3*scale,bounds.Center.Y-3*scale,scale,active?Color.White:Color.Gray);
         }
     }
@@ -569,8 +572,7 @@ internal sealed class MenuController : IDisposable
     {
         Rectangle bounds = FieldBounds(viewport, index);
         Text(label, bounds.X, bounds.Y - (bounds.Height < 30 ? 9 : 22), scale, Color.LightGray);
-        Fill(bounds, _focus == index ? new Color(235, 216, 135) : new Color(74, 80, 89));
-        Fill(new Rectangle(bounds.X + 2, bounds.Y + 2, bounds.Width - 4, bounds.Height - 4), new Color(24, 29, 35));
+        MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),inset:true,keyboardFocus:_keyboardNavigation&&_focus==index);
         if (_selectAll && _focus == index)
             Fill(new Rectangle(bounds.X + 7, bounds.Y + 8, bounds.Width - 14, bounds.Height - 16), new Color(55, 75, 100));
         string display = value.Length == 0 ? placeholder : value;
@@ -616,6 +618,7 @@ internal sealed class MenuController : IDisposable
 
     public void Dispose()
     {
+        _panorama?.Dispose();
         _sprites.Dispose();
         _pixel.Dispose();
     }

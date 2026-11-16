@@ -2130,3 +2130,299 @@ render. The preview explicitly restores texture binding after its own readbacks.
 Build zero warnings/errors; --inventory-icon-test and --placement-update-test
 passed including existing held-model, placement, mining and combat regressions.
 No physical-input playtesting, publishing or README edits; no save/asset changes.
+
+### About menu wording - 2026-11-16
+Replaced Settings > About with the three paragraphs supplied by the project
+owner, preserving their wording. Existing responsive wrapping and scrolling
+remain intact. Updated the About acknowledgement regression expectations.
+README, gameplay, saves and assets were not changed. No publishing performed.
+Verification: dotnet build --no-restore succeeded with zero warnings/errors.
+--interface-graphics-test passed, including main/pause information navigation,
+responsive menus and screenshot regressions. Expected failure fixtures logged
+screenshot write errors. No physical-input manual playtesting was performed.
+
+### Menu visual refresh and generated panorama - 2026-11-16
+Compared old gray/yellow menus with MdsmUiStyle used by the hotbar, inventory,
+chests and crafting screens. MenuChrome now reuses their teal frames, dark
+insets, brass focus indicators and bevels for buttons, sliders, choices,
+text fields, information panels and world lists. Input/layout rules remain.
+The main title uses code-drawn bevelled/extruded MDSM lettering; the proposed
+subtitle was removed at the owner's request. No image generation was used.
+
+MenuPanorama renders six actual world screenshots as a rotating sky cube,
+with an elapsed-time/bounded phase (~349 seconds per revolution). Contrast
+curtains preserve legibility. Pause/death/sleep and in-world Settings keep
+existing gameplay backdrops. Only six 1024-square images (~24 MiB uncompressed
+texture pixels) remain resident; no background world or simulation runs.
+Textures and effect are disposed with menus, including partial-load failures.
+Content.mgcb copies the six PNGs into the normal Content/UI/Panorama path.
+
+Development capture tool: --capture-menu-panorama from the project root.
+Generated random Normal world seed 1866941503; spawn (256.5,95.01,256.5),
+photograph eye (220.5,99,240.5), near-spawn forest/desert/cliff landscape.
+Camera's internal capture FOV uses 90 degrees; gameplay defaults remain 75.
+Capture metadata is in Content/UI/Panorama/capture.txt. No player saves were
+created or changed by capture; world generation and gameplay are unchanged.
+
+Verification: dotnet build --no-restore: zero warnings/errors. New
+--menu-style-test passed elapsed-time rotation at 30/360 Hz, all-direction
+background coverage, information layout checks, and menu render previews at
+320x240, 854x480 and 1280x720. Inspected main menu and small Settings PNGs.
+--interface-graphics-test passed navigation, actual final-frame screenshots,
+resizing, and all eight F1/F2 graphics-state regressions (write-failure fixtures
+intentionally log errors). --menu-update-test passed existing inventory,
+crafting/chest layouts, double-chest persistence and hand/item bob checks.
+Final subtitle-free build and preview checks passed. No physical-input or
+long-duration animation playtest; no publishing; README remains untouched.
+
+### UI reference refinements - 2026-11-16
+Inspected both current/improvement PNG pairs (including pixel-level differences).
+Removed the dotted trim in shared MdsmUiStyle.Frame; this applies to main/pause
+menus, Settings, information/world-management panels, inventory, crafting,
+containers and Creative tabs. Kept the existing palette, bevels and geometry.
+Main-menu MDSM lettering and panorama images/animation were not modified.
+
+Split hover from keyboard focus in MenuChrome and MenuController. Orange side
+bars appear only for actual mouse hover on enabled controls. Initial focus no
+longer highlights Create New World. Keyboard navigation retains a quiet teal
+underline after navigation input; activation/selection behavior is preserved.
+
+Creative search text now uses scale-aware padding and vertical centering;
+inventory/container headings gained breathing room below the top border.
+Centered the Creative scrollbar between the item grid and panel edge, with
+recessed grip ridges matching the improvement reference. BrowserTrack is shared
+by drawing and mouse hit-testing so scrollbar dragging follows the new position.
+No assets were generated, redrawn or changed. All UI changes are drawn in code.
+
+Build: zero warnings/errors. --menu-style-test passed, with new actual-menu
+startup/hover/hover-exit/keyboard-activation pixel checks, clean frame checks at
+scales 1/2/3, centered track and grip checks, and existing panorama/layout tests.
+--menu-update-test passed inventory/crafting/single+double chest/furnace/Creative
+previews and existing input/persistence checks. Inspected main menu and Creative
+preview PNGs against the references. No physical-input manual playtest.
+README unchanged. No publishing or distribution builds.
+--interface-graphics-test also passed existing menu navigation, resizing,
+final-frame PNG checks and all eight alternating F1/F2 render-state regressions.
+Screenshot write-failure fixture messages are expected. Final diff check passed.
+
+### Water-surface swimming bob - 2026-11-16
+Root cause: holding Space reset vertical speed to 2.8 blocks/s on every water
+contact; feet leaving water immediately switched to gravity 28, repeatedly
+launching the player across the surface. Player now uses momentum-preserving,
+gently damped surface buoyancy while swim-up is held, with a ~1.8 second natural
+bob period. The analytic spring step keeps its motion independent of timestep.
+Deep swimming ascent, release-to-sink, normal land jumps, Creative flight and
+horizontal movement remain on their existing paths. Surface contact queries are
+bounded to nearby foot cells and use existing fluid corner heights, including
+local/absolute coordinate translation for streamed worlds. No camera-only motion,
+new timers, save changes, or world-wide scans were introduced.
+
+Added WaterChecks.SurfaceBobbing to the full CPU suite and --swimming-test for
+focused execution with existing swimming/fall resistance/pig checks. At 30, 60,
+144 and 360 updates/s the tests observed seven direction reversals over the
+six-second measured surface interval, with matching Y ranges 5.362..6.308 on
+a source-water surface Y=5.889 (initial ascent oscillation damps toward floating).
+Tests cover collision/health, bounded amplitude, slower oscillation, matching
+trajectory and release-to-sink. Build: zero warnings/errors. Existing swimming
+checks passed; --collision-test passed 5/5 and --gameplay-refinement-test passed
+10/10, including normal jumping/step-up/flight and mode transitions.
+No physical-input/visual playtest; the subjective bobbing feel remains a manual
+check. README not edited. No publishing.
+
+### Tighter water-surface buoyancy - 2026-11-16
+Retuned surface restoring strength from 12.25 to 28 and damping from 0.6 to
+2.2. Reduced above-water buoyancy reach from one block to 0.45 blocks; beyond
+that normal gravity applies. This shortens lift, arrests upward momentum and
+settles quickly while preserving continuous buoyancy across the surface.
+Deep ascent/release sinking/land physics/Creative flight remain unchanged.
+Strengthened the surface regression with a 0.2-block above-water peak limit
+and a settling tolerance after four seconds. At 30/60/144/360 updates per
+second measured surface interval Y was approximately 5.658..5.911 versus the
+previous 5.362..6.308 (water surface 5.889). Build zero warnings/errors;
+--swimming-test, 5/5 collision checks and 10/10 gameplay refinements passed.
+Subjective in-game feel has not been manually playtested. No publishing or
+README changes.
+
+### Sustained surface swim strokes - 2026-11-16
+The damped spring was the wrong model for the requested continuous in/out motion:
+it necessarily settled at a floating equilibrium. Replaced it with a repeating
+stroke with explicit rise/return phases. Swim-up pushes upward at 2.2 blocks/s;
+airborne motion uses normal gravity 28. Water brakes the returning descent toward
+0.65 blocks/s. Another stroke starts only after feet dip 0.28 blocks beneath the
+surface, preventing rapid contact-triggered relaunches. No idle sinusoid/camera
+animation or spring equilibrium remains. Local integration steps are bounded at
+240 Hz within the existing capped player update; collision still sweeps the final
+motion. Releasing Space, mode/position resets and leaving water cancel the stroke.
+
+Replaced the prior settling expectation with 30-second stationary AND moving
+surface tests at 30/60/144/360 updates/s. Every two-second window after initial
+ascent must include both below-water and above-water motion. Measured periods
+0.608-0.613 seconds and feet Y approximately 5.606..5.981 on surface Y=5.889,
+matching between stationary/travelling cases; tested bounded height, intact
+health/collision, release-to-sink and continued horizontal travel.
+Build zero warnings/errors; --swimming-test passed existing swimming checks and
+all eight sustained cases; --collision-test 5/5; --gameplay-refinement-test 10/10.
+No manual visual/physical-input test, README edits or publishing.
+
+### Shore exits and softer recurring water splashes - 2026-11-16
+Raised open-water stroke ascent to 3.6 blocks/s (observed ~0.24 blocks above
+source-water height). When swimming toward a low solid bank with clearance,
+the exit stroke uses the existing jump impulse; normal swept collision still
+handles headroom and landing. This permits climbing onto banks a block above
+the water voxel instead of remaining stuck against them. Open-water strokes
+remain separate from the stronger deliberate shoreline exit.
+
+Transition audio now uses actual water crossings at gain 0.35 (65% quieter)
+and a shared one-second gameplay-time cooldown. Per the owner's clarification,
+bobbing remains audibly splashy at reduced frequency; the initially attempted
+silent/hysteretic water-state filter was removed. No delayed sounds or periodic
+fake events: only real crossings trigger sounds. Game1 passes simulation dt to
+PlayerAudio; pause does not advance its clock. Existing WAV assets are unchanged.
+
+Build zero warnings/errors. --swimming-test passed 30-second stationary/moving
+bobs at 30/60/144/360 Hz plus full-block shoreline exits and blocked-headroom
+cases at each rate. --audio-test passed 6/6, including sustained bob splashes
+that are non-silent, rate-limited and quieter across all four rates, plus real
+entry/exit events. Expected missing-audio fixture warning remains intentional.
+Collision checks 5/5 and gameplay refinement checks 10/10 passed. No manual
+listening/visual playtest or publishing. README unchanged.
+
+### Beta-reference held-item presentation - 2026-11-16
+Inspected the six supplied Coal/Cobblestone/Dirt/Log/Sword/Torch screenshots.
+Held items now use the full camera viewport and a 70-degree projection rather
+than the old small inset viewport. Shared HeldItemPose defines block, tool,
+loose-item/vegetation and torch poses, with large lower-right framing and top/
+side visibility for cubes. Existing specialized block geometry is preserved.
+Held torches now reuse the real narrow cuboid with cropped side/cap UVs instead
+of crossed planes. Empty-arm geometry/framing was preserved.
+
+Added HeldSpriteMeshes: cached thin extrusion of each item's existing 16x16
+sprite silhouette. Front/back use unchanged artwork, exposed pixel edges use
+matching texel colors and directional shading. Atlas alpha is read once at
+renderer initialization, restoring the native GL texture binding afterward;
+meshes are cached lazily by registered item and upload only on selection change.
+Face UVs align to pixel boundaries to prevent cracks against edge geometry.
+No asset edits, new textures, persistent IDs, save changes or dependencies.
+
+Local swing/equip transforms remain before placement and camera-local walking
+bob remains in View exactly once. All graphics operations stay on the rendering
+thread. Viewport, blend, depth, rasterizer and point sampler are restored as
+before; world/HUD visibility logic is unchanged. HUD elements draw afterward.
+
+Owner feedback identified incorrect sword/coal angles in the initial previews.
+Adjusted sprite yaw to -0.15 radians and gave tools/loose items distinct roll
+baselines (0.10/0.25 radians); recentered these categories to retain the reference
+lower-right framing after the yaw correction. Block/torch poses unchanged.
+Current previews: bin/Debug/net9.0/held-reference-{item ID}.png, including sword
+273, coal 260, dirt 2, cobblestone 7, log 4 and torch 46.
+
+Verification: final dotnet build --no-restore zero warnings/errors. New
+--held-item-test checks all obtainable item selections, sprite cache reuse and
+extrusion/UV bounds, six real GPU reference renders, 320x240/1280x720/2560x1080
+rendering, clear crosshair, single bob application, swing/equip and device state.
+Updated prior presentation checks for the intentional full-viewport projection
+and 36-vertex solid torch. --classic-hud-test passed, including empty arm framing.
+--bobbing-test, --inventory-icon-test and --menu-update-test passed, including
+previous corrected fence/gate meshes and double-chest persistence. The full
+--interface-graphics-test passed world/entity/material/menu and all eight F1/F2
+pixel/state regressions before the final sprite-angle-only adjustment; focused
+held tests and bob/icon/menu checks were rerun after that adjustment. A build
+attempt during the running graphics suite hit an executable lock; after the
+suite exited the clean build passed without warnings. Static GPU previews were
+inspected; no physical-input animated playtest or claim of pixel-identical
+Minecraft artwork. README untouched. No publishing or distribution builds.
+
+### In-place held-item handedness correction - 2026-11-16
+Owner clarified the orientation issue requires reflection, not further rotation.
+HeldItemPose now reflects the posed geometry in camera-local X before swing,
+equip and camera placement. The screen anchor is unchanged, so the model stays
+on the right while its handedness is reversed. The empty arm is unchanged.
+Reflected solid models use reversed face culling; sprite extrusion remains
+explicitly double-sided. Artwork/meshes, positions, scales and animations were
+not otherwise altered in this correction. Re-rendered and inspected sword and
+coal previews; mirror is visible around the same right-side anchor.
+Added registry-wide negative-determinant/right-side checks and explicit retained
+coal/sword anchor checks. Final build zero warnings/errors; --held-item-test,
+--bobbing-test and --inventory-icon-test passed. No publishing or README edits.
+
+### Correct sword grip against explicit side-by-side reference - 2026-11-16
+Compared MDSM-Sword-Held-Item-Reference.png directly with the supplied Beta sword
+screenshot. The previous blanket reflection made the blade point up-left;
+the reference blade rises up-right from a low right-hand grip. Removed the
+reflection for tool sprites specifically. Corrected tool yaw/roll to 0.12/0.35
+radians and moved its camera-space anchor to (1.05,-0.55,-1), retaining scale
+1.65, the existing artwork/extrusion, and all animation composition. Other
+representation categories (blocks, torches, loose items and arm) are unchanged.
+
+Added projected grip-to-tip tests for every sword tier, requiring up-right
+orientation and a 10-35 degree projected blade axis from vertical. Added a GPU
+stone-sword footprint check for right-edge framing and blade height. Current
+1280x720 preview: leftmost pixel X=932 and top Y=247; reference at that scale is
+approximately X=960, Y=236. These compare pose/framing, not differing artwork.
+Inspected the final GPU preview at bin/Debug/net9.0/held-reference-273.png.
+Final build zero warnings/errors; --held-item-test, --bobbing-test and
+--menu-update-test passed. No animated physical-input test or publishing.
+README unchanged.
+
+### Facing correction from explicit wrong/corrected item pair - 2026-11-16
+Inspected MDSM-SwordFacingDirection-Wrong-Reference.png and its Corrected pair.
+They demonstrate an in-place horizontal image reflection, not the up-right blade
+target assumed in the preceding pass. Both supplied files are actually 3440x1369;
+previews now include that exact client size plus 3440x1440 and other aspect ratios.
+
+Added a presentation-only camera-space reflection after the base item pose. It
+reflects projected X/-Z about the visible painted-face center, preserving Y and
+Z. A simple negative X scale about the world anchor was not equivalent under
+perspective. Framing points use the sprite's painted mid-plane, with pure-black
+outline/padding excluded (falling back to opaque pixels for all-black artwork).
+Vertical clipping prevents an off-screen handle from shifting the visible pivot.
+The correction is computed on selection change and cached alongside sprite data;
+there is no per-frame geometry generation, readback or full-frame render target.
+
+Only non-block held items receive the new correction. Tools, food, loose resources
+and other item sprites share it; every item with a block mapping bypasses it,
+including sprite-based Bed items. Held block and empty-arm poses are unchanged.
+Swing/equip animations are applied after the facing correction at the original
+anchor, and walking bob remains in View once. No world/HUD/physics/assets/save
+changes. Source updates: HeldItemPose, HeldSpriteMeshes, FirstPersonRenderer and
+HeldItemChecks. This supersedes the prior up-right-only sword regression.
+
+Tests now cover every non-block item's horizontal projected reflection with
+unchanged projected Y/Z across 4:3, 16:9 and ultrawide; assert every held block's
+actual effect World matrix remains unchanged; and render dirt/sword/coal at
+320x240,1280x720,2560x1080,3440x1440,3440x1369 with animation/state checks.
+Saved and inspected held-facing-273-3440x1369.png and 3440x1440.png under
+bin/Debug/net9.0, against the corrected reference. No pixel-identical reference
+match is claimed; orientation, framing and projection were the comparison.
+Final build zero warnings/errors; --held-item-test, --bobbing-test,
+--inventory-icon-test and --menu-update-test passed. No physical-input animated
+playtest or publishing. README untouched.
+
+### Creative cursor deletion and trash slot - 2026-11-16
+Added explicit InventoryInteraction.DeleteCursor, clearing the whole cursor stack
+and its original-slot bookkeeping. Only Creative UI actions invoke it.
+In the Items tab, clicking a real catalog item with an occupied cursor deletes
+that cursor stack and returns immediately: no simultaneous grant, inventory
+transfer or world drop. Empty-cursor left/Shift clicks retain existing catalog
+grants; right clicks with an occupied cursor also delete. Empty catalog cells,
+search, tabs and normal inventory transfers do not act as trash.
+
+The Creative Pack tab now has a code-drawn red inset slot and X immediately to
+the right of the hotbar, following Creative-Inventory-Delete-Slot-Reference.png.
+Left/right click deletes the entire held cursor stack, including tools and their
+metadata; empty clicks do nothing. The slot does not exist or delete in Survival,
+containers or workbench interfaces. The Items tab retains its existing scrollbar
+in this region; catalog-click deletion serves that tab.
+
+Files: Inventories/Inventory.cs, UI/InventoryScreen.cs,
+Testing/CreativeDeletionChecks.cs, Testing/MenuUpdateChecks.cs, this summary.
+No saves, IDs, artwork files, dependencies, gameplay drops or README changes.
+
+Verification: dotnet build --no-restore zero warnings/errors; --menu-update-test
+passed new actual UI-input deletion checks at 320x240,854x480,1280x720, including
+whole stacks, tools, right/Shift clicks, held mouse, full inventory, no dropped
+entities or cursor resurrection, continued empty-cursor grants and Survival item
+accounting. Existing inventory/crafting/chest/furnace/Creative preview and double
+chest persistence checks passed. --crafting-test passed all checks. Inspected
+menu-creative-inventory-1280.png for trash-slot placement/appearance. No physical
+mouse manual playtest or publishing.

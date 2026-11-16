@@ -1,4 +1,12 @@
-if(args.Length==1 && args[0]=="--sandstone-test")
+if(args.Length==1 && args[0]=="--held-item-test")
+{ System.Environment.ExitCode=MDSM.Testing.HeldItemChecks.Run(); }
+else if(args.Length==1 && args[0]=="--swimming-test")
+{ MDSM.Testing.WaterChecks.Swimming(); MDSM.Testing.WaterChecks.SurfaceBobbing(); }
+else if(args.Length==1 && args[0]=="--menu-style-test")
+{ System.Environment.ExitCode=MDSM.Testing.MenuStyleChecks.Run(); }
+else if(args.Length==1 && args[0]=="--capture-menu-panorama")
+{ System.Environment.ExitCode=MDSM.Testing.MenuPanoramaCapture.Run(); }
+else if(args.Length==1 && args[0]=="--sandstone-test")
 {
     System.Environment.ExitCode=MDSM.Testing.SandstoneChecks.Run();
 }

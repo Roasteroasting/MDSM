@@ -421,3 +421,11 @@
 /copy:Sounds/Interactions/feed-0.wav
 /copy:Sounds/Interactions/feed-1.wav
 # End generated procedural sounds
+
+# Six in-game landscape photographs; copied losslessly for the menu cubemap.
+/copy:UI/Panorama/0.png
+/copy:UI/Panorama/1.png
+/copy:UI/Panorama/2.png
+/copy:UI/Panorama/3.png
+/copy:UI/Panorama/4.png
+/copy:UI/Panorama/5.png
