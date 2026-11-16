@@ -1977,3 +1977,59 @@ captures. Screenshot-failure messages are expected negative fixtures. No manual
 physical-input playtest was performed. git diff --check passed. Logs are
 bin/creation-sizes-build.log, creation-sizes-tests.log,
 creation-sizes-graphics.log and creation-sizes-interface.log.
+
+### Cached 3D inventory block icons - 2026-11-16
+
+Inventory/Creative flat block tiles now use classic-style orthographic models.
+Rendering/InventoryIconAtlas.cs bakes every registered block icon once during
+TextureAtlas content initialization into a transparent 512x512 target with 32px
+tiles. UI rendering remains SpriteBatch draws: no per-frame geometry generation,
+3D icon rendering, texture readbacks or per-slot GPU targets. Models share one
+orientation, auto-fit their projected bounds with margins, point sampling,
+alpha testing, depth testing and the existing directional face shading.
+
+ChunkMeshBuilder.AppendInventoryItem reuses existing item geometry, face tile
+mappings, Door edges, Pane UVs, cactus geometry and the complete two-half Bed.
+Torches use the existing narrow cuboid/cap UVs; Slabs/Stairs keep their shape;
+Fence/Gate posts/rails crop texture subregions instead of compressing full tiles.
+Stairs face toward the inventory camera; furnace/chest fronts are visible.
+This new entry point leaves world/held/dropped-item geometry paths unchanged.
+
+The shared ItemIcons.Draw path supplies Creative catalogs, hotbars, inventories,
+crafting/output previews, equipment, chests/furnaces and cursor-held stacks.
+Quantity labels/durability bars and all UI layout/interaction code are retained.
+Non-block tools, equipment, food and crossed vegetation remain original 2D
+sprites. Cached alpha bounds center visible pixels without enlarging tiny art
+or altering its atlas tile, original colors, pixel shapes or texel scale.
+
+TextureAtlas owns the generated icon resource and disposes it on explicit game
+shutdown or Content terrain disposal. External ContentManager textures remain
+owned by ContentManager. Baking restores the target, viewport/scissor, blend,
+depth, rasterizer, sampler, index and texture bindings; the texture slot is
+explicitly rebound for DesktopGL. Baking happens only at content initialization,
+when no terrain vertex buffer is bound, and clears its temporary vertex binding.
+No original reference artwork, terrain/item textures, Content entries, saves,
+item IDs, world rendering, UI skins or gameplay systems were modified.
+
+Files: Rendering/InventoryIconAtlas.cs (new), Rendering/TextureAtlas.cs,
+Rendering/ChunkMeshBuilder.cs, UI/InventoryScreen.cs, Core/Game1.cs,
+Testing/InventoryIconChecks.cs (new), Testing/PrototypeChecks.cs, Program.cs.
+CLI: --inventory-icon-test; CPU geometry checks join --self-test.
+
+Verification: dotnet build passed with zero warnings/errors. Icon GPU/geometry
+checks passed: all model types nonempty, transparent margins, per-face tile
+coverage, UV bounds, slab/door/torch proportions, 2D crop pixel preservation,
+previous-target contents/state restoration and idempotent resource disposal.
+--menu-update-test passed including double-chest ownership and persistence.
+--interface-graphics-test passed existing menus, crafting/containers, item and
+world rendering, resize/HUD controls, and all 8 repeated/alternating F1/F2 PNG
+texture-state regression captures. Intentional screenshot-write failure output
+is expected. The final fence UV/lifetime refinement was followed by rerunning
+the icon and menu checks. The full expensive CPU generation suite was not rerun.
+git diff --check passed. No publishing commands or README edits.
+
+Inspected generated inventory-icons-preview.png and menu-creative-items-1280.png
+in bin/Debug/net9.0; the transparent cache is inventory-icon-atlas.png. These are
+scripted previews, not physical-input or extended gameplay tests. Remaining
+manual check: preferred icon sizing/appearance across personal UI scales and
+prolonged inventory usage. Reference PNGs were inspected for layout/style only.

@@ -840,6 +840,7 @@ public class Game1 : Game
         _mobRenderer?.Dispose();
         _projectileRenderer?.Dispose();
         _audio?.Dispose();
+        _atlas?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.
         base.UnloadContent();
     }

@@ -53,19 +53,15 @@ internal static class ItemIcons
     {
         if (stack.IsEmpty || !Items.IsDefined(stack.Item)) return;
         int inset = iconInset??(guiScale.HasValue?2*guiScale.Value:Math.Max(3, bounds.Width / 6));
-        Rectangle icon=new(bounds.X+inset,bounds.Y+inset,bounds.Width-inset*2,bounds.Height-inset*2),source=atlas.ItemSource(stack.Item);
-        BlockShape shape=Items.TryGetBlock(stack.Item,out var block)?Blocks.Get(block).Shape:BlockShape.None;
-        if(shape is BlockShape.Slab or BlockShape.Stairs)
+        int side=Math.Max(1,Math.Min(bounds.Width,bounds.Height)-inset*2);
+        Rectangle icon=new(bounds.Center.X-side/2,bounds.Center.Y-side/2,side,side);
+        if(atlas.Icons.IsModel(stack.Item))sprites.Draw(atlas.Icons.Texture,icon,InventoryIconAtlas.ModelSource(stack.Item),Color.White);
+        else
         {
-            sprites.Draw(atlas.Texture,new Rectangle(icon.X,icon.Y+icon.Height/2,icon.Width,icon.Height-icon.Height/2),new Rectangle(source.X,source.Y+8,16,8),Color.White);
-            if(shape==BlockShape.Stairs)sprites.Draw(atlas.Texture,new Rectangle(icon.X,icon.Y,icon.Width/2,icon.Height/2),new Rectangle(source.X,source.Y,8,8),Color.White);
+            Rectangle source=atlas.Icons.SpriteSource(stack.Item,atlas.ItemSource(stack.Item));
+            int width=Math.Max(1,(int)MathF.Round(side*source.Width/16f)),height=Math.Max(1,(int)MathF.Round(side*source.Height/16f));
+            sprites.Draw(atlas.ItemTexture(stack.Item),new Rectangle(icon.Center.X-width/2,icon.Center.Y-height/2,width,height),source,Color.White);
         }
-        else if(shape==BlockShape.Sign)
-        {
-            sprites.Draw(atlas.Texture,new Rectangle(icon.X,icon.Y,icon.Width,icon.Height/2),new Rectangle(source.X,source.Y,16,8),Color.White);
-            sprites.Draw(atlas.Texture,new Rectangle(icon.X+icon.Width*7/16,icon.Y+icon.Height/2,Math.Max(1,icon.Width/8),icon.Height/2),new Rectangle(source.X+7,source.Y+8,2,8),Color.White);
-        }
-        else sprites.Draw(atlas.ItemTexture(stack.Item),icon,source,Color.White);
         string count = Counts[stack.Count];
         int scale = guiScale??(bounds.Width >= 42 ? 2 : 1);
         int x = bounds.Right - 3 - count.Length * 6 * scale, y = bounds.Bottom - 3 - 7 * scale;

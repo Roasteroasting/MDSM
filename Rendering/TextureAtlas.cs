@@ -7,7 +7,7 @@ using MDSM.Worlds;
 
 namespace MDSM.Rendering;
 
-public sealed class TextureAtlas
+public sealed class TextureAtlas : IDisposable
 {
     public const int TileSize = 16;
     public const int TilesPerRow = 16;
@@ -20,6 +20,8 @@ public sealed class TextureAtlas
     public Texture2D ItemAtlas { get; }
     public Texture2D Text { get; }
     internal Effect LightingEffect { get; }
+    internal InventoryIconAtlas Icons {get;}
+    private bool _disposed;
 
     public Texture2D ItemTexture(ItemId item) => Items.IsSprite(item)?ItemAtlas:Texture;
     public Rectangle ItemSource(ItemId item) => Items.IsSprite(item)?Source(Items.Get(item).Sprite)
@@ -37,7 +39,11 @@ public sealed class TextureAtlas
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");
         if (Texture.Width != AtlasSize || Texture.Height != AtlasSize)
             throw new ContentLoadException($"terrain.png must be {AtlasSize}x{AtlasSize} pixels with {TileSize}x{TileSize} tiles.");
+        Icons=new InventoryIconAtlas(this);
+        Texture.Disposing+=DisposeIcons;
     }
+    private void DisposeIcons(object sender,EventArgs args)=>Dispose();
+    public void Dispose(){if(_disposed)return;_disposed=true;Texture.Disposing-=DisposeIcons;Icons?.Dispose();}
 
     public static Rectangle Source(int tile)
     {

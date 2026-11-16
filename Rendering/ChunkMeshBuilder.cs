@@ -85,6 +85,38 @@ internal sealed class ChunkMeshBuilder
         }
     }
 
+    internal void AppendInventoryItem(BlockType block)
+    {
+        Clear();var shape=Blocks.Get(block).Shape;
+        if(shape==BlockShape.Torch){AppendTorch(null,new(0,0,0));return;}
+        if(shape==BlockShape.Bed){AppendBed(new(0,0,0),0,false);AppendBed(new(0,0,-1),0,true);return;}
+        if(shape==BlockShape.Fence)
+        {
+            Box(new(.375f,0,.375f),new(.625f,1,.625f));
+            Box(new(0,.3f,.4375f),new(1,.45f,.5625f));Box(new(0,.7f,.4375f),new(1,.85f,.5625f));return;
+        }
+        if(shape==BlockShape.Gate)
+        {
+            Box(new(0,0,.4375f),new(.125f,1,.5625f));Box(new(.875f,0,.4375f),new(1,1,.5625f));
+            Box(new(.125f,.3f,.4375f),new(.875f,.45f,.5625f));Box(new(.125f,.7f,.4375f),new(.875f,.85f,.5625f));
+            Box(new(.4375f,.3f,.4375f),new(.5625f,.85f,.5625f));return;
+        }
+        AppendItem(block,Vector3.Zero);
+        float height=shape==BlockShape.Farmland?15f/16:shape==BlockShape.Snow?1f/8:1;
+        for(int i=0;i<VertexCount;i++)Vertices[i].Position=Vertices[i].Position/(DroppedItem.Radius*2)*new Vector3(1,height,1);
+        if(shape==BlockShape.Stairs)for(int i=0;i<VertexCount;i++)Vertices[i].Position=Vector3.Transform(Vertices[i].Position,Matrix.CreateRotationY(MathHelper.Pi));
+        void Box(Vector3 min,Vector3 max)
+        {
+            foreach(var face in Faces)
+            {
+                Vector3 extent=max-min;
+                float u=face.Normal.X==0?min.X:min.Z,v=face.Normal.Y==0?1-max.Y:min.Z;
+                var region=new Rectangle((int)(u*16),(int)(v*16),Math.Max(1,(int)((face.Normal.X==0?extent.X:extent.Z)*16)),Math.Max(1,(int)((face.Normal.Y==0?extent.Y:extent.Z)*16)));
+                AddQuad(min+face.A*extent,min+face.B*extent,min+face.C*extent,min+face.D*extent,7,new Color(new Vector3(face.Shade)),false,region);
+            }
+        }
+    }
+
     // Corners follow the geometric normal; emitted triangles use XNA's clockwise front faces.
     private static readonly Face[] Faces =
     {
@@ -236,7 +268,7 @@ internal sealed class ChunkMeshBuilder
         // Tile 43's existing sprite is two pixels wide and ten tall. The item keeps
         // using the full tile; only the placed cuboid samples these narrow regions.
         const float halfWidth = 1f / 16, height = 10f / 16;
-        Point3 support = world.Structure(cell).Support;
+        Point3 support = world==null?new(0,-1,0):world.Structure(cell).Support;
         Vector3 pivot = new(.5f,0,.5f);
         Matrix rotation = Matrix.Identity;
         if (support.Y == 0)

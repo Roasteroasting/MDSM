@@ -1,4 +1,8 @@
-if(args.Length==1 && args[0]=="--infinite-water-test")
+if(args.Length==1 && args[0]=="--inventory-icon-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.InventoryIconChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--infinite-water-test")
 {
     System.Environment.ExitCode=MDSM.Testing.InfiniteWaterChecks.Run();
 }
