@@ -1418,3 +1418,225 @@ remain. These short scripted routes are not an endurance or physical-input
 playtest. Manual follow-up: command-bar teleports in existing Infinite saves;
 longer flights, turns and terrain horizons; water/mining across fresh boundaries;
 and walking inside Edge/Corner Far Lands. No publishing or commits were performed.
+
+## Classic walking view bob ï¿½ 2026-11-15
+
+Replaced the elliptical world-space camera offset with classic synchronized
+camera-local view transforms: sideways sine sway, downward absolute-cosine dip,
+sine roll and phase-offset absolute-cosine pitch. Uses the classic 0.6 walking
+distance multiplier (one sway cycle per 3.333 blocks), capped amplitude 0.1,
+translation ratio 0.5, roll factor 3 degrees and pitch factor 5 degrees. Normal
+walking measures approximately 1.29 sway cycles/second; vertical dips occur twice
+per cycle. No forward/backward translation is introduced.
+
+Phase is bounded independently of world coordinates. Exponential amplitude fades
+and previous/current fixed-step history are interpolated at rendering time.
+Grounded swimming and Creative are explicitly ineligible; jumping/falling fade
+out without advancing the walking phase. Disabled settings/menu states apply an
+identity transform. Logical camera position, mouse aim, physics, raycasts, legacy
+precision presentation and the separate hand renderer remain unchanged.
+
+Files: Gameplay/ViewBobbing.cs, Gameplay/Camera.cs, Core/Game1.cs,
+Testing/ClassicBobbingChecks.cs, Testing/RefinementChecks.cs and Program.cs.
+Added --bobbing-test and registered reference-transform coverage in the normal
+suite. Updated the old cadence/amplitude expectations for the new classic model;
+restart bounds now verify the exponential envelope rather than a fixed value.
+
+Verification: dotnet build passed with zero warnings/errors. Focused existing
+movement/jump/collision/setting checks and bob cadence/fade checks passed at
+30/60/144/360 update rates. New checks passed for exact transform formulas/order,
+interpolation across those render rates at fixed 120 Hz simulation, rotation,
+no orbit/forward translation, logical aim isolation, disabling/reset, and
+swimming/Creative suppression. DesktopGL lighting/camera/Bed/settings regression
+passed. Full CPU suite was not rerun for this focused presentation change.
+Manual walking/turning/jumping and subjective visual comfort remain to be checked;
+no physical-input playtest or publishing was performed. README was not edited.
+
+## Beta 1.7.3 HUD presentation ï¿½ 2026-11-15
+
+Reworked the gameplay HUD around the supplied Beta screenshot. Uses a centered,
+bottom-aligned 182x22 logical-pixel hotbar, 20-pixel slot pitch, silver 24x24
+selection frame, and point-filtered integer GUI scaling. Hearts occupy the left
+half of the row above the bar; armor fills from the right, with the existing
+extra armor row retained for protection above 20 points. Breath appears above
+armor when submerged. Half/empty states and Creative health/breath suppression
+remain functional. Removed gameplay slot-number labels, permanent item-name text,
+and the redundant mining progress bar; existing world cracking still shows
+mining progress, and Bow feedback is retained. The crosshair uses destination
+color inversion rather than an outlined white sprite.
+
+User supplied three PNGs after the initial visual-only reference; those reference
+originals now reside in UI/UIReferences/ (moved there from the project root).
+Copied Isolated-Hotbar.png and Isolated-HUD-Parts.png byte-for-byte to
+Content/UI/classic-hotbar.png and classic-status.png and registered both with
+Content.mgcb/TextureAtlas. Source files and alpha were preserved; SHA-256 pairs
+match. At the reference 854x480 resolution the 364x44 hotbar renders at its
+original dimensions. Only armor (0,0,18,18), hearts (0,20,18,18), and breath
+(204,0,18,18) regions are sampled from the status sheet. Hunger and XP pixels
+remain unused: no corresponding bars or gameplay systems were added.
+
+The empty arm now has a subtle pixel skin variation, warmer tint, and larger
+bottom-right framing approximating the reference. Held-item transforms and all
+existing swing behavior are retained. Narrow windows keep compact arm framing;
+HUD is composited over the view model. No gameplay, inventory accounting,
+world-generation, saves, lighting, controls or bobbing physics changed.
+
+Files: UI/ClassicHudLayout.cs, Hud.cs, HealthHud.cs, ArmorHud.cs, BreathHud.cs,
+InventoryScreen.cs (HUD slot layout and optional HUD icon scale only),
+Rendering/TextureAtlas.cs and FirstPersonRenderer.cs, Content/Content.mgcb and
+the two supplied UI PNG copies. Testing/ClassicHudChecks.cs adds --classic-hud-test
+and joins the regular CPU suite; PresentationChecks, CompletionGraphicsChecks,
+GameplayRefinementGraphicsChecks and RefinementChecks follow the new layout/art.
+Old exact-color assertions were replaced with spatial visibility/suppression
+checks so the supplied artwork is tested without assuming the former palette.
+
+Verification: dotnet build passed with zero warnings/errors; focused HUD layout,
+health and view-model checks passed. Actual DesktopGL previews at 320x240,
+854x480 and 1280x720 verified inverse crosshair pixel values, translucent hotbar
+interiors, selected-slot framing and arm rendering. Layout additionally covers
+1920x1080. Inspected the 854x480 rendered preview. Preview PNGs are in the build
+output as classic-hud-320.png, classic-hud-854.png and classic-hud-1280.png.
+The broader interface graphics suite passed (24 logged scenarios), including
+26-point armor/overflow rendering, health and breath suppression in Creative,
+inventory and equipment interactions, held sprites, resizing, F1/F3, exact PNG
+pixels, failed-capture handling and all eight alternating F1/F2 regression images.
+At 854x480, measured red heart rows match the reference (418 through 429).
+Physical-input/extended gameplay and subjective visual comfort remain manual
+checks. README was not changed; no publishing performed.
+
+Reference: supplied Beta 1.7.3 screenshot and isolated sprites; Minecraft Wiki
+https://minecraft.wiki/w/Heads-up_display (historical HUD layout and inverted
+crosshair behavior). No modern hunger, XP, or offhand interface was introduced.
+
+## Reference container menus, Creative tabs, double chests and hand bob — 2026-11-15
+
+Integrated all seven supplied menu PNGs as byte-identical copies under
+Content/UI/Menus/, loaded through Content.mgcb and TextureAtlas. Originals in
+UI/UIReferences/ remain untouched. Inventory/crafting, 27-slot Chest, 54-slot
+Large Chest and Furnace-family screens now use the supplied frames with native
+slot coordinates, GUI scaling consistent with the hotbar, point sampling and
+matching mouse hitboxes. Smoker/Blast Furnace use the shared Furnace artwork with
+appropriate dynamic titles; burn/progress visualization follows real machine
+state. Icons, quantities, tool wear, previews and tooltips use actual game data.
+
+Per the user's clarification, Creative now uses the two provided tabs rather
+than the old side-by-side browser. The compass tab shows the nine-column item
+catalog/search/scrollbar and real player hotbar; the chest tab shows the player
+inventory and equipment. Scrolling, scrollbar dragging, single/full-stack grants,
+fresh equipment metadata, normal slot interactions, Q dropping and outside-click
+cursor drops remain supported. The reference's baked example items are covered
+by live registry entries; its delete button is masked rather than introducing an
+unrequested deletion operation. Survival keeps its 2x2 grid; workbenches retain
+3x3 crafting in both modes. Creative inventory tabs intentionally have no 2x2
+crafting section, matching the supplied artwork.
+
+The user also explicitly requested functional double chests. Two horizontally
+adjacent, mutually unambiguous Chest blocks expose a shared 54-slot write-through
+view from either half. Each physical block still owns/persists 27 slots, so the
+save format, container IDs and chunk ownership do not change. Stable Z/X ordering
+keeps the view consistent from either side. New placement rejects triples/larger
+clusters; legacy ambiguous clusters remain individually accessible without data
+loss. Removing either half drops only that half's contents, leaves the other as a
+27-slot chest, and permits rejoining later. Existing world Chest block geometry
+is retained; this adds combined storage/menu behavior, not new world-model art.
+
+FirstPersonRenderer receives the same interpolated walking-bob matrix sampled
+for the world camera. Its fresh camera-space view is that bob matrix exactly
+once; model pose, swing, optional equip transform and placement precede it in
+MonoGame row-vector order. It does not reuse the world camera's view matrix or
+apply an inverse bob. Settings, walking/airborne eligibility, pause/menu hiding,
+legacy precision, aiming and physics are unchanged. Existing swing behavior is
+retained. Inspection found no pre-existing equip animation; an independent equip
+matrix input is supported/tested without inventing new equip timing.
+
+Verification:
+- Debug and Release builds passed with zero warnings/errors. Complete CPU suite
+  passed 262/262 (exit 0), including legacy saves and all existing subsystems.
+- Focused --menu-update-test passed: recipes/layouts, write-through transfers,
+  both-half opening, slot 53 mouse interaction, 54-slot save/load, actual mining
+  drops without duplication, rejoining, chunk-edge placement, and triple rejection.
+- Actual DesktopGL previews rendered all seven interfaces at 320x240 and 1280x720.
+  Inspected Inventory, both Creative tabs, Furnace and Double Chest previews.
+  Tests verify real catalog grants and independent arm/item bob/swing/equip
+  matrices, including no accumulated bob when disabled. --bobbing-test passed.
+- Broader interface graphics suite passed all 24 logged scenarios, including
+  crafting, containers, equipment, menus, F1/F3, resizing, exact final PNG pixels,
+  failed screenshots and eight alternating F1/F2 texture-state regression images.
+  Prior side-by-side, old recovery-message position and Creative 2x2-grid fixture
+  assumptions were updated to the explicitly requested tabs/current layouts;
+  drop tests still cover Survival inventory and Creative workbench ingredients.
+- Seven source/reference PNG hash pairs matched. git diff --check passed.
+
+Main changes: UI/InventoryScreen.cs; Worlds/BlockEntities.cs and World.cs;
+Persistence/WorldSave.cs; Rendering/FirstPersonRenderer.cs and TextureAtlas.cs;
+Core/Game1.cs; Content/Content.mgcb and seven UI/Menus assets; Program.cs;
+Testing/MenuUpdateChecks.cs, RefinementChecks.cs, GameplayRefinementChecks.cs,
+DropControlChecks.cs and InterfaceGraphicsChecks.cs. Generated preview files are
+menu-<interface>-320.png and menu-<interface>-1280.png in the build output.
+
+Recommended manual checks: tab/search/scrollbar comfort, moving stacks and armor
+at preferred resolutions, pairing/opening/breaking chests from either side,
+walking/turning/jumping while holding blocks, sprites or an empty hand, and bob
+setting toggles. Scripted checks are not physical-input or endurance playtests.
+README, world generation, block/item IDs and save versions were not changed.
+No publishing or commits performed.
+
+Rendering reference reviewed for the renderer/item-renderer separation:
+https://github.com/Marcelektro/MavenMCP-1.8.9/blob/master/src/main/java/net/minecraft/client/renderer/EntityRenderer.java
+(the retained classic relationship, not a claim of identical Beta source).
+
+## Original procedural MDSM interface — 2026-11-15
+
+Supersedes the direct-reference-art presentation above. The user requested using
+UI/UIReferences as inspiration only and specifically preferred code-native pixel
+art. No image-generation tool was used.
+
+Added UI/MdsmUiStyle.cs as the shared procedural art/palette foundation: deep
+slate/teal panels, restrained copper accents, recessed slots, small frame notches,
+original grid/backpack tab symbols and a corner-bracket hotbar selection. All
+menu headings/arrows/decorations now use code and MDSM's existing PixelFont.
+Status icons are procedural coral hearts, shield-shaped armor and turquoise air
+bubbles, with the existing full/half/empty accounting preserved. There are no
+copied menu labels, compass/chest tab sprites, slot backgrounds or status icons.
+
+Kept the recent organization and functionality: inventory and crafting positions,
+Creative tabs/search/scrollbar/grants, equipment, Furnace-family displays,
+54-slot double chests, tooltips, world save behavior and hand/item bobbing. Fixed
+heading placement so the pack title and inventory caption do not overlap the
+armor slots. Empty equipment slots have understated H/C/L/B markers.
+
+Removed the nine direct PNG copies from Content and their Content.mgcb entries,
+plus obsolete copies in the development build output. Removal was restricted to
+files whose hashes matched the untouched reference originals. TextureAtlas no
+longer loads any reference UI textures. All originals remain in UI/UIReferences
+for study, outside the compiled content pipeline. MGCB cleaned obsolete generated
+resources; the compiled UI directory now contains only the existing text.xnb.
+
+Changed: UI/MdsmUiStyle.cs, ClassicHudLayout.cs, Hud.cs, HealthHud.cs, ArmorHud.cs,
+BreathHud.cs, InventoryScreen.cs, Rendering/TextureAtlas.cs and Content/Content.mgcb.
+No gameplay, persistence, first-person motion, block/item IDs or controls changed.
+
+Verification: dotnet build passed with zero warnings/errors. Focused menu/chest/
+crafting/persistence/bob checks and HUD/layout/view-model checks passed. Inspected
+new 854x480 HUD and 1280x720 Inventory/Creative previews, then corrected a title
+collision and reran the checks. Broader interface graphics suite passed, including
+Creative transfers, 26-point armor, breath/Creative visibility, inventory/crafting,
+resizing, F1/F3, exact screenshots, failure handling, and eight alternating F1/F2
+texture-state regression captures. The full CPU suite was not repeated for this
+presentation-only change. Physical-input comfort and extended play remain manual
+checks. README was not edited; no publishing or commits performed.
+
+Rendered previews (build output): classic-hud-854.png, menu-inventory-1280.png,
+menu-creative-items-1280.png, menu-creative-inventory-1280.png,
+menu-double-1280.png and corresponding small-window cases. The retained classic
+layout helper/test names describe the layout history, not imported runtime art.
+
+### Silent natural leaf decay - 2026-11-15
+
+Removed the explicit block-break audio request from VegetationSimulation's natural
+leaf-decay path. Removal, loot, support checks and timers are unchanged; mined
+leaves retain their breaking sounds. Added a regression covering both paths.
+Verification: dotnet build --no-restore passed with zero warnings/errors;
+--audio-test passed 6/6 and --refinement-test passed 18/18. The missing-clip
+warning is expected from the audio suite's deliberate missing-assets fixture.
+No manual listening check, publishing or README edits.

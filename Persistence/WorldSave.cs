@@ -43,7 +43,7 @@ public sealed partial class GameSession
     public EnvironmentalHazards Hazards {get;}=new();
     internal Action<Guid> ProjectileWear { get; }
     public Point3? ContainerCell { get; private set; }
-    public BlockContainer ActiveContainer=>ContainerCell.HasValue?World.Containers.Get(ContainerCell.Value):null;
+    public BlockContainer ActiveContainer=>ContainerCell.HasValue?World.Containers.View(ContainerCell.Value):null;
     public MiningController Mining { get; } = new();
     public CombatController Combat { get; } = new();
     public PassiveMobPopulation Mobs { get; }

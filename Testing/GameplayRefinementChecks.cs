@@ -126,7 +126,8 @@ internal static class GameplayRefinementChecks
         foreach(var dimensions in new[]{new Point(320,240),new Point(640,360),new Point(1280,720)})
         {
             var viewport=new Viewport(0,0,dimensions.X,dimensions.Y);Rectangle panel=InventoryLayout.Panel(viewport,true),browser=InventoryLayout.Browser(viewport);
-            Check(panel.Left>=0 && browser.Right<=dimensions.X && panel.Right<browser.Left && browser.Bottom<=dimensions.Y,"Creative panel layout escaped viewport.");
+            Check(panel==browser&&viewport.Bounds.Contains(panel)&&panel.Contains(InventoryLayout.BrowserSearch(viewport))
+                &&panel.Contains(InventoryLayout.CreativeTab(viewport,true))&&panel.Contains(InventoryLayout.CreativeTab(viewport,false)),"Tabbed Creative panel/search/buttons escaped viewport.");
         }
     }
     public static void CreativeBlocks()

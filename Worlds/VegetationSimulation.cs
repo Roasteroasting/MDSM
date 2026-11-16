@@ -4,7 +4,6 @@ using System.IO;
 using Microsoft.Xna.Framework;
 using MDSM.Entities;
 using MDSM.Inventories;
-using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -89,7 +88,7 @@ public sealed partial class VegetationSimulation(World world)
                     if(items==null || !items.CanSpawn(3)){Schedule(_decay,_leafQueue,key,5);continue;}
                     int count=LeafLoot.Roll(_random,loot);
                     if(world.RemoveHarvestedBlock(p,items,count))
-                    {world.Sounds?.Block(SoundKind.Break,BlockType.Leaves,world.Center(p));for(int i=0;i<count;i++)items.Spawn(loot[i],1,world.Center(p));}
+                    {for(int i=0;i<count;i++)items.Spawn(loot[i],1,world.Center(p));}
                     else Schedule(_decay,_leafQueue,key,5);
                 }
             }

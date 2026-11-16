@@ -51,17 +51,18 @@ internal static class DropControlChecks
             Check(InventoryScreen.TryDropHovered(session,InventoryLayout.Slot(viewport,12,creative).Center,viewport,true)==true && session.Inventory[12].IsEmpty,"Hovered Shift+Q did not empty its slot.");
             var armor=new ItemStack(Items.Armor(ArmorMaterial.Iron,ArmorSlot.Helmet),1,12);session.Inventory.SetEquipment(0,armor);
             Check(InventoryScreen.TryDropHovered(session,InventoryLayout.Equipment(viewport,0,creative).Center,viewport,false)==true && session.Inventory.Equipped(0).IsEmpty && session.Items.Entities[^1].Stack==armor,"Armor drop lost metadata or equipment accounting.");
-            session.Crafting.SetSlot(0,new(Items.Stick,3));
-            Check(InventoryScreen.TryDropHovered(session,InventoryLayout.CraftingSlot(viewport,2,0,creative).Center,viewport,false)==true && session.Crafting[0].Count==2,"Crafting input Q failed.");
+            var craftingSession=CommandChecks.Session();craftingSession.ApplySettings(new(){GameMode=mode});int width=creative?3:2;craftingSession.TryOpenCrafting(width);
+            craftingSession.Crafting.SetSlot(0,new(Items.Stick,3));
+            Check(InventoryScreen.TryDropHovered(craftingSession,InventoryLayout.CraftingSlot(viewport,width,0).Center,viewport,false)==true && craftingSession.Crafting[0].Count==2,"Crafting input Q failed.");
             session.Inventory.SetSlot(1,new(Items.Leather,5));session.InventoryInteraction.Click(1,false);
             Check(InventoryScreen.TryDropHovered(session,InventoryLayout.Slot(viewport,0,creative).Center,viewport,false)==true && session.InventoryInteraction.Cursor.Count==4 && session.Inventory[0].Count==10,"Cursor did not take precedence over hovered slot.");
             Check(session.InventoryInteraction.TryReturnCursor(),"Cursor remainder could not return.");
             Point3 cell=new(20,1,20);session.World.SetBlock(cell.X,cell.Y,cell.Z,BlockType.Chest);Check(session.TryOpenContainer(new(cell,default,1)),"Chest fixture failed.");
             session.ActiveContainer.SetSlot(2,new(Items.Leather,14));
-            Check(InventoryScreen.TryDropHovered(session,InventoryLayout.ContainerSlot(viewport,BlockType.Chest,2,creative).Center,viewport,true)==true && session.ActiveContainer[2].IsEmpty,"Chest stack Q failed.");
+            Check(InventoryScreen.TryDropHovered(session,InventoryLayout.ContainerSlot(viewport,BlockType.Chest,2).Center,viewport,true)==true && session.ActiveContainer[2].IsEmpty,"Chest stack Q failed.");
             cell=new(22,1,20);session.World.SetBlock(cell.X,cell.Y,cell.Z,BlockType.Furnace);Check(session.TryOpenContainer(new(cell,default,1)),"Furnace fixture failed.");
             session.ActiveContainer.SetSlot(2,new(Items.IronIngot,7));
-            Check(InventoryScreen.TryDropHovered(session,InventoryLayout.ContainerSlot(viewport,BlockType.Furnace,2,creative).Center,viewport,false)==true && session.ActiveContainer[2].Count==6,"Real furnace output Q failed.");
+            Check(InventoryScreen.TryDropHovered(session,InventoryLayout.ContainerSlot(viewport,BlockType.Furnace,2).Center,viewport,false)==true && session.ActiveContainer[2].Count==6,"Real furnace output Q failed.");
         }
     }
     public static void Safety()

@@ -22,6 +22,7 @@ internal static class AudioChecks
         ("Audio asset coverage, WAV signatures and unchanged build content copies",Assets),
         ("Bounded allocation-free audio queue, elapsed rate limits and positional category mixing",Mixing),
         ("Successful mining/placement, paired structures, health, mobs, pickup and weapon sound triggers",Triggers),
+        ("Natural leaf decay is silent while player leaf mining retains break audio",LeafDecay),
         ("Distance-based footsteps, wall/air silence, jump/landing, swimming and FPS independence",Movement),
         ("Persistent audio volumes, old/invalid settings, responsive Sounds sliders and save isolation",Settings)
     };
@@ -39,6 +40,19 @@ internal static class AudioChecks
     {
         int failures=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}
         Console.WriteLine($"{All.Length-failures}/{All.Length} audio checks passed.");return failures==0?0:1;
+    }
+    public static void LeafDecay()
+    {
+        var s=Session();Point3 leaf=new(20,10,20);
+        s.World.SetBlock(19,10,20,BlockType.WoodLog);
+        s.World.SetGeneratedBlock(leaf.X,leaf.Y,leaf.Z,BlockType.Leaves);
+        s.World.SetBlock(19,10,20,BlockType.Air);s.Sounds.Clear();
+        s.World.Vegetation.Update(VegetationSimulation.MaximumDecay+1,s.Items);
+        Check(s.World.GetBlock(leaf.X,leaf.Y,leaf.Z)==BlockType.Air,"Natural leaf did not decay in the audio fixture.");
+        Check(s.Sounds.Count==0,"Natural leaf decay emitted audio.");
+        s.World.SetBlock(leaf.X,leaf.Y,leaf.Z,BlockType.Leaves);
+        Check(new MiningController().Update(s.World,s.Items,new(leaf,default,1),true,60,s.Inventory),"Player leaf mining failed.");
+        Check(Count(s.Sounds,SoundKind.Break)==1,"Player-mined leaf lost its break sound.");
     }
     public static void Assets()
     {

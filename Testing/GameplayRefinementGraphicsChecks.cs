@@ -64,10 +64,12 @@ internal static class GameplayRefinementGraphicsChecks
             world.SetBlock(40,2,40,BlockType.WaterSource);session.Player.Breath.Update(session.Player,world,8);
             device.SetRenderTarget(target);device.Clear(Color.CornflowerBlue);
             Field<Hud>("_hud").Draw(device.Viewport,session.Inventory,true,false,session.Player.Position,world,new GameTime(),breath:session.Player.Breath);
-            var survival=Read(target,"gameplay-breath-hud.png");Check(survival.Contains(new Color(135,218,255)),"Breath bubbles not rendered.");
+            Rectangle breathArea=BreathHud.Bounds(device.Viewport,session.Inventory.ArmorPoints),healthArea=HealthHud.Bounds(device.Viewport);
+            int Visible(Color[] image,Rectangle area){int count=0;for(int y=area.Top;y<area.Bottom;y++)for(int x=area.Left;x<area.Right;x++)if(image[y*1280+x]!=Color.CornflowerBlue)count++;return count;}
+            var survival=Read(target,"gameplay-breath-hud.png");Check(Visible(survival,breathArea)>20&&Visible(survival,healthArea)>20,"Breath bubbles or health not rendered in their HUD regions.");
             device.SetRenderTarget(target);device.Clear(Color.CornflowerBlue);
             Field<Hud>("_hud").Draw(device.Viewport,session.Inventory,true,false,session.Player.Position,world,new GameTime(),creative:true,breath:session.Player.Breath);
-            var creative=Read(target,"gameplay-creative-hud.png");Check(!creative.Contains(new Color(221,43,54)) && !creative.Contains(new Color(135,218,255)),"Creative rendered health/breath.");
+            var creative=Read(target,"gameplay-creative-hud.png");Check(Visible(creative,breathArea)==0&&Visible(creative,healthArea)==0,"Creative rendered health/breath.");
         }
         // Exercise live Settings navigation from a paused session, then restore defaults for the rest of the suite.
         world.SavedGameMode=GameMode.Survival; // This fixture intentionally starts Survival before testing a live mode switch.

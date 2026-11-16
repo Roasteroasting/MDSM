@@ -59,7 +59,9 @@ internal static class CompletionGraphicsChecks
             Check(!Read(target,"complete-open-structures.png").AsSpan().SequenceEqual(scene),"Open Door/Gate geometry did not update.");
             var inventory=new Inventory();for(int slot=0;slot<4;slot++)inventory.SetEquipment(slot,S(Items.Armor(ArmorMaterial.Obsidian,(ArmorSlot)slot)));
             device.SetRenderTarget(target);device.Clear(Color.CornflowerBlue);Field<Hud>("_hud").Draw(device.Viewport,inventory,false,false,Vector3.Zero,world,new GameTime());
-            var armor=Read(target,"complete-armor-hud.png");Check(armor.Count(c=>c==Color.LightGray)>100,"26-point Armor HUD missing.");
+            var armor=Read(target,"complete-armor-hud.png");var row=ClassicHudLayout.Armor(device.Viewport);int hudScale=ClassicHudLayout.Scale(device.Viewport);
+            int Filled(Rectangle bounds){int count=0;for(int y=bounds.Top;y<bounds.Bottom;y++)for(int x=bounds.Left;x<bounds.Right;x++){var c=armor[y*1280+x];if(c.R>120&&c.G>120&&c.B>120&&Math.Abs(c.R-c.B)<45)count++;}return count;}
+            Check(Filled(row)>100&&Filled(new(row.X,row.Y-10*hudScale,row.Width,row.Height))>30,"26-point right-hand Armor HUD or overflow row missing.");
         }
         void Input(params Keys[] keys)=>Call("ProcessInput",new KeyboardState(keys),default(MouseState),false,new GameTime(),Point.Zero);
         void Right(){Input();Call("ProcessInput",default(KeyboardState),new MouseState(0,0,0,ButtonState.Released,ButtonState.Released,ButtonState.Pressed,ButtonState.Released,ButtonState.Released),false,new GameTime(),Point.Zero);}

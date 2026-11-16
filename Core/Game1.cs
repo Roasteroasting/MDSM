@@ -299,7 +299,7 @@ public class Game1 : Game
             world.Fire.Update(dt);
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
                 keyboard.IsKeyDown(Keys.LeftControl) || keyboard.IsKeyDown(Keys.RightControl));
-            _session.Bobbing.Update(player,_settings.ViewBobbing,dt);
+            _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
             _playerAudio.Update(player,world);
             _pendingJump = false;
             camera.Position = player.EyePosition;
@@ -769,9 +769,8 @@ public class Game1 : Game
         if (GraphicsDevice.Viewport.Width <= 0 || GraphicsDevice.Viewport.Height <= 0) return;
         if (_session != null)
         {
-            Vector2 bob=State==GameState.Playing && _settings.ViewBobbing?_session.Bobbing.Offset:Vector2.Zero;
-            _session.Camera.PresentationOffset=_session.Camera.Right*bob.X+Vector3.Up*bob.Y
-                +Camera.PrecisionOffset(_session.World.AbsolutePosition(_session.Camera.Position),_settings.LegacyVisualPrecision);
+            _session.Camera.PresentationTransform=State==GameState.Playing&&_settings.ViewBobbing?_session.Bobbing.Transform(_simulationClock.Fraction):Matrix.Identity;
+            _session.Camera.PresentationOffset=Camera.PrecisionOffset(_session.World.AbsolutePosition(_session.Camera.Position),_settings.LegacyVisualPrecision);
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, _session.World.Time.Sky, 1f, 0);
             _renderer.Brightness=_settings.Brightness;
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
@@ -783,7 +782,7 @@ public class Game1 : Game
             _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
             _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
             if (_presentation.HudVisible && State==GameState.Playing) _firstPerson.Draw(State, _session.Inventory,
-                BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform);
+                BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform,_session.Camera.PresentationTransform);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
                 _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath,_session.Player.AbsolutePosition);

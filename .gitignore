@@ -3,4 +3,6 @@ obj/
 Content/bin/
 Content/obj/
 .vs/
+.vscode/
 *.user
+UI/UIReferences/

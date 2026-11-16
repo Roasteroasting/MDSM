@@ -27,10 +27,12 @@ public sealed class BlockContainer
 {
     private readonly ItemStack[] _slots;
     private readonly Action _wake;
+    private readonly BlockContainer _first,_second;
     public Point3 Cell { get; }
     public BlockType Block { get; }
-    public int SlotCount=>_slots.Length;
-    public ItemStack this[int slot]=>_slots[slot];
+    public int SlotCount=>_first!=null?54:_slots.Length;
+    public ItemStack this[int slot]=>_first!=null?(slot<27?_first[slot]:_second[slot-27]):_slots[slot];
+    internal BlockContainer(BlockContainer first,BlockContainer second){_first=first;_second=second;Cell=first.Cell;Block=BlockType.Chest;}
     public double Progress { get; private set; }
     public double Burn { get; private set; }
     public double BurnTotal { get; private set; }
@@ -38,10 +40,11 @@ public sealed class BlockContainer
     {Cell=cell;Block=block;_slots=new ItemStack[block==BlockType.Chest?27:3];_wake=wake;}
     public void SetSlot(int slot,ItemStack stack)
     {
+        if(_first!=null){if((uint)slot>=54)throw new ArgumentOutOfRangeException(nameof(slot));if(slot<27)_first.SetSlot(slot,stack);else _second.SetSlot(slot-27,stack);return;}
         if(Smelting.Machine(Block) && slot==0 && (stack.IsEmpty || stack.Item!=_slots[0].Item))Progress=0;
         _slots[slot]=stack;_wake?.Invoke();
     }
-    public bool Empty { get {foreach(var stack in _slots)if(!stack.IsEmpty)return false;return true;} }
+    public bool Empty { get {for(int i=0;i<SlotCount;i++)if(!this[i].IsEmpty)return false;return true;} }
     public bool Active=>Smelting.Machine(Block) && (Burn>0 || CanSmelt && Smelting.Fuel(_slots[1].Item)>0);
     private bool CanSmelt => !_slots[0].IsEmpty && Smelting.Result(_slots[0].Item,Block).Value!=0
         && (_slots[2].IsEmpty || _slots[2].Item==Smelting.Result(_slots[0].Item,Block) && _slots[2].Count<_slots[2].Limit);
@@ -52,7 +55,7 @@ public sealed class BlockContainer
             if(slot==2){SetSlot(2,interaction.TakeStack(_slots[2],right));return;}
             if(!interaction.Cursor.IsEmpty && (slot==0?Smelting.Result(interaction.Cursor.Item,Block).Value==0:Smelting.Fuel(interaction.Cursor.Item)<=0))return;
         }
-        SetSlot(slot,interaction.ClickStack(_slots[slot],right));
+        SetSlot(slot,interaction.ClickStack(this[slot],right));
     }
     internal void Update(double elapsed)
     {
@@ -80,8 +83,8 @@ public sealed class BlockContainer
         }
     }
     public bool Wear(Guid id)
-    {for(int i=0;i<_slots.Length;i++)if(id!=Guid.Empty && _slots[i].InstanceId==id){_slots[i]=_slots[i].Wear();return true;}return false;}
-    public BlockEntityState Capture()=>new(Cell,Block,(ItemStack[])_slots.Clone(),Progress,Burn,BurnTotal);
+    {if(_first!=null)return _first.Wear(id)||_second.Wear(id);for(int i=0;i<_slots.Length;i++)if(id!=Guid.Empty && _slots[i].InstanceId==id){_slots[i]=_slots[i].Wear();return true;}return false;}
+    public BlockEntityState Capture(){var stacks=new ItemStack[SlotCount];for(int i=0;i<stacks.Length;i++)stacks[i]=this[i];return new(Cell,Block,stacks,Progress,Burn,BurnTotal);}
     internal void Restore(BlockEntityState state)
     {
         if(state.Slots.Length!=SlotCount || !double.IsFinite(state.Progress) || state.Progress<0 || state.Progress>=Smelting.Seconds
@@ -98,6 +101,19 @@ public sealed class BlockContainer
 
 public sealed partial class BlockEntities(World world)
 {
+    private BlockContainer _view,_viewFirst,_viewSecond;
+    private static readonly Point3[] ChestSides={new(1,0,0),new(-1,0,0),new(0,0,1),new(0,0,-1)};
+    private Point3? Partner(Point3 cell)
+    {Point3? found=null;foreach(var d in ChestSides){var p=cell+d;if(world.IsLoaded(p)&&world.GetBlock(p.X,p.Y,p.Z)==BlockType.Chest){if(found.HasValue)return null;found=p;}}return found;}
+    public BlockContainer View(Point3 cell)
+    {
+        var first=Get(cell);if(first?.Block!=BlockType.Chest)return first;
+        var other=Partner(cell);if(!other.HasValue||Partner(other.Value)!=cell)return first;
+        var second=Get(other.Value);if(first.Cell.Z>second.Cell.Z||first.Cell.Z==second.Cell.Z&&first.Cell.X>second.Cell.X)(first,second)=(second,first);
+        if(_viewFirst!=first||_viewSecond!=second){_viewFirst=first;_viewSecond=second;_view=new(first,second);}return _view;
+    }
+    internal bool CanPlaceChest(Point3 cell)
+    {int adjacent=0;foreach(var d in ChestSides){var p=cell+d;if(world.GetBlock(p.X,p.Y,p.Z)!=BlockType.Chest)continue;if(++adjacent>1)return false;foreach(var side in ChestSides){var next=p+side;if(world.GetBlock(next.X,next.Y,next.Z)==BlockType.Chest)return false;}}return true;}
     public const int Maximum=65536;
     private readonly Dictionary<Point3,BlockContainer> _entries=new();
     private readonly HashSet<Point3> _active=new();

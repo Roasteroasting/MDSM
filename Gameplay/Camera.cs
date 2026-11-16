@@ -16,10 +16,11 @@ public sealed class Camera
 
     public Vector3 Position { get; set; }
     public Vector3 PresentationOffset { get; set; }
+    public Matrix PresentationTransform { get; set; } = Matrix.Identity;
     public Vector3 Forward => new(MathF.Sin(_yaw) * MathF.Cos(_pitch), MathF.Sin(_pitch), -MathF.Cos(_yaw) * MathF.Cos(_pitch));
     public Vector3 HorizontalForward => new(MathF.Sin(_yaw), 0, -MathF.Cos(_yaw));
     public Vector3 Right => new(MathF.Cos(_yaw), 0, MathF.Sin(_yaw));
-    public Matrix View => Matrix.CreateLookAt(Position+PresentationOffset, Position+PresentationOffset + Forward, Vector3.Up);
+    public Matrix View => Matrix.CreateLookAt(Position+PresentationOffset, Position+PresentationOffset + Forward, Vector3.Up)*PresentationTransform;
 
     // Optional historical camera snapping. Narrow ONLY a presentation copy;
     // physics, F3, raycasts, saving and noise always retain their exact frame.

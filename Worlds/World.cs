@@ -226,6 +226,7 @@ public sealed partial class World
     {
         if(block==BlockType.Bed)return PlaceBed(cell,0,playerBounds);
         BlockDefinition definition = Blocks.Get(block);
+        if(block==BlockType.Chest&&!Containers.CanPlaceChest(cell))return false;
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
             || support.HasValue && support.Value.Y>0 && Blocks.RejectsUnderside(block)
             || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air

@@ -175,8 +175,8 @@ internal static class PresentationChecks
             var viewport = new Viewport(0, 0, size.X, size.Y);
             Rectangle bounds = ViewModelLayout.Bounds(viewport), hotbar = InventoryLayout.HotbarSlot(viewport, 0);
             Rectangle arm=ViewModelLayout.Bounds(viewport,true);
-            Require(arm.Right==viewport.Bounds.Right && arm.Left>bounds.Left && arm.Bottom==bounds.Bottom && arm.Height==bounds.Height
-                && !arm.Intersects(HealthHud.Bounds(viewport)) && !arm.Intersects(InventoryLayout.HotbarSlot(viewport,8)),"Arm lost its right/bottom anchor or overlaps the HUD.");
+            Require(arm.Right==viewport.Bounds.Right && arm.Left>size.X/2 && arm.Bottom==(size.X>=640?viewport.Bounds.Bottom:bounds.Bottom)
+                && !arm.Intersects(HealthHud.Bounds(viewport)),"Arm lost its right/bottom framing or covers the crosshair/health area.");
             Require(bounds.Left > size.X / 2 && bounds.Right <= size.X && bounds.Top > 0 && bounds.Bottom <= size.Y
                 && !bounds.Intersects(HealthHud.Bounds(viewport)) && !bounds.Intersects(InventoryLayout.HotbarSlot(viewport, 8)), "View model overlaps HUD/crosshair or leaves viewport.");
         }

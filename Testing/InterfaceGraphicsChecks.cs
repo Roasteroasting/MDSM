@@ -158,7 +158,7 @@ internal static class InterfaceGraphicsChecks
                 int colored=0;for(int y=result.Top+3;y<result.Bottom-3;y++)for(int x=result.Left+3;x<result.Right-3;x++)
                     if(pixels[y*w+x].R>pixels[y*w+x].B*1.4f)colored++;
                 Require(colored>5,"Crafting result pixels missing.");
-                if(blocked)Require(pixels.Skip((panel.Bottom-20)*w).Take(w*7).Count(c=>c==Color.Salmon)>20,"Recovery message leaves the small window.");
+                if(blocked)Require(pixels.Skip((h-12)*w).Take(w*7).Count(c=>c==Color.Salmon)>20,"Recovery message leaves the small window.");
                 using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,$"crafting-{width}x{width}-{w}{(blocked?"-blocked":"")}.png")))target.SaveAsPng(png,w,h);
                 GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=Field<TextureAtlas>("_atlas").Texture;
                 Require(Session.Crafting[0].Count==1,"Rendering consumed crafting preview ingredients.");

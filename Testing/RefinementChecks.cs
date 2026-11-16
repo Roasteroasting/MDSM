@@ -30,6 +30,9 @@ internal static class RefinementChecks
         ("Slower tiered mining, unchanged hardness ratios and harvest restrictions",Mining),
         ("Item atlas dimensions, registered sprite indices and transparency",ItemAtlasChecks.LayoutAndTiles),
         ("Distance-based bob cadence, smooth fades, airborne suppression and render rates",BobbingPacing),
+        ("Classic camera-local bob transforms, rotations and interpolation",ClassicBobbingChecks.Reference),
+        ("Beta HUD strip, status rows, selection and responsive layout",ClassicHudChecks.Layout),
+        ("Classic menus, paired chest ownership and legacy-compatible persistence",MenuUpdateChecks.Cpu),
         ("Gradual 20-45 second tree decay, persisted deadlines and older countdowns",DecayPacing)};
     private static void Require(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}
     public static int Run()
@@ -269,7 +272,7 @@ internal static class RefinementChecks
                 maxX=Math.Max(maxX,Math.Abs(bob.Offset.X));maxY=Math.Max(maxY,Math.Abs(bob.Offset.Y));previous=bob.Offset;
             }
             double frequency=(crossings-1)/(lastCross-firstCross);
-            Require(frequency>1.38 && frequency<1.49 && maxX>.055f && maxY>.069f,"Bobbing cadence/amplitude is not broad walking motion.");
+            Require(Math.Abs(frequency-Player.MoveSpeed/ViewBobbing.DistancePerCycle)<.035 && maxX>ViewBobbing.HorizontalAmplitude*.9f && maxY>ViewBobbing.VerticalAmplitude*.9f,"Bobbing cadence/amplitude differs from classic walking distance.");
             if(reference.HasValue)Require(Vector2.Distance(reference.Value,bob.Offset)<.0002f,"Bobbing depends on render/update frequency.");
             reference=bob.Offset;
             // Equal traveled distance has equal phase even when the speed differs.
@@ -289,7 +292,7 @@ internal static class RefinementChecks
                 }
                 Require(fade.Offset==Vector2.Zero,"Stationary/airborne bobbing retained residual motion.");
                 fade.UpdatePose(stopped+Vector3.Right*Player.MoveSpeed*dt,true,true,dt);
-                Require(fade.Offset.Length()>0 && fade.Offset.Length()<.02f,"Walking restart did not fade in.");
+                Require(fade.Offset.Length()>0 && fade.Offset.Length()<=ViewBobbing.VerticalAmplitude*(1-MathF.Exp(-6*dt))+.00001f,"Walking restart did not follow the bounded fade-in envelope.");
                 fade.UpdatePose(stopped,true,false,dt);Require(fade.Offset==Vector2.Zero,"Setting did not disable bobbing immediately.");
                 fade.UpdatePose(stopped,true,true,dt);Require(fade.Offset==Vector2.Zero,"Re-enabling at rest restored residual shaking.");
             }

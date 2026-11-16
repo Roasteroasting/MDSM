@@ -1,4 +1,16 @@
-if(args.Length==1 && args[0]=="--infinite-graphics-test")
+if(args.Length==1 && args[0]=="--menu-update-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.MenuUpdateChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--classic-hud-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.ClassicHudChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--bobbing-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.ClassicBobbingChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--infinite-graphics-test")
 {
     System.Environment.ExitCode=MDSM.Testing.InfiniteGraphicsChecks.Run();
 }
