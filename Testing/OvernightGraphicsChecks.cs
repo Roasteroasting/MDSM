@@ -194,7 +194,10 @@ internal static class OvernightGraphicsChecks
                 uint hash=unchecked((uint)(x*73856093^z*19349663^world.Seed));hash^=hash>>13;hash*=1274126177;hash^=hash>>16;if(hash%7>2)continue;
                 Session.Camera.Position=new(x*32+11,130,z*32+10);Session.Camera.RestoreOrientation(0,Camera.PitchLimit);Render("textured-clouds");
                 var sky=typeof(WorldRenderer).GetField("_sky",Flags).GetValue(F<WorldRenderer>("_renderer"));var clouds=(CuboidModelBuilder)typeof(SkyRenderer).GetField("_clouds",Flags).GetValue(sky);
-                C(clouds.Count>0 && clouds.Vertices.Take(clouds.Count).All(v=>SignFireChecks.Tile(v)==Blocks.Get(BlockType.Snow).SideTile),"Cloud geometry did not sample Snow.");return;
+                var snow=(Texture2D)typeof(SkyRenderer).GetField("_snow",Flags).GetValue(sky);var actual=new Color[256];snow.GetData(actual);
+                var expected=new Color[256];F<TextureAtlas>("_atlas").Texture.GetData(0,TextureAtlas.Source(Blocks.Get(BlockType.Snow).SideTile),expected,0,256);
+                C(clouds.Count>0 && actual.SequenceEqual(expected),"Cloud texture changed the existing Snow pixels.");
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=F<TextureAtlas>("_atlas").Texture;return;
             }
             throw new Exception("Cloud fixture not found.");
         }

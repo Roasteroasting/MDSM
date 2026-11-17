@@ -212,7 +212,7 @@ internal sealed class InventoryScreen : IDisposable
     // Null means there is no real stack here (including previews/catalog entries).
     internal static bool? TryDropHovered(GameSession session, Point mouse, Viewport viewport, bool wholeStack,bool creativeItems=false)
     {
-        if (!session.InventoryInteraction.Cursor.IsEmpty) return session.DropCursor(wholeStack);
+        if (!session.InventoryInteraction.Cursor.IsEmpty) return session.DropCursor(wholeStack,thrown:true);
         bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2;
         int rows=session.ActiveContainer?.Block==BlockType.Chest?session.ActiveContainer.SlotCount/9:0;
         bool? Drop(ItemStack stack, out ItemStack remaining)

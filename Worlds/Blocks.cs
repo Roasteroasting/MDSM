@@ -167,6 +167,8 @@ public static class Blocks
     public static bool MatureCrop(BlockType block)=>block is BlockType.Wheat7 or BlockType.Carrot7 or BlockType.Potato7;
     public static int CropStage(BlockType block)=>block>=BlockType.Potato1?(int)block-(int)BlockType.Potato1:block>=BlockType.Carrot1?(int)block-(int)BlockType.Carrot1:(int)block-(int)BlockType.Wheat1;
     public static bool DoubleGrass(BlockType block)=>block is BlockType.DoubleTallGrassLower or BlockType.DoubleTallGrassUpper;
+    // Occupied voxel may be replaced, independently of collision/selection bounds.
+    public static bool Replaceable(BlockType block)=>block==BlockType.Air || block==BlockType.Snow || Get(block).Shape==BlockShape.Cross || Crop(block);
     public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + CropStage(block)*.125f)
         :block==BlockType.Sapling?.8f:block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.DeadBush?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;

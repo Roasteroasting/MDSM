@@ -229,7 +229,7 @@ public sealed partial class World
         if(block==BlockType.Chest&&!Containers.CanPlaceChest(cell))return false;
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
             || support.HasValue && support.Value.Y>0 && Blocks.RejectsUnderside(block)
-            || (GetBlock(cell.X, cell.Y, cell.Z) != BlockType.Air
+            || (!Blocks.Replaceable(GetBlock(cell.X, cell.Y, cell.Z))
                 && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
             || (definition.Solid && PlacementOverlaps(cell,block,playerBounds,proposed))
             || (definition.Solid && PlacementBlockedByMobs(cell,block,proposed))

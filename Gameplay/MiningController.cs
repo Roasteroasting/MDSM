@@ -92,24 +92,32 @@ public sealed class MiningController
 
 public static class BlockPlacement
 {
+    public static Point3 PlacementCell(World world,BlockHit hit)
+    {
+        BlockType occupied=world.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z);
+        return occupied!=BlockType.Air && Blocks.Replaceable(occupied) ? hit.Cell : hit.PlacementCell;
+    }
     public static bool TryPlace(World world, Inventory inventory, BlockHit hit, BoundingBox playerBounds,bool creative=false,float yaw=0)
     {
         if(!hit.HasPlacementFace)return false;
+        Point3 destination=PlacementCell(world,hit);
+        bool replacing=destination==hit.Cell;
+        Point3 attachment=replacing?new(0,-1,0):new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z);
         if(Items.TryGetBlock(inventory.Selected.Item,out var block) && World.OrientedBuilding(block))
         {
-            Point3 cell=hit.PlacementCell;bool upper=hit.Normal.Y<0 || hit.Normal.Y==0 && hit.Position is Vector3 p && p.Y-MathF.Floor(p.Y)>.5f;
+            Point3 cell=destination;bool upper=!replacing && (hit.Normal.Y<0 || hit.Normal.Y==0 && hit.Position is Vector3 p && p.Y-MathF.Floor(p.Y)>.5f);
             if(Blocks.Get(block).Shape==BlockShape.Slab && world.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)==block
                 && (hit.Normal.Y>0 && (world.Structure(hit.Cell).Facing&4)==0 || hit.Normal.Y<0 && (world.Structure(hit.Cell).Facing&4)!=0))
             {cell=hit.Cell;upper=(world.Structure(cell).Facing&4)==0;}
             byte facing=(byte)(((int)MathF.Round(yaw/MathHelper.PiOver2)+4)%4);
-            Point3 support=new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z);
+            Point3 support=attachment;
             if(block==BlockType.Sign && support.Y==0)facing=(byte)(support.X<0?1:support.X>0?3:support.Z<0?2:0);
             else if(block==BlockType.Sign)
             {int octant=((int)MathF.Round(yaw/MathHelper.PiOver4)%8+8)%8;facing=(byte)(octant/2+((octant&1)<<3));}
             if(!world.PlaceBuilding(cell,block,facing,upper,playerBounds,support))return false;
             if(!creative)inventory.ConsumeSelected();return true;
         }
-        return TryPlace(world,inventory,hit.PlacementCell,playerBounds,creative,new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z));
+        return TryPlace(world,inventory,destination,playerBounds,creative,attachment);
     }
     public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false,Point3? support=null)
     {

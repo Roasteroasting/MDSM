@@ -216,7 +216,7 @@ public sealed partial class WorldRenderer : IDisposable
             _device.Textures[0]=null;_device.Textures[0]=_texture;
         }
 
-        _items.Draw(camera, items,_world,Brightness);
+        _items.Draw(camera, items,_world,Brightness,fallingInterpolation);
         _falling.Draw(camera, _world.Gravity, fallingInterpolation,_world,Brightness);
         var cracking=miningTarget;
         if(cracking.HasValue)_cracks.Draw(_world,camera,cracking.Value,miningProgress);

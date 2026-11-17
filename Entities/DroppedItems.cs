@@ -25,9 +25,18 @@ public sealed class DroppedItem
     public Guid InstanceId { get; }
     public ItemStack Stack => new(Item,Count,Durability,InstanceId);
     private FramedPosition _pose;
+    private FramedPosition _previousPose;
+    private float _phase, _previousPhase;
+    // Toss direction and presentation are transient; existing saves retain their
+    // exact item state and vertical motion without a save-layout change.
+    internal Vector2 HorizontalVelocity { get; private set; }
     public Vector3 Position {get=>_pose.Local;private set=>_pose.Local=value;}
     public MDSM.Worlds.Streaming.WorldPosition AbsolutePosition=>_pose.Absolute;
-    internal void Bind(World world)=>_pose.Bind(world);
+    internal void Bind(World world){_pose.Bind(world);_previousPose=_pose;}
+    internal Vector3 RenderPosition(float fraction)=>Vector3.Lerp(_previousPose.Local,Position,Math.Clamp(fraction,0,1));
+    internal float RenderPhase(float fraction)=>MathHelper.Lerp(_previousPhase,_phase,Math.Clamp(fraction,0,1));
+    internal Vector3 VisualPosition(float fraction)=>RenderPosition(fraction)+new Vector3(0,.13f+.06f*MathF.Sin(RenderPhase(fraction)),0);
+    internal void Throw(Vector3 velocity){HorizontalVelocity=new(velocity.X,velocity.Z);VerticalVelocity=velocity.Y;}
     public float VerticalVelocity { get; private set; }
     public float PickupDelay { get; internal set; }
     public DroppedItemState Capture() => new(Item, Count, Position, VerticalVelocity, PickupDelay,Durability,InstanceId);
@@ -37,32 +46,51 @@ public sealed class DroppedItem
     {
         Item = state.Item; Count = state.Count; Position = state.Position;Durability=state.Durability;InstanceId=state.InstanceId;
         VerticalVelocity = state.VerticalVelocity; PickupDelay = state.PickupDelay;
+        _previousPose=_pose;
+        float variation=state.Position.X*.73f+state.Position.Z*.51f+state.Item.Value*.013f;
+        _phase=_previousPhase=(variation-MathF.Floor(variation))*MathHelper.TwoPi;
     }
 
     internal void Update(World world, float elapsed)
     {
+        _previousPose=_pose;_previousPhase=_phase;_phase+=elapsed*2;
+        if(_phase>=MathHelper.TwoPi*2){_phase-=MathHelper.TwoPi*2;_previousPhase-=MathHelper.TwoPi*2;}
+        float before=VerticalVelocity;
         VerticalVelocity = Math.Max(-40, VerticalVelocity - 18 * elapsed);
-        float movement = VerticalVelocity * elapsed;
-        int steps = Math.Max(1, (int)MathF.Ceiling(MathF.Abs(movement) / 0.1f));
-        float step = movement / steps;
+        Vector3 movement=new(HorizontalVelocity.X*elapsed,(before+VerticalVelocity)*.5f*elapsed,HorizontalVelocity.Y*elapsed);
+        int steps = Math.Max(1, (int)MathF.Ceiling(movement.Length() / 0.1f));
+        bool grounded=false;
         for (int i = 0; i < steps; i++)
         {
-            Vector3 next = Position + new Vector3(0, step, 0);
-            var bounds = new BoundingBox(next - new Vector3(Radius), next + new Vector3(Radius));
-            bool collided = false;
-            for (int x = Math.Max(world.LocalMinX, (int)MathF.Floor(bounds.Min.X)); x <= Math.Min(world.LocalMaxX - 1, (int)MathF.Floor(bounds.Max.X)); x++)
-            for (int y = Math.Max(0, (int)MathF.Floor(bounds.Min.Y)); y <= Math.Min(World.Height - 1, (int)MathF.Floor(bounds.Max.Y)); y++)
-            for (int z = Math.Max(world.LocalMinZ, (int)MathF.Floor(bounds.Min.Z)); z <= Math.Min(world.LocalMaxZ - 1, (int)MathF.Floor(bounds.Max.Z)); z++)
-                if (world.IsSolid(x, y, z) && World.Overlaps(bounds, World.Bounds(new Point3(x, y, z))))
-                {
-                    next.Y = step < 0 ? Math.Max(next.Y, y + 1 + Radius) : Math.Min(next.Y, y - Radius);
-                    collided = true;
-                }
-            Position = next;
-            if (collided) { VerticalVelocity = 0; break; }
+            if(Move(world,movement.X/steps,0)){HorizontalVelocity=new(0,HorizontalVelocity.Y);movement.X=0;}
+            if(Move(world,movement.Z/steps,2)){HorizontalVelocity=new(HorizontalVelocity.X,0);movement.Z=0;}
+            if(Move(world,movement.Y/steps,1)){grounded=movement.Y<0;VerticalVelocity=0;movement.Y=0;}
         }
+        HorizontalVelocity*=MathF.Exp(-(grounded?8:.8f)*elapsed);
         // Keep void items at their original X/Z, never teleport death drops to spawn.
         if (Position.Y < -16 + Radius) { Position = new Vector3(Position.X, -16 + Radius, Position.Z); VerticalVelocity = 0; }
+    }
+    private bool Move(World world,float amount,int axis)
+    {
+        if(amount==0)return false;
+        Vector3 next=Position;if(axis==0)next.X+=amount;else if(axis==1)next.Y+=amount;else next.Z+=amount;
+        var bounds=new BoundingBox(next-new Vector3(Radius),next+new Vector3(Radius));bool hit=false;
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];
+        for(int x=Math.Max(world.LocalMinX,(int)MathF.Floor(bounds.Min.X));x<=Math.Min(world.LocalMaxX-1,(int)MathF.Floor(bounds.Max.X));x++)
+        for(int z=Math.Max(world.LocalMinZ,(int)MathF.Floor(bounds.Min.Z));z<=Math.Min(world.LocalMaxZ-1,(int)MathF.Floor(bounds.Max.Z));z++)
+        for(int y=Math.Max(0,(int)MathF.Floor(bounds.Min.Y)-1);y<=Math.Min(World.Height-1,(int)MathF.Floor(bounds.Max.Y));y++)
+        {
+            int count=world.BlockBoxes(world.GlobalCell(x,y,z),boxes,true);
+            for(int i=0;i<count;i++)if(World.Overlaps(bounds,boxes[i]))
+            {
+                var box=boxes[i];hit=true;
+                if(axis==0)next.X=amount>0?Math.Min(next.X,box.Min.X-Radius):Math.Max(next.X,box.Max.X+Radius);
+                else if(axis==1)next.Y=amount>0?Math.Min(next.Y,box.Min.Y-Radius):Math.Max(next.Y,box.Max.Y+Radius);
+                else next.Z=amount>0?Math.Min(next.Z,box.Min.Z-Radius):Math.Max(next.Z,box.Max.Z+Radius);
+            }
+        }
+        next.X=Math.Clamp(next.X,world.LocalMinX+Radius,world.LocalMaxX-Radius);next.Z=Math.Clamp(next.Z,world.LocalMinZ+Radius,world.LocalMaxZ-Radius);
+        Position=next;return hit;
     }
 }
 
@@ -118,13 +146,13 @@ public sealed partial class DroppedItems
         _items.Add(Make(state));
     }
 
-    public bool TrySpawn(ItemStack stack, Vector3 position, float pickupDelay)
+    public bool TrySpawn(ItemStack stack, Vector3 position, float pickupDelay,Vector3 velocity=default)
     {
-        if (stack.IsEmpty || !CanSpawn()) return false;
+        if (stack.IsEmpty || !CanSpawn() || !float.IsFinite(velocity.LengthSquared()) || velocity.LengthSquared()>1600) return false;
         var state=new DroppedItemState(stack.Item,stack.Count,position,0,pickupDelay,stack.Durability,stack.InstanceId);
         Validate(state,_world.Size);
         if(!Items.LavaResistant(stack.Item) && Lava.Intersects(_world,new BoundingBox(position-new Vector3(DroppedItem.Radius),position+new Vector3(DroppedItem.Radius))))return true;
-        _items.Add(Make(state));
+        var entity=Make(state);entity.Throw(velocity);_items.Add(entity);
         return true;
     }
     public bool Wear(Guid id)

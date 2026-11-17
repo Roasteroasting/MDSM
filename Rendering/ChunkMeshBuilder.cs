@@ -241,7 +241,9 @@ internal sealed partial class ChunkMeshBuilder
                     if(definition.Shape==BlockShape.Snow)
                     {
                         BlockType adjacent=world.GetBlock(worldX+face.Offset.X,y+face.Offset.Y,worldZ+face.Offset.Z);
-                        if(Blocks.IsOpaque(adjacent) || face.Normal.Y==0 && adjacent==BlockType.Snow)continue;
+                        // The block in the voxel above starts well above this
+                        // layer's top, so it cannot occlude the exposed snow face.
+                        if(face.Normal.Y<=0 && Blocks.IsOpaque(adjacent) || face.Normal.Y==0 && adjacent==BlockType.Snow)continue;
                     }
                     Vector3 size=boxes[i].Max-boxes[i].Min;
                     AddQuad(boxes[i].Min+face.A*size,boxes[i].Min+face.B*size,boxes[i].Min+face.C*size,boxes[i].Min+face.D*size,definition.Tile(face.Normal),new Color(new Vector3(face.Shade)),false,
@@ -276,7 +278,9 @@ internal sealed partial class ChunkMeshBuilder
             {
                 // World queries include adjacent chunks and return air beyond finite edges.
                 BlockType neighbor=world.GetBlock(worldX + face.Offset.X,y + face.Offset.Y,worldZ + face.Offset.Z);
-                if (Blocks.IsOpaque(neighbor) || neighbor==BlockType.Snow && face.Normal.Y>0 || block==BlockType.Glass && neighbor==BlockType.Glass)
+                // A thin, non-opaque snow layer must never remove the terrain's
+                // supporting top face (including during asynchronous snow edits).
+                if (Blocks.IsOpaque(neighbor) || block==BlockType.Glass && neighbor==BlockType.Glass)
                     continue;
 
                 int tile = Blocks.Tile(block, face.Normal);

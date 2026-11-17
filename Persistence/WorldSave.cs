@@ -197,17 +197,17 @@ public sealed partial class GameSession
         Camera.Position = Player.EyePosition; Camera.RestoreOrientation(0, 0);
     }
 
-    public bool DropCursor(bool wholeStack = true)
+    public bool DropCursor(bool wholeStack = true,bool thrown=false)
     {
         return !Player.IsDead && DropPlacement.TryFind(World, Player, Camera.HorizontalForward, true, out Vector3 position)
-            && InventoryInteraction.TryDropCursor(Items, position, DroppedItems.DeliberatePickupDelay, wholeStack);
+            && InventoryInteraction.TryDropCursor(Items, position, DroppedItems.DeliberatePickupDelay, wholeStack,thrown?DropPlacement.ThrowVelocity(Camera.Forward):Vector3.Zero);
     }
     internal bool TryDropStack(ItemStack stack, bool wholeStack, out ItemStack remaining)
     {
         remaining = stack;
         if (Player.IsDead || stack.IsEmpty || !DropPlacement.TryFind(World, Player, Camera.HorizontalForward, true, out Vector3 position)) return false;
         int count = wholeStack ? stack.Count : 1;
-        if (!Items.TrySpawn(stack.WithCount(count), position, DroppedItems.DeliberatePickupDelay)) return false;
+        if (!Items.TrySpawn(stack.WithCount(count), position, DroppedItems.DeliberatePickupDelay,DropPlacement.ThrowVelocity(Camera.Forward))) return false;
         remaining = stack.WithCount(stack.Count - count);
         return true;
     }

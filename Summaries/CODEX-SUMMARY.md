@@ -2497,3 +2497,93 @@ Verification:
   open/closed gates and underwater fog/overlay. All four gate orientations have
   scripted preview captures. Physical-input animated playtesting, long-distance
   shimmering checks and subjective underwater visibility tuning remain manual.
+
+### Replaceable placement, dropped items, flowers and coherent clouds - 2026-11-16
+
+Placement now resolves a targeted occupied replaceable voxel before considering
+its adjacent face. Blocks.Replaceable covers thin Snow, crossed vegetation
+(including both tall-grass halves, flowers, saplings and dead bushes), crops and
+Air. World placement validation, oriented building blocks, Doors and Beds share
+the replacement permission; player/mob geometry checks and item consumption still
+run before the mutation. Ordinary solid-face placement and slab joining are
+preserved. Replacing a paired plant uses the existing whole-plant cleanup. Sign
+editing opens at the resolved placement cell. Changes use normal SetBlock updates
+for lighting, neighboring terrain/water meshes, collision and vegetation timers.
+
+Snow holes had two face-occlusion assumptions: supporting terrain tops were hidden
+by a non-opaque Snow voxel, and an opaque block in the voxel ABOVE a Snow layer
+culled the Snow top even though that full block starts 13/16 block above the layer.
+Supporting terrain tops now remain present under thin Snow, and overhead blocks
+cannot cull that exposed Snow top. Snow's underside/side occlusion is retained.
+Tests cover overhead blocks, replacement, removal and exact restored ground pixels.
+
+Dropped blocks now use cached miniature inventory-model geometry (including thin
+models and tall Door geometry), rotated about their center. Ordinary items retain
+their existing two-sided atlas sprites. A bounded gameplay phase drives a 1 rad/s
+rotation and gentle 0.06-block bob around a 0.13-block visual lift; a per-item phase
+offset avoids synchronized motion. Previous/current physical positions and phases
+are interpolated for rendering, with floating-origin-safe previous positions.
+Tall models receive sufficient extra lift to keep their visual foot above ground.
+Physics and pickup positions do not bob. Soft code-generated 16x16 shadow masks
+project clipped patches onto actual ground/slab top faces, fading over distance.
+The dropped-item pass restores texture, sampler, depth, blend and raster states.
+
+Q and Shift+Q, including hovered/cursor inventory paths, use view-directed toss
+velocity (2.5 blocks/s forward plus 2 upward, with minimum 0.75 upward when looking
+down). Horizontal drag, existing gravity 18/terminal speed 40, and bounded swept
+substeps stop tosses against real block collision shapes. Outside-click cursor
+releases and death drops retain their previous non-thrown behavior. Collision and
+presentation are separate; pickup delays, quantities, identities and merging stay
+unchanged. Save records/formats are unchanged: position and vertical velocity
+persist as before; horizontal toss velocity and visual phase reset after reload.
+
+Both existing flower loot definitions were already correct in Survival. Added
+full raycast -> mining -> one matching drop -> pickup -> replant verification for
+Red and Yellow Flowers rather than duplicating or altering working loot rules.
+Their dropped plant models now benefit from the visible floating/rotating pass.
+Creative flower mining remains drop-free; grass and other vegetation loot is intact.
+
+CloudPattern uses deterministic broad/detail smooth value noise in absolute
+8-block cells to create connected, irregular silhouettes with gaps. SkyRenderer
+caches a bounded 45x45-cell region and merges cells into rectangles, rebuilding
+only when the moving cloud region changes. Drift remains 0.5 blocks/s, altitude
+140/thickness 3 and fog distances 90-155 are unchanged. Geometry extends beyond
+the camera far plane. Origin subtraction occurs before float conversion; chunk
+loading does not influence coverage. Existing Snow texels are copied once into a
+16x16 owned texture for seamless point wrapping across larger faces, with no new
+artwork or per-frame readbacks. Representative GPU previews had 2,196-2,304 cloud
+vertices; these are fixture measurements, not a whole-game FPS benchmark.
+
+Files: Worlds/Blocks.cs, World.cs, WorldDetails.cs, Beds.cs;
+Gameplay/MiningController.cs; Core/Game1.cs; Entities/DropPlacement.cs and
+DroppedItems.cs; Persistence/WorldSave.cs; Inventories/Inventory.cs;
+UI/InventoryScreen.cs; Rendering/ChunkMeshBuilder.cs, DroppedItemRenderer.cs,
+WorldRenderer.cs, SkyRenderer.cs and new CloudPattern.cs; Program.cs;
+new Testing/PlacementDropCloudChecks.cs, PrototypeChecks.cs and the updated
+Snow-pixel assertion in OvernightGraphicsChecks.cs. No terrain-generation, IDs, save-layout,
+content-artwork, UI layout, Far Lands or README changes. No publishing.
+
+Reference reading: the replaceable-position rule and classic bob/rotation style
+were checked against ItemBlock and RenderEntityItem in the available Java source:
+https://github.com/Marcelektro/MavenMCP-1.8.9/blob/master/src/main/java/net/minecraft/item/ItemBlock.java
+https://github.com/Marcelektro/MavenMCP-1.8.9/blob/master/src/main/java/net/minecraft/client/renderer/entity/RenderEntityItem.java
+The implementation is adapted to MDSM; exact Beta implementation equivalence is
+not claimed.
+
+Verification: final dotnet build --no-restore succeeded with zero warnings/errors.
+--placement-drop-cloud-test passed CPU/GPU checks for all replacement directions,
+Survival/Creative item safety, paired plants, chunk seams, Snow top visibility,
+exact removal pixels, flower lifecycle, throw direction/arc, gravity at 30/60/144/
+360 FPS, wall tunneling, slab landing, save accounting, rotating models/sprites,
+tall model clearance, flat/slab shadow heights, graphics-state restoration,
+cloud coherence/determinism/gaps and exact Snow pixels.
+Existing suites passed: --drop-control-test (4/4), --support-drops-test (6/6),
+--placement-update-test, --collision-test (5/5), --gameplay-refinement-test (10/10),
+--visual-refinement-test, --inventory-icon-test, --held-item-test,
+--streaming-graphics-test (normal and positive/negative Far Lands/beyond),
+--drop-control-graphics-test (actual Game1 synthetic Q input at four frame rates),
+--overnight-graphics-test and --interface-graphics-test (all eight exact F1/F2 PNG
+cases, resizing and intentional capture failures). Inspected drop/rotation/shadow
+and connected/overhead cloud preview PNGs. No physical-input manual playtest or
+sustained Large/Massive frame-time benchmark was performed; moving-camera cloud
+appearance, item feel and edge shadows remain useful manual checks.

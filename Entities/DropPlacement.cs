@@ -8,6 +8,12 @@ namespace MDSM.Entities;
 
 public static class DropPlacement
 {
+    internal static Vector3 ThrowVelocity(Vector3 forward)
+    {
+        if(forward.LengthSquared()<.001f)forward=Vector3.Forward;
+        forward.Normalize();var velocity=forward*2.5f+Vector3.Up*2;
+        velocity.Y=Math.Max(.75f,velocity.Y);return velocity;
+    }
     // Prefer the viewing direction, then nearby sides and overhead clearance.
     public static bool TryFind(World world, Player player, Vector3 forward, bool avoidPlayer, out Vector3 position)
     {

@@ -1,4 +1,6 @@
-if(args.Length==1 && args[0]=="--visual-refinement-test")
+if(args.Length==1 && args[0]=="--placement-drop-cloud-test")
+{ System.Environment.ExitCode=MDSM.Testing.PlacementDropCloudChecks.Run(); }
+else if(args.Length==1 && args[0]=="--visual-refinement-test")
 { System.Environment.ExitCode=MDSM.Testing.VisualRefinementChecks.Run(); }
 else if(args.Length==1 && args[0]=="--held-item-test")
 { System.Environment.ExitCode=MDSM.Testing.HeldItemChecks.Run(); }

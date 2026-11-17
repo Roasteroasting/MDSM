@@ -365,12 +365,15 @@ public class Game1 : Game
         {
             if (!_awaitMouseRelease && !held && mouse.RightButton == ButtonState.Pressed
                 && _previousMouse.RightButton == ButtonState.Released && hit.HasPlacementFace)
+            {
+                Point3 placedCell=BlockPlacement.PlacementCell(world,hit);
                 if(BlockPlacement.TryPlace(world, _session.Inventory, hit, player.Bounds,player.Creative,camera.Yaw))
                 {
                     _session.Swing.Trigger();
-                    if(world.GetBlock(hit.PlacementCell.X,hit.PlacementCell.Y,hit.PlacementCell.Z)==BlockType.Sign)
-                    {_signEditor.Open(world,hit.PlacementCell);SetState(GameState.SignEditing);return;}
+                    if(world.GetBlock(placedCell.X,placedCell.Y,placedCell.Z)==BlockType.Sign)
+                    {_signEditor.Open(world,placedCell);SetState(GameState.SignEditing);return;}
                 }
+            }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
         if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward,hostiles:_session.Hostiles) != null) _selection = null;

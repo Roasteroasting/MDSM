@@ -61,7 +61,7 @@ public sealed partial class World
         var proposed = new StructureState(cell,orientation,false,support);
         if(block==BlockType.Door)
         {
-            if(!Contains(cell.X,cell.Y+1,cell.Z) || GetBlock(cell.X,cell.Y,cell.Z)!=BlockType.Air || GetBlock(cell.X,cell.Y+1,cell.Z)!=BlockType.Air
+            if(!Contains(cell.X,cell.Y+1,cell.Z) || !Blocks.Replaceable(GetBlock(cell.X,cell.Y,cell.Z)) || !Blocks.Replaceable(GetBlock(cell.X,cell.Y+1,cell.Z))
                 || !SupportsVoxelTop(new(cell.X,cell.Y-1,cell.Z)) || Overlaps(new(LocalPosition(cell),LocalPosition(cell)+new Vector3(1,2,1)),player)
                 || PlacementBlockedByMobs(cell,block,proposed)
                 || PlacementBlockedByMobs(cell+new Point3(0,1,0),BlockType.DoorUpper,proposed))return false;

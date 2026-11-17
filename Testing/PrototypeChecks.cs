@@ -16,6 +16,7 @@ internal static class PrototypeChecks
     {
         (string Name, Action Check)[] checks =
         {
+            ("Replaceable plants/snow, flower lifecycle, thrown/animated drops and coherent clouds",PlacementDropCloudChecks.Cpu),
             ("Torch strip/cap UVs, floor and four wall transforms, targeting and persisted orientation",()=>{TorchChecks.Uvs();TorchChecks.PlacementAndPersistence();}),
             ("Door Creative acquisition, inventory, crafting, placement, mining and save lifecycle",DoorChecks.InventoryAndWorld),
             ("Equipment identity, nonstackable transfers, durability and pickups",ProgressionChecks.Equipment),
