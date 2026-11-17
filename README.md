@@ -5,7 +5,6 @@ Eventually, I intend to add new mobs, new gameplay mechanics, new ores, new dime
 ## What I have yet to add
 * Better hostile mob textures
 * Better mob sounds
-* Better held-item and held-block rendering
 * Skylands (like the Aether, but probably not as good)
 * Something like a less-complex version of redstone
 * Whatever else I can come up with
