@@ -420,6 +420,8 @@
 /copy:Sounds/Interactions/fizz-1.wav
 /copy:Sounds/Interactions/feed-0.wav
 /copy:Sounds/Interactions/feed-1.wav
+/copy:Sounds/Ambient/firecrackle-0.wav
+/copy:Sounds/Ambient/firecrackle-1.wav
 # End generated procedural sounds
 
 # Six in-game landscape photographs; copied losslessly for the menu cubemap.

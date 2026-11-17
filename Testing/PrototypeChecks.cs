@@ -16,6 +16,8 @@ internal static class PrototypeChecks
     {
         (string Name, Action Check)[] checks =
         {
+            ("Cactus side-only timed contact and bounded fire ambience/sparks",CactusFireChecks.Cpu),
+            ("Smooth vertex lighting, AO, opaque/transparent corners, chunk seams and persistent settings",SmoothLightingCpuChecks.Cpu),
             ("Replaceable plants/snow, flower lifecycle, thrown/animated drops and coherent clouds",PlacementDropCloudChecks.Cpu),
             ("Torch strip/cap UVs, floor and four wall transforms, targeting and persisted orientation",()=>{TorchChecks.Uvs();TorchChecks.PlacementAndPersistence();}),
             ("Door Creative acquisition, inventory, crafting, placement, mining and save lifecycle",DoorChecks.InventoryAndWorld),

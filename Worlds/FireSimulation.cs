@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
+using MDSM.Audio;
 
 namespace MDSM.Worlds;
 
@@ -17,6 +18,23 @@ public sealed partial class FireSimulation(World world)
     private readonly Queue<Point3> _lava=new();private readonly HashSet<Point3> _lavaQueued=new();
     private readonly Random _random=new(unchecked(world.Seed^0x46495245));
     private double _time;
+    private double _effectsClock;
+    private readonly Random _effectRandom=new(unchecked(world.Seed^0x53465058));
+    internal void UpdatePresentation(Vector3 listener,float dt)
+    {
+        if(!float.IsFinite(dt)||dt<=0)return;
+        _effectsClock+=dt;if(_effectsClock<.25)return;_effectsClock%=.25;
+        Vector3 nearest=default;float distance=16*16;bool audible=false;int sparks=0;
+        foreach(var pair in _flames)
+        {
+            Vector3 position=world.Center(pair.Key);float d=Vector3.DistanceSquared(listener,position);
+            if(d<distance){distance=d;nearest=position;audible=true;}
+            if(d>32*32||sparks>=4||_effectRandom.NextDouble()>=.12)continue;
+            var direction=Direction(pair.Value.Attachment);if(direction.Y==0)position+=new Vector3(direction.X,0,direction.Z)*.35f;
+            world.Particles.Spark(position+Vector3.Up*.2f);sparks++;
+        }
+        if(audible)world.Sounds?.At(SoundKind.FireCrackle,nearest);
+    }
     public int Count=>_flames.Count;
     internal bool CanAdd=>Count<Maximum;
     public int LastProcessed {get;private set;}

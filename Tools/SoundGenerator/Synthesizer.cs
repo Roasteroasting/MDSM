@@ -9,8 +9,8 @@ internal static class Synthesizer
         uint state=2166136261;foreach(char c in group.Path)state=(state^c)*16777619;state^=(uint)(variation+1)*0x9e3779b9;
         double duration=group.Kind<=SoundKind.Land?group.Kind switch{SoundKind.Break=>.29,SoundKind.Land=>.18,SoundKind.Step=>.105,_=>.14}
             :group.Kind is >=SoundKind.MobIdle and <=SoundKind.MobDeath?group.Kind==SoundKind.MobDeath?.8:group.Species==3?.34:.65
-            :group.Kind switch{SoundKind.PlayerDeath=>.7,SoundKind.BowDraw=>.3,SoundKind.Eat=>.26,SoundKind.WaterEnter or SoundKind.WaterExit or SoundKind.WaterFlow or SoundKind.Pour or SoundKind.Scoop=>.4,_=>.17};
-        int count=(int)(duration*SampleRate);var samples=new double[count];double low=0,slow=0,phase=0,peak=0;
+            :group.Kind switch{SoundKind.FireCrackle=>2.8,SoundKind.PlayerDeath=>.7,SoundKind.BowDraw=>.3,SoundKind.Eat=>.26,SoundKind.WaterEnter or SoundKind.WaterExit or SoundKind.WaterFlow or SoundKind.Pour or SoundKind.Scoop=>.4,_=>.17};
+        int count=(int)(duration*SampleRate);var samples=new double[count];double low=0,slow=0,phase=0,peak=0,pop=0,filteredPop=0;
         double detune=1+(variation-(group.Variations-1)*.5)*.055;
         for(int i=0;i<count;i++)
         {
@@ -39,6 +39,12 @@ internal static class Synthesizer
                     _=>low*.5+(noise-low)*.25
                 };
                 value*=group.Kind switch{SoundKind.Hit=>Math.Exp(-t*12),SoundKind.Place=>Math.Exp(-t*22)*(1+.35*Math.Sin(t*90)),SoundKind.Step=>Math.Exp(-t*25),SoundKind.Land=>1+.5*Math.Exp(-t*18),_=>.5+Math.Abs(Math.Sin(t*47+variation))};
+            }
+            else if(group.Kind==SoundKind.FireCrackle)
+            {
+                if(noise>.9985)pop=.8;
+                pop*=.94;filteredPop+=.22*(pop-filteredPop);
+                value=low*.2+slow*.28+filteredPop*(noise*.7+low*.3);envelope=1;
             }
             else if(group.Kind is >=SoundKind.MobIdle and <=SoundKind.MobDeath)
             {

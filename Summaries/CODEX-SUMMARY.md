@@ -2587,3 +2587,166 @@ cases, resizing and intentional capture failures). Inspected drop/rotation/shado
 and connected/overhead cloud preview PNGs. No physical-input manual playtest or
 sustained Large/Massive frame-time benchmark was performed; moving-camera cloud
 appearance, item feel and edge shadows remain useful manual checks.
+
+### Optional classic Smooth Lighting - 2026-11-16
+
+Added application-wide GameSettings.SmoothLighting, default OFF, saved through the
+existing atomic settings JSON. Missing or non-boolean legacy fields safely leave
+it OFF. The checkbox is beside Brightness in the existing Settings video controls;
+no duplicate Video submenu was introduced. Mouse and keyboard navigation use the
+existing menu style. Settings labels choose the largest fitting integer font scale
+so the new half-width row stays legible. FPS, sound, game mode and difficulty state
+are preserved. Startup meshes honor the saved preference immediately.
+
+Research: Beta 1.7.3 RenderBlocks.renderStandardBlockWithAmbientOcclusion samples
+outside each face, combines adjacent/diagonal brightness into four corner colors,
+and retains directional face multipliers. The new CPU stencil follows those
+principles and guards sealed diagonal corners rather than exposing bright light
+through two touching opaque neighbors. References:
+https://raw.githubusercontent.com/jacobo-mc/mc_b1.7.3_release/main/1.7.3-LTS/src/minecraft/net/minecraft/src/RenderBlocks.java
+https://minecraft.wiki/w/Beta_1.3
+This adapts the classic appearance to MDSM's existing 0-14 light/brightness curve;
+it does not claim a byte-identical recreation of Minecraft's lighting table.
+
+Rendering/SmoothLighting.cs contains the bounded outside-face stencil and corner
+encoding. Four sky/block samples are averaged separately, with opaque neighbors
+receiving consistent available-light fallback plus AO. Full opaque cubes occlude;
+Leaves contribute mild occlusion; Glass, fluids and non-full shapes do not behave
+like opaque cubes. Thin axis-aligned model faces interpolate the same canonical
+corner field at their actual vertex positions. Crossed plants, text, fluids,
+Torches and luminous faces retain their appropriate existing flat/emissive paths.
+An adaptive face diagonal reduces asymmetric AO creases without increasing vertex
+or triangle counts. Atlas UVs, alpha masks, point filtering and geometry are intact.
+
+The existing 24-byte terrain vertex remains unchanged in size. Smooth vertices
+use unused block-light byte values 64-120 as a marker and store quarter-level sky
+and block samples; directional shade/AO stays in the red byte. As clarified by the
+user, the existing BlockLighting.fx effect was minimally extended: marked vertices
+evaluate the existing day/brightness curve in the vertex stage, then interpolate
+brightness across each triangle. Unmarked flat vertices retain the original
+fragment math. No new effect file, pass, screen-space AO, dynamic shadow or shader
+system was introduced. Day/night and Brightness changes need no geometry uploads.
+
+WorldRenderer invalidates only resident meshes when the setting changes, retains
+old geometry until replacements are ready, and uses existing build/upload budgets.
+Streamed workers capture the mode and reject stale results after toggles. Current
+water geometry is reused during terrain-lighting-only refreshes. Optional mesh
+change subscriptions invalidate the diagonal chunk at corner edits while Smooth
+Lighting is ON; OFF retains the old face-neighbor dependency behavior. Disposal
+unsubscribes. Immutable mesh snapshots record missing neighbors; AO uses a known
+sample fallback rather than fictitious Bedrock occlusion there. Physics still
+treats unloaded terrain as solid. Publishing/retiring chunks uses the existing
+light/mesh invalidation path to refresh neighboring corners.
+
+No changes to light propagation, packed world light storage, time, gameplay light
+levels, hostile spawning, terrain generation, Far Lands noise, block/item IDs,
+collision, inventory or world/region save formats. Smooth data is GPU presentation
+only. No whole-world mesh cache or full-world light recalculation was added.
+
+Files: Core/GameSettings.cs, Core/Game1.cs; UI/SettingsLayout.cs, MenuController.cs;
+Rendering/SmoothLighting.cs (new), ChunkMeshBuilder.cs, ChunkMesh.cs,
+WorldRenderer.cs, StreamedWorldRenderer.cs; Content/Effects/BlockLighting.fx;
+Worlds/World.cs and MeshSnapshot.cs; Program.cs; new Testing/SmoothLightingChecks.cs,
+SmoothLightingCpuChecks.cs, SmoothLightingGpuChecks.cs; PrototypeChecks.cs,
+InterfaceGraphicsChecks.cs, LightingGraphicsChecks.cs; this summary. README and
+artwork are untouched. No publishing.
+
+Verification:
+- Final dotnet build --no-restore: zero warnings/errors; git diff --check clean.
+- --smooth-lighting-test passed corner values/AO, sealed diagonals, adaptive
+  triangulation, transparent/thin blocks, shared vertex/page boundaries, unknown
+  neighbors, positive/negative distant snapshots, settings defaults/validation/
+  persistence/layout/input, and exact flat mesh restoration.
+- Before changing the effect, --smooth-lighting-reference captured three flat
+  day/night/Brightness GPU frames. All three remain pixel-identical after the
+  change; disabling Smooth Lighting also restores the exact flat frame. These
+  development reference PNGs stay under bin, not source assets. On a clean build
+  without prior captures the test reports that explicitly and still checks CPU
+  byte equality, live restoration and the remaining GPU assertions.
+- GPU interpolation samples were 79/139/198 across a controlled linear gradient;
+  flipping the triangle diagonal changes channels by at most one byte. Sky and
+  artificial light respond independently to night. Torch-lit interior and exposed
+  terrain previews show soft gradients/contact corners; inspected these images
+  and the new Settings checkbox.
+- Toggle/day/night/Brightness tests verify unchanged propagated light bytes,
+  vertex counts and terrain buffer capacities, with no day/night/Brightness mesh
+  rebuilds. Diagonal edit invalidation is active only for smooth meshes.
+- Representative CPU chamber chunk: 8,862 vertices in both modes, approximately
+  1.72 ms flat versus 4.65 ms smooth in the final five-build sample. Each five-build
+  measurement allocated 40 managed bytes (the Stopwatch), not per-face objects.
+  These are isolated CPU measurements, not gameplay frame-rate guarantees.
+- Actual asynchronous Far Lands fixture at positive X/negative Z: 49 loaded
+  chunks, nine GPU meshes, estimated terrain buffers 7,077,888 bytes, about 2.74 s
+  fixture total. Rapid toggles, stale jobs, diagonal edits and GPU cleanup passed;
+  also rendered and inspected smooth-farlands.png. Estimates are buffer capacities,
+  not driver-reported VRAM. The existing two-worker/four-upload test bounds held.
+- Existing suites passed: --lighting-test (6/6), --menu-update-test,
+  --menu-style-test, --visual-refinement-test, --placement-drop-cloud-test,
+  --placement-update-test, --gameplay-refinement-test (10/10), --bobbing-test,
+  --streaming-foundation-test, --streaming-graphics-test, --lighting-graphics-test,
+  and --interface-graphics-test, including all eight exact F1/F2 regression PNGs
+  with Smooth Lighting enabled, resize/menu/death states and capture failures.
+- Updated the real keyboard Settings navigation check for the added checkbox;
+  it now toggles/persists Smooth Lighting before continuing to About. The older
+  Sun/Moon test was legitimately obscured by the previously added cloud layer;
+  its camera probe moved above clouds to Y=150, preserving the pixel assertions.
+  No runtime sky code or assertions were removed to make it pass.
+
+Static rendered previews and synthetic input were verified. Physical-input cave
+exploration, subjective AO strength, extended streaming and sustained Large/Massive
+frame pacing remain manual playtesting/performance checks. No sustained 1080p FPS
+claim is made from these small controlled GPU fixtures.
+
+### Cactus side damage and quiet fire ambience/sparks - 2026-11-16
+
+EnvironmentalHazards now detects horizontal contact with the Cactus block's real
+inset collision bounds. It uses a small horizontal contact tolerance and requires
+positive vertical overlap; top/bottom-only contact is harmless. Sustained contact
+causes one base HP per second of active gameplay, through existing difficulty,
+Armor and Creative immunity rules. Leaving contact resets the partial tick. No
+mob damage or ordinary collision/movement behavior was changed.
+
+FireSimulation.UpdatePresentation is a separate gameplay-time presentation clock,
+called by Game1. Four times per second it checks the existing bounded fire registry,
+selects the nearest audible flame within 16 blocks, and occasionally emits tiny
+sparks within 32 blocks. A separate FX random generator preserves gameplay fire
+randomness/timers. At most four sparks are emitted per presentation tick, using
+the existing 384-slot particle pool. Sparks rise, fade and render full-bright
+orange in a small untextured batch; normal block debris retains its existing
+textured path. The mixed pass restores graphics state and native texture binding.
+No particle entities, persistent data or chunk remeshing are introduced.
+
+Added SoundKind.FireCrackle at the end of the transient sound enum and two original
+procedural ~2.8-second PCM WAV clips under Content/Sounds/Ambient/. The effects
+category gain is 0.14 with positional attenuation/pan and existing volume controls.
+AudioManager refreshes one looping voice rather than stacking flame voices. It
+stops during menus/focus loss/muting or when no longer refreshed; absent fire has
+at most a 0.65-second grace, fading during the final 0.25 seconds. The ordinary
+32-voice budget and low ambient priority still apply.
+
+The development SoundGenerator gained --only <SoundKind>, allowing generation of
+just the new clips without overwriting user-replaced recordings. Generated with:
+  dotnet run --project Tools/SoundGenerator -- D:\MDSM\MDSM --only FireCrackle
+Only the two new WAV assets and their /copy entries were added; existing recordings
+were not regenerated. No world save or settings formats changed.
+
+Files for this follow-up: Gameplay/EnvironmentalHazards.cs; Core/Game1.cs;
+Worlds/FireSimulation.cs and BlockParticles.cs; Rendering/ParticleRenderer.cs;
+Audio/AudioManager.cs and SoundCatalog.cs; Tools/SoundGenerator/Program.cs and
+Synthesizer.cs; Content/Content.mgcb and Sounds/Ambient/firecrackle-{0,1}.wav;
+new Testing/CactusFireChecks.cs, Program.cs, Testing/PrototypeChecks.cs; this
+summary. Earlier uncommitted Smooth Lighting work is preserved. README untouched.
+
+Verification: final dotnet build --no-restore succeeded with zero warnings/errors;
+git diff --check clean. --cactus-fire-test passed all four sides at 30/60/144/360
+updates/sec, top/bottom/inset-gap exclusion, timer reset, Creative immunity, real
+walking collision, safe standing on top, fire presentation timer isolation,
+nearby/distant/paused/extinguished emission, actual MonoGame looping/pan/quiet gain,
+heartbeat refresh without extra voices, pause/mute/stale-loop stop, mixed spark/
+debris pixels and graphics-state restoration. Inspected fire-sparks.png.
+Existing --audio-test (6/6), --sign-fire-test, --collision-test (5/5),
+--gameplay-refinement-test (10/10), --smooth-lighting-test and --audio-graphics-test
+passed. Runtime audio loaded all 281 WAV clips and played all 113 sound groups;
+voice high-water remained 32/32. No subjective listening or physical-input manual
+playtest is claimed. Final crackle loudness/tone and natural spark frequency are
+useful manual checks. No publishing.

@@ -93,7 +93,7 @@ internal sealed class MenuController : IDisposable
         _ => MainButtons
     };
     private int FocusOffset => _screen == GameState.WorldCreation ? 6
-        : _screen == GameState.Settings ? 10 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+        : _screen == GameState.Settings ? 11 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
 
     public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
     {
@@ -219,7 +219,7 @@ internal sealed class MenuController : IDisposable
 
         if (_screen == GameState.Settings)
         {
-            int oldCap = _settings.FpsCap; bool oldUncapped = _settings.UncappedFps,oldBobbing=_settings.ViewBobbing;
+            int oldCap = _settings.FpsCap; bool oldUncapped = _settings.UncappedFps,oldBobbing=_settings.ViewBobbing,oldSmooth=_settings.SmoothLighting;
             Difficulty oldDifficulty = _settings.Difficulty; GameMode oldMode = _settings.GameMode;
             Rectangle slider = SettingsLayout.Slider(viewport), toggle = SettingsLayout.Toggle(viewport);
             if (click && slider.Contains(_mouse)) { _focus = 0; _draggingSlider = true; }
@@ -236,6 +236,8 @@ internal sealed class MenuController : IDisposable
             else if (_focus == 1 && (Pressed(Keys.Space) || Pressed(Keys.Enter))) _settings.UncappedFps = !_settings.UncappedFps;
             if(click && SettingsLayout.Bobbing(viewport).Contains(_mouse)){_focus=2;_settings.ViewBobbing=!_settings.ViewBobbing;}
             else if(_focus==2 && (Pressed(Keys.Space)||Pressed(Keys.Enter)))_settings.ViewBobbing=!_settings.ViewBobbing;
+            if(click && SettingsLayout.SmoothLighting(viewport).Contains(_mouse)){_focus=10;_settings.SmoothLighting=!_settings.SmoothLighting;}
+            else if(_focus==10 && (Pressed(Keys.Space)||Pressed(Keys.Enter)))_settings.SmoothLighting=!_settings.SmoothLighting;
             for (int option = 0; option < 2; option++)
             {
                 bool clicked = click && SettingsLayout.Choice(viewport, option).Contains(_mouse);
@@ -247,7 +249,7 @@ internal sealed class MenuController : IDisposable
                 else _settings.GameMode = (GameMode)(((int)_settings.GameMode + change + 2) % 2);
             }
             if (oldCap != _settings.FpsCap || oldUncapped != _settings.UncappedFps || oldBobbing!=_settings.ViewBobbing
-                || oldDifficulty != _settings.Difficulty || oldMode != _settings.GameMode) return MenuAction.SettingsChanged;
+                || oldSmooth!=_settings.SmoothLighting || oldDifficulty != _settings.Difficulty || oldMode != _settings.GameMode) return MenuAction.SettingsChanged;
             if (Pressed(Keys.Enter) && _focus < 5) return MenuAction.None;
         }
 
@@ -272,7 +274,7 @@ internal sealed class MenuController : IDisposable
                 changed|=before!=(index==4?_settings.Brightness:SoundSettingsLayout.Get(_settings,index));
             }
             if(changed)return MenuAction.SettingsChanged;
-            if(Pressed(Keys.Enter) && _focus<10)return MenuAction.None;
+            if(Pressed(Keys.Enter) && _focus<11)return MenuAction.None;
         }
 
         if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
@@ -452,13 +454,14 @@ internal sealed class MenuController : IDisposable
             Rectangle toggle=SettingsLayout.Toggle(viewport),bobbing=SettingsLayout.Bobbing(viewport);
             Choice(toggle,"UNCAPPED FPS",1,_settings.UncappedFps);
             Choice(bobbing,"VIEW BOBBING",2,_settings.ViewBobbing);
+            Choice(SettingsLayout.SmoothLighting(viewport),"SMOOTH LIGHTING",10,_settings.SmoothLighting);
             Choice(SettingsLayout.Choice(viewport,0),$"DIFFICULTY: {_settings.Difficulty}",3,enabled:WorldOptionsEnabled);
             Choice(SettingsLayout.Choice(viewport,1),$"MODE: {_settings.GameMode}",4,enabled:WorldOptionsEnabled);
             void Choice(Rectangle bounds,string label,int focus,bool? checkedValue=null,bool enabled=true)
             {
                 MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),enabled,keyboardFocus:_keyboardNavigation&&_focus==focus);
                 int indent=checkedValue.HasValue?26:6;
-                int textScale=label.Length*6*scale<=bounds.Width-indent-6?scale:1;
+                int textScale=Math.Clamp((bounds.Width-indent-6)/Math.Max(1,label.Length*6),1,scale);
                 if(checkedValue.HasValue)
                 {
                     Fill(new(bounds.X+6,bounds.Center.Y-6,12,12),Color.LightGray);
@@ -473,7 +476,7 @@ internal sealed class MenuController : IDisposable
                 int thumb=bounds.Left+8+(int)MathF.Round(value*(bounds.Width-17));
                 Fill(new(thumb-5,bounds.Y+3,11,bounds.Height-6),MdsmUiStyle.Light);
                 Fill(new(thumb-2,bounds.Y+5,4,2),MdsmUiStyle.Accent);
-                int textScale=label.Length*6*scale<=bounds.Width-16?scale:1;
+                int textScale=Math.Clamp((bounds.Width-16)/Math.Max(1,label.Length*6),1,scale);
                 Text(label,bounds.Center.X-label.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
             }
         }

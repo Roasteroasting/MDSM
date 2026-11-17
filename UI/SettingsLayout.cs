@@ -16,7 +16,8 @@ internal static class SettingsLayout
         return new(x,top+row*(height+gap),width,height);
     }
     public static Rectangle Slider(Viewport viewport)=>Row(viewport,0);
-    public static Rectangle Brightness(Viewport viewport)=>Row(viewport,1);
+    public static Rectangle Brightness(Viewport viewport)=>Row(viewport,1,0);
+    public static Rectangle SmoothLighting(Viewport viewport)=>Row(viewport,1,1);
     public static Rectangle Volume(Viewport viewport,int index)=>Row(viewport,2+index/2,index%2);
     public static Rectangle Toggle(Viewport viewport)=>Row(viewport,4,0);
     public static Rectangle Bobbing(Viewport viewport)=>Row(viewport,4,1);

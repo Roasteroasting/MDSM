@@ -11,7 +11,7 @@ public enum SoundKind
     PlayerHurt, PlayerDeath, Pickup, Jump, WaterEnter, WaterExit, Swim, WaterFlow,
     DoorOpen, DoorClose, GateOpen, GateClose, ChestOpen, ChestClose,
     InventoryOpen, InventoryClose, InventoryMove, Craft, Equip, Click,
-    Eat, Drop, ToolBreak, BowDraw, BowShoot, ArrowHit, Swing, Shear, Till, Plant, Pour, Scoop, Ignite, Smelt, Fizz, Feed
+    Eat, Drop, ToolBreak, BowDraw, BowShoot, ArrowHit, Swing, Shear, Till, Plant, Pour, Scoop, Ignite, Smelt, Fizz, Feed, FireCrackle
 }
 
 public sealed record SoundGroup(SoundKind Kind, SoundMaterial Material, int Species, string Path,
@@ -55,6 +55,8 @@ public static class SoundCatalog
         foreach(SoundKind kind in Enum.GetValues<SoundKind>())
         {
             if(kind<=SoundKind.MobDeath)continue;
+            if(kind==SoundKind.FireCrackle)
+            {result.Add(new(kind,SoundMaterial.Stone,0,"Ambient/firecrackle",SoundCategory.Effects,2,.14f,16,.1,0));continue;}
             bool ui=kind is SoundKind.InventoryOpen or SoundKind.InventoryClose or SoundKind.InventoryMove or SoundKind.Craft or SoundKind.Equip or SoundKind.Click or SoundKind.Drop;
             string folder=ui?"Interface":kind is SoundKind.WaterEnter or SoundKind.WaterExit or SoundKind.Swim or SoundKind.WaterFlow or SoundKind.Pour or SoundKind.Scoop?"Water"
                 :kind is SoundKind.PlayerHurt or SoundKind.PlayerDeath or SoundKind.Eat or SoundKind.Jump or SoundKind.Pickup?"Player":"Interactions";

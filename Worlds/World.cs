@@ -21,6 +21,7 @@ public sealed partial class World
     public ReadOnlySpan<Chunk> Chunks => IsInfinite?_residentChunks:_chunks;
     public int Seed { get; }
     public int Revision { get; private set; }
+    internal event Action<Point3> MeshGeometryChanged;
     internal SoundEvents Sounds { get; set; }
     public FluidSimulation Fluids { get; }
     public FluidSimulation LavaFlow { get; }
@@ -179,6 +180,7 @@ public sealed partial class World
             if (localX == Chunk.Size - 1) MarkDirty(chunkX + 1, chunkZ);
             if (localZ == 0) MarkDirty(chunkX, chunkZ - 1);
             if (localZ == Chunk.Size - 1) MarkDirty(chunkX, chunkZ + 1);
+            MeshGeometryChanged?.Invoke(changedCell);
         }
         // Shared water corners also depend on diagonally adjacent chunks.
         for (long cz = chunkZ - (localZ == 0 ? 1 : 0); cz <= chunkZ + (localZ == Chunk.Size - 1 ? 1 : 0); cz++)
@@ -212,7 +214,7 @@ public sealed partial class World
         if(block==BlockType.Leaves)Vegetation.MarkNatural(new Point3(x,y,z));
     }
 
-    private void MarkDirty(long x, long z)
+    internal void MarkDirty(long x, long z)
     {
         if(IsInfinite){if(TryGetChunkAt(x*16,z*16,out var chunk))chunk.MarkDirty();return;}
         if (x>=0 && x<ChunksX && z>=0 && z<ChunksZ)

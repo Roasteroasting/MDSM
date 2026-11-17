@@ -25,6 +25,26 @@ public sealed partial class WorldRenderer : IDisposable
     private readonly UnderwaterView _underwater;
     private readonly MiningCracks _cracks;
     public float Brightness { get; set; }=.5f;
+    private bool _smoothLighting;
+    public bool SmoothLighting
+    {
+        get=>_smoothLighting;
+        set
+        {
+            if(_smoothLighting==value)return;
+            _smoothLighting=value;_builder.SmoothLighting=value;_building=-1;
+            if(value)_world.MeshGeometryChanged+=InvalidateCorner;else _world.MeshGeometryChanged-=InvalidateCorner;
+            // Preserve old GPU geometry until each bounded replacement is ready.
+            // No world revision, light propagation, water mesh or save data changes.
+            foreach(int index in _region.Indices)_meshes[index]?.Invalidate();
+        }
+    }
+    private void InvalidateCorner(Point3 cell)
+    {
+        int x=MDSM.Worlds.Streaming.Coordinates.Mod(cell.X,16),z=MDSM.Worlds.Streaming.Coordinates.Mod(cell.Z,16);
+        if((x==0||x==15)&&(z==0||z==15))
+            _world.MarkDirty(MDSM.Worlds.Streaming.Coordinates.FloorDiv(cell.X,16)+(x==0?-1:1),MDSM.Worlds.Streaming.Coordinates.FloorDiv(cell.Z,16)+(z==0?-1:1));
+    }
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
     private readonly DroppedItemRenderer _items;
@@ -258,6 +278,7 @@ public sealed partial class WorldRenderer : IDisposable
 
     public void Dispose()
     {
+        _world.MeshGeometryChanged-=InvalidateCorner;
         foreach (ChunkMesh mesh in _meshes)
             mesh?.Dispose();
         while(_retiring.TryDequeue(out var old))old.Dispose();_retiringBytes=0;

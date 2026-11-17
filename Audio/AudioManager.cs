@@ -49,6 +49,7 @@ public sealed class AudioManager : IDisposable
     private readonly Random _random=new(0x41554449);
     private readonly GameSettings _settings;
     private int _count;
+    private double _fireHeartbeat;
     public int ActiveVoices=>_count;
     public int HighWaterVoices { get; private set; }
     public int LoadedClips { get; private set; }
@@ -92,13 +93,14 @@ public sealed class AudioManager : IDisposable
     private void UpdateCore(double elapsed,SoundEvents ui,SoundEvents world,Vector3 listener,Vector3 right,bool playing,bool foreground)
     {
         _rates.Advance(elapsed);
+        if(double.IsFinite(elapsed)&&elapsed>0)_fireHeartbeat=Math.Max(0,_fireHeartbeat-elapsed);
         for(int i=_count-1;i>=0;i--)
         {
             var voice=_active[i];var group=SoundCatalog.Groups[voice.Event.Group];
             var mix=SoundSpatial.Calculate(voice.Event,_settings,listener,right);
-            if(!foreground || !playing && !group.InMenus || mix.Volume<=0 || voice.Instance.State==SoundState.Stopped)
+            if(!foreground || !playing && !group.InMenus || mix.Volume<=0 || voice.Instance.State==SoundState.Stopped || group.Kind==SoundKind.FireCrackle&&_fireHeartbeat<=0)
             {voice.Instance.Stop();_active[i]=_active[--_count];_active[_count]=default;continue;}
-            voice.Instance.Volume=mix.Volume;voice.Instance.Pan=mix.Pan;
+            voice.Instance.Volume=mix.Volume*(group.Kind==SoundKind.FireCrackle?(float)Math.Min(1,_fireHeartbeat/.25):1);voice.Instance.Pan=mix.Pan;
         }
         Drain(ui);if(!ReferenceEquals(ui,world))Drain(world);
         void Drain(SoundEvents events)
@@ -112,6 +114,12 @@ public sealed class AudioManager : IDisposable
     {
         if(!Available || (uint)sound.Group>=_clips.Length){Rejected++;return false;}
         var mix=SoundSpatial.Calculate(sound,_settings,listener,right);
+        if(SoundCatalog.Groups[sound.Group].Kind==SoundKind.FireCrackle&&mix.Volume>.001f)
+        {
+            _fireHeartbeat=.65;
+            for(int i=0;i<_count;i++)if(_active[i].Event.Group==sound.Group&&_active[i].Instance.State==SoundState.Playing)
+            {_active[i]=new(sound,_active[i].Instance);return true;}
+        }
         if(mix.Volume<=.001f || !_rates.Accept(sound.Group)){Rejected++;return false;}
         var group=SoundCatalog.Groups[sound.Group];int variant=_random.Next(group.Variations);
         if(variant==_lastVariant[sound.Group] && group.Variations>1)variant=(variant+1)%group.Variations;
@@ -135,6 +143,7 @@ public sealed class AudioManager : IDisposable
         try
         {
             instance.Volume=mix.Volume;instance.Pan=mix.Pan;instance.Pitch=Math.Clamp(sound.Pitch+(float)(_random.NextDouble()-.5)*.12f,-1,1);
+            instance.IsLooped=group.Kind==SoundKind.FireCrackle;
             instance.Play();_active[_count++]=new(sound,instance);_lastVariant[sound.Group]=variant;
             Played++;HighWaterVoices=Math.Max(HighWaterVoices,_count);return true;
         }

@@ -18,6 +18,8 @@ internal sealed class ChunkMesh : IDisposable
     internal bool HasText=>_textCount>0;
     internal Chunk Chunk => _chunk;
     internal bool NeedsBuild => _revision != _chunk.Revision;
+    internal bool SmoothLighting {get;private set;}
+    internal void Invalidate()=>_revision=-1;
     internal int VertexCount => _vertexCount+_textCount;
     internal long BufferBytes => ((long)(_vertices?.VertexCount ?? 0)+(_text?.VertexCount??0)) * VertexPositionColorTexture.VertexDeclaration.VertexStride;
     internal static long LiveBufferBytes { get; private set; }
@@ -31,7 +33,7 @@ internal sealed class ChunkMesh : IDisposable
 
     public bool Update(World world, ChunkMeshBuilder builder)
     {
-        if (_revision == _chunk.Revision)
+        if (_revision == _chunk.Revision && SmoothLighting==builder.SmoothLighting)
             return false;
 
         builder.Build(world, _chunk);
@@ -39,6 +41,7 @@ internal sealed class ChunkMesh : IDisposable
     }
     internal void UploadPrepared(ChunkMeshBuilder builder,int revision)
     {
+        SmoothLighting=builder.SmoothLighting;
         _vertexCount = builder.VertexCount;
         _textCount=builder.TextVertexCount;
         Upload(ref _vertices,builder.Vertices,_vertexCount,1024);

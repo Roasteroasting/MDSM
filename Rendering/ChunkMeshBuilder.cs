@@ -21,6 +21,7 @@ internal sealed partial class ChunkMeshBuilder
     private World _world;
     private BlockLighting.Page _lightPage;
     private Chunk _buildingChunk;
+    private BlockType _surfaceBlock;
     private int _buildY,_buildZ;
     private Point3? _singleBlock;
     private Vector3 GeometryOrigin(Point3 cell)=>new(cell.X-(_singleBlock.HasValue?_world.OriginX:0),cell.Y,cell.Z-(_singleBlock.HasValue?_world.OriginZ:0));
@@ -162,6 +163,7 @@ internal sealed partial class ChunkMeshBuilder
         {
             if(_singleBlock.HasValue&&_singleBlock.Value.X!=chunk.OriginX+x)continue;
             BlockType block = chunk.GetBlock(x, y, z);
+            _surfaceBlock=block;
             BlockDefinition definition = Blocks.Get(block);
             if(Lava.IsLava(block))
             {
@@ -478,11 +480,15 @@ internal sealed partial class ChunkMeshBuilder
 
     private void AddQuad(Vector3 aPosition, Vector3 bPosition, Vector3 cPosition, Vector3 dPosition, int tile, Color color, bool twoSided,Rectangle? region=null,bool transpose=false,bool flipU=false,bool text=false)
     {
+        Color ca=color,cb=color,cc=color,cd=color;bool smooth=false;
         if(_world!=null)
         {
             Vector3 normal=Vector3.Cross(bPosition-aPosition,cPosition-aPosition);
             if(normal.LengthSquared()>0)normal.Normalize();
-            color=Lit(color,(aPosition+bPosition+cPosition+dPosition)*.25f+normal*.02f);
+            Vector3 center=(aPosition+bPosition+cPosition+dPosition)*.25f;
+            if(SmoothLighting && !_singleBlock.HasValue && !twoSided && !text && Blocks.Get(_surfaceBlock).Shape is not (BlockShape.Torch or BlockShape.Fire or BlockShape.Fluid))
+                smooth=SmoothFace(center,normal,aPosition,bPosition,cPosition,dPosition,color,out ca,out cb,out cc,out cd);
+            if(!smooth)ca=cb=cc=cd=Lit(color,center+normal*.02f);
         }
         int needed = twoSided ? 12 : 6;
         ref VertexPositionColorTexture[] vertices=ref (text?ref _textVertices:ref _vertices);
@@ -495,12 +501,14 @@ internal sealed partial class ChunkMeshBuilder
             Rectangle source=TextureAtlas.Source(tile);
             return new((source.X+r.X+.5f+u*(r.Width-1))/TextureAtlas.AtlasSize,(source.Y+r.Y+.5f+v*(r.Height-1))/TextureAtlas.AtlasSize);
         }
-        var a = new VertexPositionColorTexture(aPosition, color, Uv(0,1));
-        var b = new VertexPositionColorTexture(bPosition, color, Uv(1,1));
-        var c = new VertexPositionColorTexture(cPosition, color, Uv(1,0));
-        var d = new VertexPositionColorTexture(dPosition, color, Uv(0,0));
-        vertices[at++] = a; vertices[at++] = c; vertices[at++] = b;
-        vertices[at++] = a; vertices[at++] = d; vertices[at++] = c;
+        var a = new VertexPositionColorTexture(aPosition, ca, Uv(0,1));
+        var b = new VertexPositionColorTexture(bPosition, cb, Uv(1,1));
+        var c = new VertexPositionColorTexture(cPosition, cc, Uv(1,0));
+        var d = new VertexPositionColorTexture(dPosition, cd, Uv(0,0));
+        if(smooth && CornerLight.Weight(ca)+CornerLight.Weight(cc)>CornerLight.Weight(cb)+CornerLight.Weight(cd))
+        {vertices[at++]=a;vertices[at++]=d;vertices[at++]=b;vertices[at++]=b;vertices[at++]=d;vertices[at++]=c;}
+        else
+        {vertices[at++] = a; vertices[at++] = c; vertices[at++] = b;vertices[at++] = a; vertices[at++] = d; vertices[at++] = c;}
         if (twoSided)
         {
             vertices[at++] = a; vertices[at++] = b; vertices[at++] = c;

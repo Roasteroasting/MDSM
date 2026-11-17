@@ -75,7 +75,9 @@ internal static class LightingGraphicsChecks
             var repeat=Render(1,"lighting-readback-repeat.png");Check(lit.AsSpan().SequenceEqual(repeat),"Readback corrupted lighting/terrain texture binding.");
             room.SetBlock(64,1,61,BlockType.Air);RenderingPerformanceChecks.Warm(renderer,camera);
             var removed=Render(1,"lighting-torch-removed.png");Check(removed.AsSpan().SequenceEqual(bright),"Removed Torch left stale GPU light.");
-            camera.Position=new(64.5f,120,64.5f);camera.RestoreOrientation(0,Camera.PitchLimit);
+            // Probe celestial visibility above the cloud layer; connected clouds
+            // may legitimately hide the Sun/Moon from the old Y=120 viewpoint.
+            camera.Position=new(64.5f,150,64.5f);camera.RestoreOrientation(0,Camera.PitchLimit);
             preparedBefore=renderer.PreparedChunks;
             room.Time.Restore(300);var sun=Render(.5f,"lighting-noon-sun.png");room.Time.Restore(900);var moon=Render(.5f,"lighting-midnight-moon.png");
             Check(sun.Count(c=>c.R>230 && c.G>200 && c.B<200)>100 && moon.Count(c=>c.R>180 && c.G>180 && c.B>200)>50,"Sun/Moon overhead pixels missing.");

@@ -1,12 +1,15 @@
 using MDSM.Audio;
 
 bool verify=args.Contains("--verify");
-string directory=args.FirstOrDefault(a=>a!="--verify");
+int onlyIndex=Array.IndexOf(args,"--only");
+SoundKind? only=onlyIndex<0?null:onlyIndex+1<args.Length&&Enum.TryParse<SoundKind>(args[onlyIndex+1],true,out var selected)?selected:throw new ArgumentException("--only requires a sound kind.");
+string directory=args.Where((a,i)=>a!="--verify"&&(onlyIndex<0||i!=onlyIndex&&i!=onlyIndex+1)).FirstOrDefault();
 string root=Path.GetFullPath(directory??Path.Combine(AppContext.BaseDirectory,"../../../../../"));
 if(!File.Exists(Path.Combine(root,"MDSM.csproj")))throw new ArgumentException("Pass the MDSM project directory.");
 string sounds=Path.Combine(root,"Content","Sounds");int count=0;long bytes=0;
 foreach(var group in SoundCatalog.Groups)for(int variation=0;variation<group.Variations;variation++)
 {
+    if(only.HasValue&&group.Kind!=only.Value)continue;
     string path=Path.Combine(root,"Content",group.Asset(variation));
     byte[] wav=Synthesizer.Generate(group,variation);
     if(verify){if(!File.Exists(path)||!File.ReadAllBytes(path).AsSpan().SequenceEqual(wav))throw new InvalidDataException("Non-reproducible asset: "+path);}

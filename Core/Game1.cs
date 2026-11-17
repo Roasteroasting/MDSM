@@ -301,6 +301,7 @@ public class Game1 : Game
             world.Weather.Update(dt,player.Position);
             world.Particles.Update(world,dt);
             world.Fire.Update(dt);
+            world.Fire.UpdatePresentation(camera.Position,dt);
             player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
                 _creativeFlight.FastFlight);
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
@@ -530,6 +531,7 @@ public class Game1 : Game
         var session = new GameSession(id, save);
         session.ApplySettings(_settings);
         var renderer = _preparingRenderer ?? new WorldRenderer(GraphicsDevice, _atlas, session.World);
+        renderer.SmoothLighting=_settings.SmoothLighting;
         _preparingRenderer = null;
         _renderer?.Dispose();
         _renderer = renderer;
@@ -554,7 +556,7 @@ public class Game1 : Game
                 if (!_creation.IsCompleted) return;
                 var task = _creation; _creation = null;
                 _created = task.GetAwaiter().GetResult();
-                _preparingRenderer = new WorldRenderer(GraphicsDevice, _atlas, _created.Value.Save.World);
+                _preparingRenderer = new WorldRenderer(GraphicsDevice, _atlas, _created.Value.Save.World){SmoothLighting=_settings.SmoothLighting};
             }
             WorldSave preparing = _created.Value.Save;
             if(preparing.World.IsInfinite)
@@ -782,6 +784,7 @@ public class Game1 : Game
             _session.Camera.PresentationOffset=Camera.PrecisionOffset(_session.World.AbsolutePosition(_session.Camera.Position),_settings.LegacyVisualPrecision);
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, _session.World.Time.Sky, 1f, 0);
             _renderer.Brightness=_settings.Brightness;
+            _renderer.SmoothLighting=_settings.SmoothLighting;
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation, State==GameState.Playing&&_session.Mining.Target==_selection?.Cell?_session.Mining.Target:null);
             _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles,_session.World,_settings.Brightness);

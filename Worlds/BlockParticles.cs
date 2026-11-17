@@ -6,12 +6,17 @@ namespace MDSM.Worlds;
 // Fixed-capacity presentation pool. No entities, saves or chunk mesh updates.
 public sealed class BlockParticles
 {
-    public struct Particle { public Vector3 Position,Velocity; public float Life,Size; public int Tile,Patch; }
+    public struct Particle { public Vector3 Position,Velocity; public float Life,Size; public int Tile,Patch; public bool Spark; }
     public const int Capacity=384;
     private readonly Particle[] _particles=new Particle[Capacity];
     private int _cursor;
     internal void Reframe(Vector3 delta){for(int i=0;i<_particles.Length;i++)if(_particles[i].Life>0)_particles[i].Position+=delta;}
     public ReadOnlySpan<Particle> Active=>_particles;
+    internal void Spark(Vector3 position)
+    {
+        _particles[_cursor++%Capacity]=new(){Position=position,Velocity=new((Random.Shared.NextSingle()-.5f)*.5f,.8f+Random.Shared.NextSingle()*.6f,(Random.Shared.NextSingle()-.5f)*.5f),
+            Life=.5f+Random.Shared.NextSingle()*.3f,Size=.018f+Random.Shared.NextSingle()*.012f,Spark=true};
+    }
     public void Burst(BlockType block,Vector3 position,bool landing=false)
     {
         if(!Blocks.IsRenderable(block)||Lava.Fluid(block))return;
@@ -31,7 +36,8 @@ public sealed class BlockParticles
         for(int i=0;i<_particles.Length;i++)
         {
             ref Particle p=ref _particles[i];if(p.Life<=0)continue;
-            p.Life=Math.Max(0,p.Life-dt);p.Velocity.Y-=12*dt;
+            p.Life=Math.Max(0,p.Life-dt);
+            if(p.Spark)p.Velocity*=MathF.Exp(-1.2f*dt);else p.Velocity.Y-=12*dt;
             Vector3 next=p.Position+p.Velocity*dt;
             if(world.IsSolid((int)MathF.Floor(next.X),(int)MathF.Floor(next.Y),(int)MathF.Floor(next.Z)))
             {p.Velocity*=.2f;p.Velocity.Y=0;}
