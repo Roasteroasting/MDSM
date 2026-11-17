@@ -53,7 +53,7 @@ internal sealed class DroppedItemRenderer : IDisposable
         }
         _effect.View = camera.View;
         _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
-        if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
+        if(world!=null)UnderwaterView.Fog(_effect,camera,world.Time.Sky);
         DrawBatch(_builder.Vertices, _builder.VertexCount, _atlas.Texture);
         {
             int spriteCount = 0;

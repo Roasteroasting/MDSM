@@ -9,12 +9,12 @@ internal static class FlatLighting
 {
     public static void Apply(Effect effect,GraphicsDevice device,Texture2D texture,World world,Camera camera,float brightness,float alphaCutoff)
     {
-        effect.Parameters["View"].SetValue(camera.View);
         effect.Parameters["ViewProjection"].SetValue(camera.View*camera.Projection(device.Viewport.AspectRatio));
         effect.Parameters["Texture"].SetValue(texture);
         effect.Parameters["Daylight"].SetValue(world.Time.Daylight);
         effect.Parameters["Brightness"].SetValue(brightness);
-        effect.Parameters["FogColor"].SetValue(world.Time.Sky.ToVector3());
+        effect.Parameters["FogColor"].SetValue((camera.Underwater?UnderwaterView.FogColor:world.Time.Sky).ToVector3());
+        effect.Parameters["WaterFog"].SetValue(camera.Underwater?1f:0f);
         effect.Parameters["FogStart"].SetValue(WorldRenderer.FogStart);effect.Parameters["FogEnd"].SetValue(WorldRenderer.FogEnd);
         effect.Parameters["AlphaCutoff"].SetValue(alphaCutoff);
         // Readbacks can disturb DesktopGL's native binding behind its cached state.

@@ -16,7 +16,6 @@ public sealed partial class WorldRenderer
     {
         // Subtract Int64 origins before float conversion, independently for every chunk.
         var translation=Matrix.CreateTranslation(mesh.Chunk.OriginX-_world.OriginX,0,mesh.Chunk.OriginZ-_world.OriginZ);
-        _terrainEffect.Parameters["View"].SetValue(translation*camera.View);
         _terrainEffect.Parameters["ViewProjection"].SetValue(translation*camera.View*camera.Projection(_device.Viewport.AspectRatio));pass.Apply();
     }
     private void PrepareStreamed(Camera camera,int budget)

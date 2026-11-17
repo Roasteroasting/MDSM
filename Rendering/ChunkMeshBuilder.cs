@@ -10,7 +10,7 @@ using MDSM.UI;
 namespace MDSM.Rendering;
 
 // CPU-only geometry builder. One reusable scratch buffer serves all chunk uploads.
-internal sealed class ChunkMeshBuilder
+internal sealed partial class ChunkMeshBuilder
 {
     private VertexPositionColorTexture[] _vertices = new VertexPositionColorTexture[4096];
     public VertexPositionColorTexture[] Vertices => _vertices;
@@ -22,6 +22,14 @@ internal sealed class ChunkMeshBuilder
     private BlockLighting.Page _lightPage;
     private Chunk _buildingChunk;
     private int _buildY,_buildZ;
+    private Point3? _singleBlock;
+    private Vector3 GeometryOrigin(Point3 cell)=>new(cell.X-(_singleBlock.HasValue?_world.OriginX:0),cell.Y,cell.Z-(_singleBlock.HasValue?_world.OriginZ:0));
+    internal void BuildBlock(World world,Point3 cell)
+    {
+        BeginBuild(world,world.GetChunk(MDSM.Worlds.Streaming.Coordinates.FloorDiv(cell.X,16),MDSM.Worlds.Streaming.Coordinates.FloorDiv(cell.Z,16)));
+        _singleBlock=cell;_buildY=cell.Y;_buildZ=(int)((cell.Z%16+16)%16);
+        try{AdvanceBuild(long.MaxValue);}finally{_singleBlock=null;}
+    }
     public void Clear() { VertexCount = TextVertexCount = 0; _world=null; _lightPage=null; }
 
     public void AppendCube(BlockType block, Vector3 origin)
@@ -100,23 +108,23 @@ internal sealed class ChunkMeshBuilder
 
     private void AppendFenceItem(BlockShape shape)
     {
+        Span<BoundingBox> parts=stackalloc BoundingBox[5];
         if(shape==BlockShape.Fence)
         {
-            Box(new(.375f,0,.375f),new(.625f,1,.625f));
-            Box(new(0,.3f,.4375f),new(1,.45f,.5625f));Box(new(0,.7f,.4375f),new(1,.85f,.5625f));return;
+            parts[0]=new(new(.375f,0,.375f),new(.625f,1,.625f));
+            parts[1]=new(new(0,.3f,.4375f),new(.375f,.45f,.5625f));parts[2]=new(new(.625f,.3f,.4375f),new(1,.45f,.5625f));
+            parts[3]=new(new(0,.7f,.4375f),new(.375f,.85f,.5625f));parts[4]=new(new(.625f,.7f,.4375f),new(1,.85f,.5625f));
         }
-        if(shape==BlockShape.Gate)
-        {
-            Box(new(0,0,.4375f),new(.125f,1,.5625f));Box(new(.875f,0,.4375f),new(1,1,.5625f));
-            Box(new(.125f,.3f,.4375f),new(.875f,.45f,.5625f));Box(new(.125f,.7f,.4375f),new(.875f,.85f,.5625f));
-            Box(new(.4375f,.3f,.4375f),new(.5625f,.85f,.5625f));return;
-        }
-        void Box(Vector3 min,Vector3 max)
-        {
-            AppendWoodBox(min,max,Vector3.Zero);
-        }
+        else GateParts(parts,new(0,0,.4375f),new(1,1,.125f),false);
+        AppendWoodModel(parts,Vector3.Zero);
     }
-
+    private static void GateParts(Span<BoundingBox> parts,Vector3 origin,Vector3 extent,bool thinX)
+    {
+        parts[0]=new(new(0,0,0),new(.125f,1,1));parts[1]=new(new(.875f,0,0),new(1,1,1));
+        parts[2]=new(new(.125f,.3f,0),new(.875f,.45f,1));parts[3]=new(new(.125f,.7f,0),new(.875f,.85f,1));
+        parts[4]=new(new(.4375f,.45f,0),new(.5625f,.7f,1));
+        for(int i=0;i<5;i++){var min=parts[i].Min;var max=parts[i].Max;if(thinX){min=new(min.Z,min.Y,min.X);max=new(max.Z,max.Y,max.X);}parts[i]=new(origin+min*extent,origin+max*extent);}
+    }
     // Corners follow the geometric normal; emitted triangles use XNA's clockwise front faces.
     private static readonly Face[] Faces =
     {
@@ -146,11 +154,13 @@ internal sealed class ChunkMeshBuilder
     {
         World world=_world;Chunk chunk=_buildingChunk;
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
+        Span<BoundingBox> gateParts=stackalloc BoundingBox[5];
         while(_buildY<World.Height)
         {
         int y=_buildY,z=_buildZ;
         for (int x = 0; x < Chunk.Size; x++)
         {
+            if(_singleBlock.HasValue&&_singleBlock.Value.X!=chunk.OriginX+x)continue;
             BlockType block = chunk.GetBlock(x, y, z);
             BlockDefinition definition = Blocks.Get(block);
             if(Lava.IsLava(block))
@@ -168,7 +178,7 @@ internal sealed class ChunkMeshBuilder
                 continue;
 
             long worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
-            Vector3 position = new(worldX, y, worldZ);
+            Vector3 position = GeometryOrigin(new(worldX,y,worldZ));
             if(World.OrientedBuilding(block))
             {AppendBuilding(world,new(worldX,y,worldZ),block,boxes);continue;}
             if(definition.Shape==BlockShape.Cactus){AppendCactus(position,1,world);continue;}
@@ -182,7 +192,8 @@ internal sealed class ChunkMeshBuilder
             if (definition.Shape == BlockShape.Pane)
             {
                 int connections=world.PaneConnections(new(worldX,y,worldZ));
-                int count=World.PaneBoxes(new(worldX,y,worldZ),connections,boxes),direction=-1;
+                var renderCell=_singleBlock.HasValue?new Point3(worldX-world.OriginX,y,worldZ-world.OriginZ):new Point3(worldX,y,worldZ);
+                int count=World.PaneBoxes(renderCell,connections,boxes),direction=-1;
                 for(int box=0;box<count;box++)
                 {
                     if(box>0){do{direction++;}while((connections&(1<<direction))==0);}
@@ -211,17 +222,20 @@ internal sealed class ChunkMeshBuilder
                 if(definition.Shape==BlockShape.Gate)
                 {
                     var bounds=boxes[0];Vector3 extent=bounds.Max-bounds.Min;bool thinX=extent.X<extent.Z;
-                    Box(new(0,0,0),new(.125f,1,1));Box(new(.875f,0,0),new(1,1,1));
-                    Box(new(.125f,.3f,0),new(.875f,.45f,1));Box(new(.125f,.7f,0),new(.875f,.85f,1));Box(new(.4375f,.3f,0),new(.5625f,.85f,1));
+                    GateParts(gateParts,bounds.Min,extent,thinX);AppendWoodModel(gateParts,position);
                     continue;
-                    void Box(Vector3 min,Vector3 max)
-                    {
-                        if(thinX){min=new(min.Z,min.Y,min.X);max=new(max.Z,max.Y,max.X);}
-                        AppendWoodBox(bounds.Min+min*extent,bounds.Min+max*extent,position);
-                    }
                 }
                 if(definition.Shape==BlockShape.Fence)
-                {for(int i=0;i<count;i++)AppendWoodBox(boxes[i].Min,boxes[i].Max,position);continue;}
+                {
+                    for(int i=1;i<count;i++)
+                    {
+                        var rail=boxes[i];
+                        if(rail.Max.X-rail.Min.X>rail.Max.Z-rail.Min.Z){if(rail.Min.X<boxes[0].Min.X)rail.Max.X=boxes[0].Min.X;else rail.Min.X=boxes[0].Max.X;}
+                        else {if(rail.Min.Z<boxes[0].Min.Z)rail.Max.Z=boxes[0].Min.Z;else rail.Min.Z=boxes[0].Max.Z;}
+                        boxes[i]=rail;
+                    }
+                    AppendWoodModel(boxes[..count],position);continue;
+                }
                 for(int i=0;i<count;i++)foreach(Face face in Faces)
                 {
                     if(definition.Shape==BlockShape.Snow)
@@ -271,6 +285,7 @@ internal sealed class ChunkMeshBuilder
                 AddQuad(position + face.A, position + face.B, position + face.C, position + face.D, tile, color, false);
             }
         }
+        if(_singleBlock.HasValue)return true;
         if(++_buildZ==Chunk.Size){_buildZ=0;_buildY++;}
         if(Stopwatch.GetTimestamp()>=deadline)return false;
         }
@@ -294,7 +309,7 @@ internal sealed class ChunkMeshBuilder
             pivot += towardWall * (.5f - halfWidth * MathF.Cos(angle));
             pivot.Y = .2f; // Preserve the existing wall attachment height.
         }
-        Matrix transform = rotation * Matrix.CreateTranslation(new Vector3(cell.X,cell.Y,cell.Z)+pivot);
+        Matrix transform = rotation * Matrix.CreateTranslation(GeometryOrigin(cell)+pivot);
         Vector3 min = new(-halfWidth,0,-halfWidth), size = new(halfWidth*2,height,halfWidth*2);
         Rectangle tile = TextureAtlas.Source(Blocks.Get(BlockType.Torch).SideTile);
         foreach (Face face in Faces)
@@ -329,10 +344,10 @@ internal sealed class ChunkMeshBuilder
     }
     private void AppendBuilding(World world,Point3 cell,BlockType block,Span<BoundingBox> boxes)
     {
-        Vector3 origin=new(cell.X,cell.Y,cell.Z);int tile=Blocks.Get(block).SideTile;
+        Vector3 origin=GeometryOrigin(cell);int tile=Blocks.Get(block).SideTile;
         if(block==BlockType.Sign)
         {
-            var state=world.Structure(cell);Matrix transform=World.SignTransform(cell,state);bool wall=state.Support.Y==0;
+            var state=world.Structure(cell);var renderCell=_singleBlock.HasValue?new Point3(cell.X-world.OriginX,cell.Y,cell.Z-world.OriginZ):cell;Matrix transform=World.SignTransform(renderCell,state);bool wall=state.Support.Y==0;
             SignBox(new(-.5f,wall?.25f:.5f,-.0625f),new(.5f,wall?.75f:1,.0625f));
             if(!wall)SignBox(new(-.0625f,0,-.0625f),new(.0625f,.5f,.0625f));
             if(world.Signs.TryGetValue(cell,out string text))
@@ -385,18 +400,15 @@ internal sealed class ChunkMeshBuilder
         }
     }
 
-    private void AppendWoodBox(Vector3 min,Vector3 max,Vector3 origin)
+    private void AppendWoodFace(Vector3 min,Vector3 max,Vector3 origin,Face face)
     {
         Vector3 size=max-min,localMin=min-origin,localMax=max-origin;
-        foreach(var face in Faces)
-        {
             float u=face.Normal.X>0?1-localMax.Z:face.Normal.X<0?localMin.Z:face.Normal.Z<0?1-localMax.X:localMin.X;
             float v=face.Normal.Y==0?1-localMax.Y:face.Normal.Y>0?localMin.Z:1-localMax.Z;
             int width=Math.Max(1,(int)MathF.Round((face.Normal.X==0?size.X:size.Z)*16));
             int height=Math.Max(1,(int)MathF.Round((face.Normal.Y==0?size.Y:size.Z)*16));
             var region=new Rectangle(Math.Clamp((int)MathF.Round(u*16),0,16-width),Math.Clamp((int)MathF.Round(v*16),0,16-height),width,height);
             AddQuad(min+face.A*size,min+face.B*size,min+face.C*size,min+face.D*size,7,new Color(new Vector3(face.Shade)),false,region);
-        }
     }
     private void DoorBox(Vector3 min,Vector3 max,int tile,Vector3 hinge)
     {
@@ -494,7 +506,7 @@ internal sealed class ChunkMeshBuilder
     }
     private Color Lit(Color color,Vector3 position)
     {
-        if(_world==null)return color;
+        if(_world==null||_singleBlock.HasValue)return color;
         int x=(int)MathF.Floor(position.X),y=(int)MathF.Floor(position.Y),z=(int)MathF.Floor(position.Z);
         byte packed=_lightPage!=null && x>=_lightPage.X-1 && x<=_lightPage.X+16 && z>=_lightPage.Z-1 && z<=_lightPage.Z+16
             ?_lightPage.At(x,y,z):_world.Lighting.Packed(new(x,y,z));
@@ -503,7 +515,7 @@ internal sealed class ChunkMeshBuilder
     private void AppendBed(Point3 cell,byte facing,bool head)
     {
         Matrix transform=Matrix.CreateTranslation(-.5f,0,-.5f)*Matrix.CreateRotationY(-(facing&3)*MathHelper.PiOver2)
-            *Matrix.CreateTranslation(cell.X+.5f,cell.Y,cell.Z+.5f);
+            *Matrix.CreateTranslation(GeometryOrigin(cell)+new Vector3(.5f,0,.5f));
         Vector3 min=new(0,3f/16,0),size=new(1,6f/16,1);
         foreach(Face face in Faces)
         {

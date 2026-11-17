@@ -2426,3 +2426,74 @@ accounting. Existing inventory/crafting/chest/furnace/Creative preview and doubl
 chest persistence checks passed. --crafting-test passed all checks. Inspected
 menu-creative-inventory-1280.png for trash-slot placement/appearance. No physical
 mouse manual playtest or publishing.
+
+### Underwater presentation, ten-stage mining cracks and wooden joints - 2026-11-16
+
+Added Rendering/UnderwaterView.cs. Actual rendered eye position (including camera
+presentation transforms) is tested against the interpolated water surface. Below
+water, terrain/water use blue exponential fog with density 0.1; nearby dynamic
+entities use the corresponding short-range blue fog. Sky/weather are hidden
+underwater. A subtle point-sampled repeating water-texture overlay follows mouse
+look, after first-person rendering and before the HUD. Surfacing restores normal
+fog and sky immediately. Gameplay breath, lighting levels and physics are unchanged.
+Historical rendering references: EntityRenderer.updateFogColor/setupFog and
+ItemRenderer.renderWaterOverlayTexture in the publicly available Java renderer:
+https://github.com/Marcelektro/MavenMCP-1.8.9/blob/master/src/main/java/net/minecraft/client/renderer/EntityRenderer.java
+https://github.com/Marcelektro/MavenMCP-1.8.9/blob/master/src/main/java/net/minecraft/client/renderer/ItemRenderer.java
+These inform the classic visual behavior; no claim of exact Beta source equivalence.
+
+A quantitative GPU distance probe exposed zero fog distance from the separate
+View uniform, optimized to a non-square matrix by the DesktopGL shader compiler.
+BlockLighting.fx now uses perspective clip W for eye-space depth and removes that
+uniform; streamed per-chunk ViewProjection translation remains intact. Near/far
+GPU color contrast now verifies actual distance fog rather than merely settings.
+
+The supplied destroy_stages.png is 160x16: ten horizontal 16x16 tiles. Its pixels
+are unchanged and the content pipeline preserves its non-premultiplied alpha.
+Rendering/MiningCracks.cs and Effects/MiningCracks.fx draw stage floor(progress*10)
+for progress [0,1), masking against the original block's cutout texture. Selected
+geometry/UVs are reused from ChunkMeshBuilder; no chunk remesh is needed as progress
+changes. A 0.001-block outward face offset avoids equal-depth faces, with depth
+testing and no depth writes. The shader multiplies cracks into existing lighting.
+Changing/stopping/completing mining removes the pass; it remains a world effect
+when F1 hides the HUD. Cached target geometry is invalidated by chunk revisions and
+floating-origin changes. Special shapes including panes preserve local rendering
+coordinates at large positive/negative world origins.
+
+Rendering/WoodModelGeometry.cs emits exterior surfaces of touching wooden parts.
+Fence rails terminate at post faces; covered post patches/internal rail caps are
+omitted, including joints between neighboring fences. The gate center upright
+only spans the gap between its two rails. Shared inventory, held/dropped and placed
+models retain texture scale/UV conventions and silhouette. Fence item vertex count
+changes from 108 to 204 because exterior post faces are split around rail joints.
+Gate item count remains 180. No depth bias or polygon offset is used for fences or
+gates. Collision, placement, connections, gate states, IDs and save data are unchanged.
+
+Files: Core/Game1.cs, Gameplay/Camera.cs, Program.cs; Rendering/WorldRenderer.cs,
+StreamedWorldRenderer.cs, FlatLighting.cs, ChunkMeshBuilder.cs, TextureAtlas.cs,
+BurningRenderer.cs, ParticleRenderer.cs, PassiveMobRenderer.cs,
+DroppedItemRenderer.cs, FallingBlockRenderer.cs, ProjectileRenderer.cs; the three
+new rendering files listed above; Content/Content.mgcb and both effects; new
+Testing/VisualRefinementChecks.cs, plus existing icon/presentation count assertions
+and PrototypeChecks registration. No README edits or publishing.
+
+Verification:
+- dotnet build --no-restore: 0 warnings, 0 errors.
+- --visual-refinement-test passed CPU and GPU checks for all ten stages, exact
+  stop/reset pixels, six viewing directions, cutout holes, 0.001 offset, no chunk
+  remeshing, floating-origin shape alignment, eye-level water/surfacing, look UVs,
+  actual fog contrast, overlay and dual-texture/sampler/depth/blend restoration.
+- All 16 fence connection masks and all eight gate facing/open combinations have
+  no overlapping coplanar face areas; gate collision behavior remains unchanged.
+- --placement-update-test passed pane/Torch placement, connectivity, UVs,
+  door states, save/load, mining clocks/durability/drops and mob combat regressions.
+- --inventory-icon-test and --held-item-test passed shared model/cache/state checks.
+- --swimming-test and --gameplay-refinement-test passed (10/10 latter checks).
+- --interface-graphics-test passed all eight exact final-frame screenshot cases,
+  including alternating F1/F2, resizing, FPS modes and intentional write failures.
+- --streaming-graphics-test passed normal/positive/negative Edge and Corner Far
+  Lands GPU generation, geometry uploads, visible pixels and resource cleanup.
+- Inspected generated PNGs for first/last cracks, leaf cutouts, connected fences,
+  open/closed gates and underwater fog/overlay. All four gate orientations have
+  scripted preview captures. Physical-input animated playtesting, long-distance
+  shimmering checks and subjective underwater visibility tuning remain manual.

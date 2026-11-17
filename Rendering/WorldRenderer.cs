@@ -22,6 +22,8 @@ public sealed partial class WorldRenderer : IDisposable
     private readonly ParticleRenderer _particles;
     private readonly WeatherRenderer _weather;
     private readonly BurningRenderer _burning;
+    private readonly UnderwaterView _underwater;
+    private readonly MiningCracks _cracks;
     public float Brightness { get; set; }=.5f;
     private readonly BasicEffect _selectionEffect;
     private readonly World _world;
@@ -149,6 +151,8 @@ public sealed partial class WorldRenderer : IDisposable
     public WorldRenderer(GraphicsDevice device, TextureAtlas atlas, World world)
     {
         _device = device;
+        _underwater=new UnderwaterView(device,atlas.Water);
+        _cracks=new MiningCracks(device,atlas);
         _world = world;
         _texture=atlas.Texture;_textTexture=atlas.Text;_sky=new SkyRenderer(device,atlas.Texture);
         _particles=new ParticleRenderer(device,atlas.Texture);
@@ -168,14 +172,16 @@ public sealed partial class WorldRenderer : IDisposable
         };
     }
 
-    public void Draw(Camera camera, BlockHit? selection, DroppedItems items = null, float miningProgress = 0, float fallingInterpolation = 1)
+    public void Draw(Camera camera, BlockHit? selection, DroppedItems items = null, float miningProgress = 0, float fallingInterpolation = 1, Point3? miningTarget=null)
     {
+        camera.Underwater=UnderwaterView.Submerged(_world,camera);
+        if(camera.Underwater)_device.Clear(ClearOptions.Target|ClearOptions.DepthBuffer,UnderwaterView.FogColor,1,0);
         Matrix view = camera.View;
         Matrix projection = camera.Projection(_device.Viewport.AspectRatio);
         _frustum.Matrix = view * projection;
         VisibleChunks = 0;
         Prepare(camera);
-        _sky.Draw(camera,_world.Time,_world.Seed,_world.Weather.MotionSeconds,_world.OriginX,_world.OriginZ);
+        if(!camera.Underwater)_sky.Draw(camera,_world.Time,_world.Seed,_world.Weather.MotionSeconds,_world.OriginX,_world.OriginZ);
         foreach (int index in _region.Indices)
         {
             ChunkMesh mesh = _meshes[index];
@@ -212,11 +218,14 @@ public sealed partial class WorldRenderer : IDisposable
 
         _items.Draw(camera, items,_world,Brightness);
         _falling.Draw(camera, _world.Gravity, fallingInterpolation,_world,Brightness);
+        var cracking=miningTarget;
+        if(cracking.HasValue)_cracks.Draw(_world,camera,cracking.Value,miningProgress);
         if (selection is BlockHit hit)
             DrawSelection(hit, camera, miningProgress);
     }
 
-    public void DrawWater(Camera camera) { _burning.Draw(camera,_world);_water.Brightness=Brightness;_water.Draw(camera);_particles.Draw(camera,_world,Brightness);_weather.Draw(camera,_world); }
+    public void DrawWater(Camera camera) { _burning.Draw(camera,_world);_water.Brightness=Brightness;_water.Draw(camera);_particles.Draw(camera,_world,Brightness);if(!camera.Underwater)_weather.Draw(camera,_world); }
+    internal void DrawUnderwater(Camera camera)=>_underwater.Draw(camera);
 
     private void DrawSelection(BlockHit hit, Camera camera, float miningProgress)
     {
@@ -262,5 +271,7 @@ public sealed partial class WorldRenderer : IDisposable
         _particles.Dispose();
         _weather.Dispose();
         _burning.Dispose();
+        _underwater.Dispose();
+        _cracks.Dispose();
     }
 }

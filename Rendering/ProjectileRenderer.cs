@@ -26,7 +26,7 @@ internal sealed class ProjectileRenderer:IDisposable
     {
         int count=0,ballCount=0;
         float light=1;
-        if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
+        if(world!=null)UnderwaterView.Fog(_effect,camera,world.Time.Sky);
         for(int i=0;i<projectiles.Arrows.Count;i++)
         {
             var arrow=projectiles.Arrows[i];
@@ -57,7 +57,7 @@ internal sealed class ProjectileRenderer:IDisposable
             if(count>0)foreach(var pass in _effect.CurrentTechnique.Passes){pass.Apply();_device.DrawUserPrimitives(PrimitiveType.LineList,_vertices,0,count/2);}
             if(ballCount>0 && _atlas!=null)
             {
-                _device.SamplerStates[0]=SamplerState.PointClamp;_ballEffect.Texture=_atlas.ItemAtlas;_ballEffect.View=camera.View;_ballEffect.Projection=_effect.Projection;
+                _device.SamplerStates[0]=SamplerState.PointClamp;UnderwaterView.Fog(_ballEffect,camera,world?.Time.Sky??WorldRenderer.SkyColor);_ballEffect.Texture=_atlas.ItemAtlas;_ballEffect.View=camera.View;_ballEffect.Projection=_effect.Projection;
                 foreach(var pass in _ballEffect.CurrentTechnique.Passes){pass.Apply();_device.Textures[0]=null;_device.Textures[0]=_atlas.ItemAtlas;_device.DrawUserPrimitives(PrimitiveType.TriangleList,_balls,0,ballCount/3);}
             }
         }

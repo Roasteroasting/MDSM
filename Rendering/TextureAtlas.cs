@@ -17,9 +17,11 @@ public sealed class TextureAtlas : IDisposable
     // Owned by the ContentManager supplied to the constructor, not by this wrapper.
     public Texture2D Texture { get; }
     public Texture2D Water { get; }
+    internal Texture2D DestroyStages { get; }
     public Texture2D ItemAtlas { get; }
     public Texture2D Text { get; }
     internal Effect LightingEffect { get; }
+    internal Effect CrackEffect { get; }
     internal InventoryIconAtlas Icons {get;}
     private bool _disposed;
 
@@ -31,9 +33,12 @@ public sealed class TextureAtlas : IDisposable
     {
         Texture = content.Load<Texture2D>("Blocks/terrain");
         Water = content.Load<Texture2D>("Blocks/water");
+        DestroyStages=content.Load<Texture2D>("Blocks/destroy_stages");
+        if(DestroyStages.Width!=160||DestroyStages.Height!=16)throw new ContentLoadException("destroy_stages.png must contain ten 16x16 tiles horizontally.");
         ItemAtlas=content.Load<Texture2D>("Items/items");
         Text=content.Load<Texture2D>("UI/text");
         LightingEffect=content.Load<Effect>("Effects/BlockLighting");
+        CrackEffect=content.Load<Effect>("Effects/MiningCracks");
         if(ItemAtlas.Width!=AtlasSize || ItemAtlas.Height!=AtlasSize)throw new ContentLoadException("items.png must be 256x256.");
         if(Text.Width!=AtlasSize || Text.Height!=AtlasSize)throw new ContentLoadException("text.png must be 256x256.");
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");

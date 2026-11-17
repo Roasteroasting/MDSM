@@ -37,7 +37,7 @@ internal static class InventoryIconChecks
         {
             builder.AppendInventoryItem(block);var canonical=builder.Vertices.Take(builder.VertexCount).ToArray();
             var held=new ViewModelGeometry();held.Build(new(ViewModelKind.Cube,Items.FromBlock(block)));
-            C(held.VertexCount==canonical.Length&&canonical.Length==(block==BlockType.Fence?108:180),"Held fence/gate uses obsolete geometry.");
+            C(held.VertexCount==canonical.Length&&canonical.Length==(block==BlockType.Fence?204:180),$"Held fence/gate uses obsolete geometry: {block} {canonical.Length}/{held.VertexCount}.");
             for(int i=0;i<canonical.Length;i++)
             {
                 Vector3 expected=(canonical[i].Position-Vector3.One*.5f)*(MDSM.Entities.DroppedItem.Radius*2)*3.5f;

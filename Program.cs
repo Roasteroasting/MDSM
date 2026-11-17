@@ -1,4 +1,6 @@
-if(args.Length==1 && args[0]=="--held-item-test")
+if(args.Length==1 && args[0]=="--visual-refinement-test")
+{ System.Environment.ExitCode=MDSM.Testing.VisualRefinementChecks.Run(); }
+else if(args.Length==1 && args[0]=="--held-item-test")
 { System.Environment.ExitCode=MDSM.Testing.HeldItemChecks.Run(); }
 else if(args.Length==1 && args[0]=="--swimming-test")
 { MDSM.Testing.WaterChecks.Swimming(); MDSM.Testing.WaterChecks.SurfaceBobbing(); }

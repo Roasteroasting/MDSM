@@ -31,7 +31,7 @@ internal sealed class FallingBlockRenderer : IDisposable
     {
         if (simulation.Active.Count == 0) return;
         _effect.View = camera.View; _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
-        if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
+        if(world!=null)UnderwaterView.Fog(_effect,camera,world.Time.Sky);
         _frustum.Matrix = _effect.View * _effect.Projection;
         int count = 0;
         for (int i = 0; i < simulation.Active.Count; i++)

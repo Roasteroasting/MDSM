@@ -15,6 +15,7 @@ internal sealed class BurningRenderer:IDisposable
     {_device=device;_atlas=atlas;_effect=new(device){VertexColorEnabled=true,AlphaFunction=CompareFunction.GreaterEqual,ReferenceAlpha=128,World=Matrix.Identity};}
     public void Draw(Camera camera,World world)
     {
+        UnderwaterView.Fog(_effect,camera,world.Time.Sky);
         _count=0;
         if(world.LiveMobs!=null)foreach(var mob in world.LiveMobs.Entities)Append(mob);
         if(world.LiveHostiles!=null)foreach(var mob in world.LiveHostiles.Entities)Append(mob);

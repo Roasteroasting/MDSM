@@ -151,7 +151,7 @@ internal static class PresentationChecks
             {Require(selection.Kind==ViewModelKind.Sprite,"Bed must use its item artwork in first person.");geometry.Build(selection);Require(geometry.VertexCount==ItemSpriteGeometry.VertexCount,"Bed sprite is missing.");continue;}
             bool plant = Blocks.Get(block).Shape is BlockShape.Cross or BlockShape.Torch;
             Require(selection.Item == inventory.Selected.Item && selection.Kind == (plant ? ViewModelKind.Plant : ViewModelKind.Cube), "Held item ignores inventory/shape.");
-            geometry.Build(selection);int expected=block==BlockType.Torch?36:plant?24:block is BlockType.Door or BlockType.WoodenStairs or BlockType.CobblestoneStairs or BlockType.Sign?72:block==BlockType.FenceGate?180:block==BlockType.Fence?108:36;
+            geometry.Build(selection);int expected=block==BlockType.Torch?36:plant?24:block is BlockType.Door or BlockType.WoodenStairs or BlockType.CobblestoneStairs or BlockType.Sign?72:block==BlockType.FenceGate?180:block==BlockType.Fence?204:36;
             Require(geometry.VertexCount == expected, "Held geometry changed representation.");
             float minZ = float.MaxValue, maxZ = float.MinValue;
             for (int i = 0; i < geometry.VertexCount; i++)

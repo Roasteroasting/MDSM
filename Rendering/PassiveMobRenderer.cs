@@ -40,7 +40,7 @@ internal sealed class PassiveMobRenderer : IDisposable
             _device.BlendState = BlendState.Opaque; _device.DepthStencilState = DepthStencilState.Default;
             _device.RasterizerState = RasterizerState.CullCounterClockwise; _device.SamplerStates[0] = SamplerState.PointClamp;
             _effect.View = camera.View; _effect.Projection = camera.Projection(_device.Viewport.AspectRatio);
-            if(world!=null)_effect.FogColor=world.Time.Sky.ToVector3();
+            if(world!=null)UnderwaterView.Fog(_effect,camera,world.Time.Sky);
             for (int species = 0; species < _textures.Length; species++)
             {
                 _builder.Clear();

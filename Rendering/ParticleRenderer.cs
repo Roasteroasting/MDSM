@@ -16,6 +16,7 @@ internal sealed class ParticleRenderer:IDisposable
     {_device=device;_texture=texture;_effect=new(device){TextureEnabled=true,VertexColorEnabled=true};}
     public void Draw(Camera camera,World world,float brightness)
     {
+        UnderwaterView.Fog(_effect,camera,world.Time.Sky);
         int count=0;Vector3 right=camera.Right,up=Vector3.Normalize(Vector3.Cross(right,camera.Forward));
         foreach(var p in world.Particles.Active)
         {

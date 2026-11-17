@@ -14,6 +14,7 @@ public sealed class Camera
     public float Yaw => _yaw;
     public float Pitch => _pitch;
 
+    internal bool Underwater { get; set; }
     public Vector3 Position { get; set; }
     public Vector3 PresentationOffset { get; set; }
     public Matrix PresentationTransform { get; set; } = Matrix.Identity;

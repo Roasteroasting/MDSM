@@ -7,10 +7,10 @@
 #define PS_PROFILE ps_4_0_level_9_1
 #endif
 float4x4 ViewProjection;
-float4x4 View;
 float Daylight;
 float Brightness;
 float3 FogColor;
+float WaterFog;
 float FogStart;
 float FogEnd;
 float AlphaCutoff;
@@ -22,7 +22,9 @@ VSOutput VSMain(VSInput input)
 {
     VSOutput output;
     output.Position=mul(input.Position,ViewProjection);
-    output.Distance=-mul(input.Position,View).z;
+    // Perspective clip W is positive eye-space depth. Avoid a separately
+    // optimized non-square View uniform on DesktopGL.
+    output.Distance=output.Position.w;
     output.Color=input.Color;output.Uv=input.Uv;return output;
 }
 float4 PSMain(VSOutput input) : COLOR0
@@ -34,7 +36,7 @@ float4 PSMain(VSOutput input) : COLOR0
     float minimum=.025+.12*Brightness;
     float light=minimum+(1-minimum)*pow(saturate(level/14),1.7);
     float3 rgb=tex.rgb*input.Color.r*light;
-    float fog=saturate((input.Distance-FogStart)/(FogEnd-FogStart));
+    float fog=WaterFog>.5?1-exp(-max(0,input.Distance)*.1):saturate((input.Distance-FogStart)/(FogEnd-FogStart));
     return float4(lerp(rgb,FogColor,fog),tex.a*input.Color.a);
 }
 technique BlockLighting { pass P0 { VertexShader=compile VS_PROFILE VSMain(); PixelShader=compile PS_PROFILE PSMain(); } }

@@ -780,7 +780,7 @@ public class Game1 : Game
             GraphicsDevice.Clear(ClearOptions.Target | ClearOptions.DepthBuffer, _session.World.Time.Sky, 1f, 0);
             _renderer.Brightness=_settings.Brightness;
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
-            _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation);
+            _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation, State==GameState.Playing&&_session.Mining.Target==_selection?.Cell?_session.Mining.Target:null);
             _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles,_session.World,_settings.Brightness);
             _projectileRenderer.Draw(_session.Camera,_session.Projectiles,_session.World,_settings.Brightness);
             _renderer.DrawWater(_session.Camera);
@@ -789,6 +789,7 @@ public class Game1 : Game
             _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
             if (_presentation.HudVisible && State==GameState.Playing) _firstPerson.Draw(State, _session.Inventory,
                 BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform,_session.Camera.PresentationTransform);
+            _renderer.DrawUnderwater(_session.Camera);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
                 _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath,_session.Player.AbsolutePosition);
