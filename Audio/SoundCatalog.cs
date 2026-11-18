@@ -24,6 +24,9 @@ public sealed record SoundGroup(SoundKind Kind, SoundMaterial Material, int Spec
 // Shared with the development generator. Asset indices are unrelated to saved block/item IDs.
 public static class SoundCatalog
 {
+    internal static float IdleRange(int species) => species == 5 ? 8 : species >= 4 ? 10 : 14;
+    internal static float IdleDelay(int species, float variation)
+        => species == 5 ? 90 + 90 * variation : species >= 4 ? 25 + 30 * variation : 16 + 18 * variation;
     public static readonly SoundGroup[] Groups = Create();
     private static readonly Dictionary<(SoundKind,SoundMaterial,int),int> Indices = Index();
     public static int Find(SoundKind kind, SoundMaterial material=SoundMaterial.Stone, int species=0)
@@ -50,7 +53,8 @@ public static class SoundCatalog
         {
             var kind=(SoundKind)((int)SoundKind.MobIdle+action);
             result.Add(new(kind,SoundMaterial.Stone,mob,$"Mobs/{species[mob]}/{new[]{"idle","hurt","death"}[action]}",
-                SoundCategory.Mobs,2,action==0?.65f:.9f,action==0?28:36,action==0?1:.08,action==0?0:3));
+                SoundCategory.Mobs,2,action==0?.55f:.9f,action==0?IdleRange(mob):36,
+                action==0?(mob==5?45:mob>=4?12:5):.08,action==0?0:3));
         }
         foreach(SoundKind kind in Enum.GetValues<SoundKind>())
         {

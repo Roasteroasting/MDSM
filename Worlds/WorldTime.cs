@@ -8,6 +8,14 @@ public sealed class WorldTime
 {
     public const double DaySeconds = 1200, Morning = 60;
     public double Seconds { get; private set; } = Morning;
+    private float _rainTransition;
+    internal float RainCover => MathHelper.SmoothStep(0,1,_rainTransition);
+    internal void UpdateRainVisual(bool raining,double elapsed)
+    {
+        if(!double.IsFinite(elapsed)||elapsed<=0)return;
+        float step=(float)(elapsed/5);
+        _rainTransition=Math.Clamp(_rainTransition+(raining?step:-step),0,1);
+    }
     public double Phase => Seconds / DaySeconds;
     public bool IsNight => Phase >= .55 && Phase < .95;
     public int SunlightLevel=>Math.Clamp((int)MathF.Floor(Daylight+.00001f),0,BlockLighting.Maximum);
@@ -39,7 +47,11 @@ public sealed class WorldTime
             float day=Daylight/14;
             Color sky=Color.Lerp(new Color(8,12,29),new Color(143,190,232),day);
             float horizon=MathF.Max(0,1-MathF.Abs(SunDirection.Y)/.32f);
-            return Color.Lerp(sky,new Color(199,106,76),horizon*.65f);
+            Color clear=Color.Lerp(sky,new Color(199,106,76),horizon*.65f);
+            if(_rainTransition==0)return clear;
+            float luminance=clear.R*.2126f+clear.G*.7152f+clear.B*.0722f;
+            var overcast=new Color((int)(luminance*.55f),(int)(luminance*.59f),(int)(luminance*.65f));
+            return Color.Lerp(clear,overcast,RainCover);
         }
     }
 }

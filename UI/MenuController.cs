@@ -93,7 +93,8 @@ internal sealed class MenuController : IDisposable
         _ => MainButtons
     };
     private int FocusOffset => _screen == GameState.WorldCreation ? 6
-        : _screen == GameState.Settings ? 11 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+        : _screen == GameState.Settings ? 12 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
+    private static int VolumeFocus(int index)=>index==4?11:6+index;
 
     public MenuController(GraphicsDevice device, TextureAtlas atlas, GameSettings settings)
     {
@@ -256,11 +257,12 @@ internal sealed class MenuController : IDisposable
         if(_screen==GameState.Settings)
         {
             bool changed=false;
-            for(int index=0;index<5;index++)
+            for(int index=0;index<=SoundSettingsLayout.Labels.Length;index++)
             {
-                Rectangle slider=index==4?SettingsLayout.Brightness(viewport):SettingsLayout.Volume(viewport,index);
-                float before=index==4?_settings.Brightness:SoundSettingsLayout.Get(_settings,index);
-                int focus=index==4?5:6+index;
+                bool brightness=index==SoundSettingsLayout.Labels.Length;
+                Rectangle slider=brightness?SettingsLayout.Brightness(viewport):SettingsLayout.Volume(viewport,index);
+                float before=brightness?_settings.Brightness:SoundSettingsLayout.Get(_settings,index);
+                int focus=brightness?5:VolumeFocus(index);
                 if(click && slider.Contains(_mouse)){_focus=focus;_soundSlider=index;}
                 if(mouse.LeftButton==ButtonState.Released)_soundSlider=-1;
                 float value=before;
@@ -270,11 +272,11 @@ internal sealed class MenuController : IDisposable
                     if(Pressed(Keys.Left))value-=.01f;if(Pressed(Keys.Right))value+=.01f;
                     if(Pressed(Keys.Home))value=0;if(Pressed(Keys.End))value=1;
                 }
-                if(index==4)_settings.Brightness=value;else SoundSettingsLayout.Set(_settings,index,value);
-                changed|=before!=(index==4?_settings.Brightness:SoundSettingsLayout.Get(_settings,index));
+                if(brightness)_settings.Brightness=value;else SoundSettingsLayout.Set(_settings,index,value);
+                changed|=before!=(brightness?_settings.Brightness:SoundSettingsLayout.Get(_settings,index));
             }
             if(changed)return MenuAction.SettingsChanged;
-            if(Pressed(Keys.Enter) && _focus<11)return MenuAction.None;
+            if(Pressed(Keys.Enter) && _focus<FocusOffset)return MenuAction.None;
         }
 
         if (click && (_screen is GameState.WorldCreation or GameState.WorldRename))
@@ -446,10 +448,10 @@ internal sealed class MenuController : IDisposable
             DrawSlider(SettingsLayout.Slider(viewport), $"FPS CAP: {_settings.FpsCap}",
                 (_settings.FpsCap-GameSettings.MinimumFps)/(float)(GameSettings.MaximumFps-GameSettings.MinimumFps),0);
             DrawSlider(SettingsLayout.Brightness(viewport),$"BRIGHTNESS: {MathF.Round(_settings.Brightness*100)}%",_settings.Brightness,5);
-            for(int index=0;index<4;index++)
+            for(int index=0;index<SoundSettingsLayout.Labels.Length;index++)
             {
                 float value=SoundSettingsLayout.Get(_settings,index);
-                DrawSlider(SettingsLayout.Volume(viewport,index),$"{SoundSettingsLayout.Labels[index]}: {MathF.Round(value*100)}%",value,6+index);
+                DrawSlider(SettingsLayout.Volume(viewport,index),$"{SoundSettingsLayout.Labels[index]}: {MathF.Round(value*100)}%",value,VolumeFocus(index));
             }
             Rectangle toggle=SettingsLayout.Toggle(viewport),bobbing=SettingsLayout.Bobbing(viewport);
             Choice(toggle,"UNCAPPED FPS",1,_settings.UncappedFps);

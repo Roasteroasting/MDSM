@@ -30,7 +30,10 @@ internal sealed class SkyRenderer : IDisposable
     {
         _device.DepthStencilState=DepthStencilState.None;_device.BlendState=BlendState.Opaque;_device.RasterizerState=RasterizerState.CullNone;
         _effect.View=camera.View;_effect.Projection=camera.Projection(_device.Viewport.AspectRatio);
-        Square(0,time.SunDirection,7,new Color(255,238,158));Square(6,time.MoonDirection,5,new Color(203,217,235));
+        float cloudCover=time.RainCover;
+        Color sky=time.Sky;
+        Square(0,time.SunDirection,7,Color.Lerp(new Color(255,238,158),sky,cloudCover));
+        Square(6,time.MoonDirection,5,Color.Lerp(new Color(203,217,235),sky,cloudCover));
         foreach(var pass in _effect.CurrentTechnique.Passes){pass.Apply();_device.DrawUserPrimitives(PrimitiveType.TriangleList,_vertices,0,4);}
         DrawClouds(camera,time,seed,cloudTime<0?time.Seconds:cloudTime,originX,originZ);
         void Square(int offset,Vector3 direction,float radius,Color color)
@@ -47,6 +50,7 @@ internal sealed class SkyRenderer : IDisposable
     {
         double drift=seconds*.5;long cx=(long)Math.Floor((originX+(double)camera.Position.X-drift)/CloudPattern.CellSize),cz=(long)Math.Floor((originZ+(double)camera.Position.Z)/CloudPattern.CellSize);
         Color tint=Color.Lerp(new Color(69,76,96),new Color(242,244,245),time.Daylight/14f);
+        tint=Color.Lerp(tint,Color.Lerp(new Color(40,44,54),new Color(157,164,173),time.Daylight/14f),time.RainCover);
         if(cx!=_cloudX || cz!=_cloudZ || seed!=_cloudSeed)
         {
             _cloudX=cx;_cloudZ=cz;_cloudSeed=seed;_clouds.Clear();

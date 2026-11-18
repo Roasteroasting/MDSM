@@ -1,4 +1,6 @@
-if(args.Length==1 && args[0]=="--cactus-fire-test")
+if(args.Length==1 && args[0]=="--world-soundtrack-test")
+{ System.Environment.ExitCode=MDSM.Testing.WorldSoundtrackChecks.Run(); }
+else if(args.Length==1 && args[0]=="--cactus-fire-test")
 { System.Environment.ExitCode=MDSM.Testing.CactusFireChecks.Run(); }
 else if(args.Length==1 && args[0]=="--smooth-lighting-reference")
 { System.Environment.ExitCode=MDSM.Testing.SmoothLightingChecks.Run(true); }

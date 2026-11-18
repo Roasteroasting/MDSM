@@ -128,7 +128,14 @@ internal static class AudioChecks
             var definition=MobDefinitions.Get(species);var state=new MobState(species,new(25,1,25),0,definition.MaximumHealth);
             var mob=new PassiveMob(state,17);var control=new PassiveMob(state,17);var w=Session().World;var quiet=new World(173,WorldSize.Small,false);
             for(int z=0;z<52;z++)for(int x=0;x<52;x++)quiet.SetGeneratedBlock(x,0,z,BlockType.Grass);
-            w.Sounds.SetListener(state.Position);for(int tick=0;tick<1500;tick++){mob.Update(w,1f/120);control.Update(quiet,1f/120);}
+            int seconds=(int)SoundCatalog.IdleDelay((int)species,1)+1;
+            for(int tick=0;tick<seconds*10;tick++)
+            {
+                w.Sounds.SetListener(mob.Position+Vector3.Up*(definition.Height*.7f));
+                mob.Update(w,.1f);
+                control.Update(quiet,.1f);
+                if(tick==119)Check(Count(w.Sounds,SoundKind.MobIdle)==0,"Species idle sound starts too often.");
+            }
             Check(mob.Position==control.Position && mob.Yaw==control.Yaw,"Audio altered mob AI randomness or movement.");
             Check(Drain(w.Sounds).Any(e=>SoundCatalog.Groups[e.Group].Kind==SoundKind.MobIdle && SoundCatalog.Groups[e.Group].Species==(int)species),"Species idle sound missing.");
             var population=(int)species<4?new PassiveMobPopulation(w,new[]{state}):null;
@@ -211,18 +218,24 @@ internal static class AudioChecks
         try
         {
             var store=new SettingsStore(Path.Combine(root,"settings.json"));var settings=store.Load();Check(settings.MasterVolume==.8f && settings.MobVolume==1,"Volume defaults incorrect.");
-            settings.FpsCap=240;settings.MasterVolume=.2f;settings.EffectsVolume=.3f;settings.MobVolume=.4f;settings.InterfaceVolume=.5f;store.Save(settings);
-            var loaded=store.Load();Check(loaded.MasterVolume==.2f && loaded.EffectsVolume==.3f && loaded.MobVolume==.4f && loaded.InterfaceVolume==.5f && loaded.FpsCap==240,"Volumes did not persist independently.");
+            settings.FpsCap=240;settings.MasterVolume=.2f;settings.EffectsVolume=.3f;settings.MobVolume=.4f;settings.InterfaceVolume=.5f;settings.MusicVolume=.6f;store.Save(settings);
+            var loaded=store.Load();Check(loaded.MasterVolume==.2f && loaded.EffectsVolume==.3f && loaded.MobVolume==.4f && loaded.InterfaceVolume==.5f && loaded.MusicVolume==.6f && loaded.FpsCap==240,"Volumes did not persist independently.");
             File.WriteAllText(store.FilePath,"{\"MasterVolume\":\"invalid\",\"EffectsVolume\":5,\"MobVolume\":-2,\"InterfaceVolume\":1e400}");loaded=store.Load();
             Check(loaded.MasterVolume==.8f && loaded.EffectsVolume==1 && loaded.MobVolume==0 && loaded.InterfaceVolume==1,"Invalid volume values unsafe.");
-            File.WriteAllText(store.FilePath,"{\"FpsCap\":144}");Check(store.Load().MasterVolume==.8f && store.Load().FpsCap==144,"Old settings incompatible.");
+            File.WriteAllText(store.FilePath,"{\"FpsCap\":144}");loaded=store.Load();
+            Check(loaded.MasterVolume==.8f && loaded.MusicVolume==.65f && loaded.FpsCap==144,"Old settings incompatible.");
             foreach(Point size in new[]{new Point(320,240),new(480,300),new(1280,720),new(1920,1080)})
             {
-                var viewport=new Viewport(0,0,size.X,size.Y);Rectangle last=default;
-                for(int row=0;row<4;row++)
-                {var slider=SoundSettingsLayout.Slider(viewport,row);Check(slider.Left>=0 && slider.Right<=size.X && (row%2==0?slider.Top>last.Bottom:slider.Left>last.Right && slider.Y==last.Y),"Volume sliders overlap or escape viewport.");
-                    Check(SoundSettingsLayout.ValueAt(slider,slider.Left)==0 && SoundSettingsLayout.ValueAt(slider,slider.Right)==1,"Slider endpoints wrong.");last=slider;}
-                Check(SoundSettingsLayout.Back(viewport).Bottom<=size.Y && SoundSettingsLayout.Back(viewport).Top>last.Bottom,"Volume Back clipped.");
+                var viewport=new Viewport(0,0,size.X,size.Y);
+                Rectangle back=SoundSettingsLayout.Back(viewport);
+                for(int index=0;index<SoundSettingsLayout.Labels.Length;index++)
+                {
+                    var slider=SoundSettingsLayout.Slider(viewport,index);
+                    Check(viewport.Bounds.Contains(slider) && slider.Bottom<back.Top && back.Bottom<=size.Y,"Volume slider or Back escapes viewport.");
+                    for(int previous=0;previous<index;previous++)
+                        Check(!slider.Intersects(SoundSettingsLayout.Slider(viewport,previous)),"Volume sliders overlap.");
+                    Check(SoundSettingsLayout.ValueAt(slider,slider.Left)==0 && SoundSettingsLayout.ValueAt(slider,slider.Right)==1,"Slider endpoints wrong.");
+                }
             }
             var session=Session();using var a=new MemoryStream();WorldSerializer.Write(a,session.Capture());session.Sounds.Local(SoundKind.PlayerHurt);using var b=new MemoryStream();WorldSerializer.Write(b,session.Capture());
             Check(a.ToArray().AsSpan().SequenceEqual(b.ToArray()),"Transient audio entered world saves.");

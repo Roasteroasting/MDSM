@@ -221,6 +221,7 @@ internal static class InterfaceGraphicsChecks
                     Click(0); Require(State == GameState.Settings, "Controls Back skipped Settings.");
                     for(int navigation=0;navigation<10;navigation++)Press(Keys.Tab);
                     Press(Keys.Space);Require(Settings.SmoothLighting,"Keyboard Smooth Lighting entry failed.");
+                    Press(Keys.Tab);Press(Keys.Home);Require(Settings.MusicVolume==0,"Keyboard Music slider did not reach zero.");
                     Press(Keys.Tab);Press(Keys.Tab);Press(Keys.Enter);
                     Require(State == GameState.About, "Keyboard About entry failed.");
                     Capture(); break;
@@ -231,7 +232,7 @@ internal static class InterfaceGraphicsChecks
                     Click(2); Require(State == GameState.MainMenu, "Settings Back lost main-menu origin.");
                     Require(Settings.FpsCap == 360 && Settings.UncappedFps, "Information navigation changed FPS preferences.");
                     GameSettings persisted = new SettingsStore(Path.Combine(_root, "settings.json")).Load();
-                    Require(persisted.FpsCap == 360 && persisted.UncappedFps && persisted.SmoothLighting, "Settings navigation did not preserve persisted preferences.");
+                    Require(persisted.FpsCap == 360 && persisted.UncappedFps && persisted.SmoothLighting && persisted.MusicVolume==0, "Settings navigation did not preserve persisted preferences.");
                     Settings.UncappedFps = false; Settings.FpsCap = 60;
                     Fixture(); Capture(); break;
                 case 4:

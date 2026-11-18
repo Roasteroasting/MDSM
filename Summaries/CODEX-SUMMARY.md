@@ -2750,3 +2750,68 @@ passed. Runtime audio loaded all 281 WAV clips and played all 113 sound groups;
 voice high-water remained 32/32. No subjective listening or physical-input manual
 playtest is claimed. Final crackle loudness/tone and natural spark frequency are
 useful manual checks. No publishing.
+
+### World music, rain atmosphere, and quieter mobs - 2026-11-18
+
+The original six recordings remain in Content/Sounds/References. Content.mgcb
+copies only the prepared runtime tracks from Sounds/Music and Sounds/Ambient.
+The MP3, WAV, and Ogg source recordings were decoded offline and prepared as
+stereo Ogg Vorbis for MonoGame DesktopGL streaming. FFmpeg is a preparation tool
+for these assets. The game uses its existing MonoGame dependencies for playback.
+
+FFmpeg EBU R128 measurements put the original songs at -37.9 to -14.1 LUFS.
+The five runtime copies measure -23.0 to -22.9 LUFS, with true peaks of
+-10.9 to -5.8 dBFS. Rain is attenuated and prepared with a two-second loop
+crossfade. Its prepared file measures -26.5 LUFS with a -5.7 dBFS true peak
+before the in-game ambience gain.
+
+WorldSoundtrack uses one MonoGame streamed channel alongside the existing
+one-shot effects mixer. It shuffles all five songs and avoids an immediate
+repeat between shuffles. Entering a world and finishing a song each schedule
+5-15 minutes of active gameplay before another song. Local temperate rain
+takes priority over music. If a song was playing, it fades out, ends early
+and starts a fresh delay. Rain fades out when the player leaves the local
+rain area, enters snow or desert, or returns to the main menu. Music and
+rain use four-second fades. Music tails use the actual stream position.
+Pausing fades and pauses the stream. Losing window focus pauses it immediately.
+
+Settings has a persistent Music slider, default 65 percent. Master Volume
+scales both streams and Effects Volume scales rain. The sky, clouds, celestial
+sprites and distance fog blend toward darker gray over five seconds using the
+same local rain predicate. The visual blend uses the existing day/night colors.
+
+Mob idle calls are scheduled per nearby mob. Passive animals use 16-34 seconds
+and a 14-block range. Zombies and spiders use 25-55 seconds and 10 blocks.
+Skeletons use 90-180 seconds and 8 blocks. Group cooldowns also limit choruses.
+A short solid-geometry ray check at the time of a call prevents idle voices
+from carrying through cave roofs and walls. All 28 hurt/death WAV variants were
+derived from their corresponding idle recordings using species-specific pitch
+adjustments. Hurt sounds are higher, death sounds lower. The originals remain
+in place. Derived clips use mono PCM16, short fades and a 1.2-second length cap.
+
+MonoGame's streaming API reference
+https://docs.monogame.net/articles/getting_to_know/howto/audio/HowTo_PlayASong.html
+
+The build succeeded with zero warnings and errors. The dedicated world soundtrack
+test exercised all five streams and rain on DesktopGL, both volume controls,
+shuffle and silence scheduling, playback-position fades, priority, focus and
+pause behavior through the mixer, world exit and missing files. It also checked
+local weather across all biomes, cave-roof idle occlusion, and sky transition
+pixels. Clear, transition and overcast preview frames were inspected. Scheduling
+tests advance the gameplay clock directly to exercise minute-scale waits.
+
+The audio CPU and graphics suites passed. DesktopGL loaded all 281 WAV clips
+and played all 113 effects groups within the 32-voice budget. The Settings,
+interface screenshot, lighting, gameplay refinement, cactus/fire and sign/fire
+regressions passed. Keyboard Music control and persistence were exercised in the
+interface suite. Subjective listening balance remains a playtest check.
+
+### Settings layout adjustment - 2026-11-18
+
+Moved Music beside Brightness. FPS Cap now sits to the left of Smooth Lighting,
+with Smooth Lighting directly above View Bobbing. Removed the empty row and
+widened the two-column layout on large windows to preserve one mouse position
+per integer FPS cap at desktop widths. Layout checks account for Music's new row.
+
+Build, audio, lighting, menu style, and audio graphics checks passed. The
+320-by-240 Settings preview confirmed the order and label fit.

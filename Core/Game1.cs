@@ -47,6 +47,7 @@ public class Game1 : Game
     private PassiveMobRenderer _mobRenderer;
     private ProjectileRenderer _projectileRenderer;
     private AudioManager _audio;
+    private WorldSoundtrack _soundtrack;
     private readonly SoundEvents _uiSounds=new();
     private readonly PlayerAudio _playerAudio=new();
     private KeyboardState _previousKeyboard;
@@ -110,6 +111,7 @@ public class Game1 : Game
     protected override void LoadContent()
     {
         _audio=new AudioManager(Content.RootDirectory,_settings);
+        _soundtrack=new WorldSoundtrack(Content.RootDirectory,_settings);
         _atlas = new TextureAtlas(Content);
         _hud = new Hud(GraphicsDevice, _atlas);
         _menu = new MenuController(GraphicsDevice, _atlas, _settings);
@@ -134,8 +136,13 @@ public class Game1 : Game
         bool back = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
         Point lookDelta = _mouseLook.ReadDelta();
         ProcessInput(keyboard, mouse, back, gameTime, lookDelta);
-        _audio.Update(gameTime.ElapsedGameTime.TotalSeconds,_uiSounds,_session?.Sounds,
-            _session?.Camera.Position??Vector3.Zero,_session?.Camera.Right??Vector3.Right,State==GameState.Playing,IsActive);
+        double elapsed = gameTime.ElapsedGameTime.TotalSeconds;
+        bool playing = State == GameState.Playing;
+        bool raining = _session != null && _session.World.Weather.RainAt(_session.Player.Position);
+        if (playing && IsActive) _session?.World.Time.UpdateRainVisual(raining, elapsed);
+        _soundtrack.Update(elapsed, _session != null, playing, raining, IsActive);
+        _audio.Update(elapsed,_uiSounds,_session?.Sounds,
+            _session?.Camera.Position??Vector3.Zero,_session?.Camera.Right??Vector3.Right,playing,IsActive);
         base.Update(gameTime);
         _diagnostics.Update(start, GC.GetAllocatedBytesForCurrentThread() - allocations);
     }
@@ -846,6 +853,7 @@ public class Game1 : Game
         _firstPerson?.Dispose();
         _mobRenderer?.Dispose();
         _projectileRenderer?.Dispose();
+        _soundtrack?.Dispose();
         _audio?.Dispose();
         _atlas?.Dispose();
         // The game's ContentManager owns and disposes the shared terrain texture.

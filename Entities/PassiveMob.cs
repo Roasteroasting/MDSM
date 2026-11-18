@@ -52,7 +52,7 @@ public sealed class PassiveMob
     private bool _wandering;
     private bool _wanderHopping;
     private float _obstacleChoiceSeconds;
-    private float _idleSoundSeconds=3,_stepSoundDistance;
+    private float _idleSoundSeconds,_stepSoundDistance;
     private uint _soundSeed;
     // Tiny local voxel cache, not a simulation throttle: all AI/physics still run at 120 Hz.
     // Conservative world revision invalidation preserves immediate edits/fluid changes.
@@ -64,7 +64,8 @@ public sealed class PassiveMob
         Species = state.Species;
         Definition = MobDefinitions.Get(Species);
         Position = state.Position; Yaw = state.Yaw; Health = state.Health;
-        _soundSeed=unchecked((uint)(Position.X*17+Position.Z*31)+(uint)Species*997+1);_idleSoundSeconds+=_soundSeed%9;
+        _soundSeed=unchecked((uint)aiSeed+(uint)Species*997+1);
+        ResetIdleSound();
         Sheared=state.Sheared;WoolSeconds=state.WoolSeconds;
         BabySeconds=state.BabySeconds;LoveSeconds=state.LoveSeconds;BreedCooldown=state.BreedCooldown;Bred=state.Bred;
         EggSeconds=state.EggSeconds;_eggReady=EggSeconds==0;
@@ -74,6 +75,11 @@ public sealed class PassiveMob
     }
 
     public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds,BabySeconds,LoveSeconds,BreedCooldown,Bred,EggSeconds,Burning.Capture());
+    private void ResetIdleSound()
+    {
+        _soundSeed=unchecked(_soundSeed*1664525+1013904223);
+        _idleSoundSeconds=SoundCatalog.IdleDelay((int)Species,(_soundSeed>>8)/16777216f);
+    }
     internal void LayEgg(float elapsed,DroppedItems items)
     {
         if(Species!=MobSpecies.Chicken || Baby || IsDead || !float.IsFinite(elapsed)||elapsed<=0)return;
@@ -133,8 +139,12 @@ public sealed class PassiveMob
     {
         if (IsDead || !float.IsFinite(elapsed) || elapsed <= 0) return;
         float dt = Math.Min(elapsed, 0.1f);
-        if(world.Sounds?.Nearby(Position,28)==true && (_idleSoundSeconds-=dt)<=0)
-        {_soundSeed=_soundSeed*1664525+1013904223;_idleSoundSeconds=6+_soundSeed%900/100f;world.Sounds.Mob(SoundKind.MobIdle,this);}
+        if(world.Sounds is { } sounds && sounds.Nearby(Position,SoundCatalog.IdleRange((int)Species)) && (_idleSoundSeconds-=dt)<=0)
+        {
+            ResetIdleSound();
+            if(sounds.IdleAudible(world,Position+Vector3.Up*(Definition.Height*.7f)))
+                sounds.Mob(SoundKind.MobIdle,this);
+        }
         if(life)TickLife(elapsed);
         _shoreHopSeconds = Math.Max(0, _shoreHopSeconds - dt);
         _obstacleChoiceSeconds = Math.Max(0, _obstacleChoiceSeconds - dt);

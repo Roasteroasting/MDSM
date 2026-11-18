@@ -51,6 +51,7 @@ public sealed class Weather
     private float Next(){_random^=_random<<13;_random^=_random>>17;_random^=_random<<5;return(_random&0xffffff)/16777216f;}
     public bool Precipitation(int x,int z)=>Active && _world.Climate.At(x,z)!=Biome.Desert && (x-_x)*(x-_x)+(z-_z)*(z-_z)<_radius*_radius;
     public bool RainAt(int x,int z)=>Precipitation(x,z) && _world.Climate.At(x,z)!=Biome.SnowyForest;
+    internal bool RainAt(Vector3 position)=>RainAt((int)MathF.Floor(position.X),(int)MathF.Floor(position.Z));
     public bool ExposedRain(Vector3 p)
     {int x=(int)MathF.Floor(p.X),z=(int)MathF.Floor(p.Z);return RainAt(x,z) && _world.SurfaceY(x,z)<p.Y;}
     public void Update(double dt,Vector3 player)

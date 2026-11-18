@@ -37,6 +37,11 @@ internal static class PresentationChecks
         {
             var viewport = new Viewport(0, 0, size.X, size.Y);
             Rectangle a = SettingsLayout.Slider(viewport), b = SettingsLayout.Toggle(viewport), c = SettingsLayout.Back(viewport);
+            Rectangle smooth = SettingsLayout.SmoothLighting(viewport), bobbing = SettingsLayout.Bobbing(viewport);
+            Rectangle music = SettingsLayout.Volume(viewport,4), brightness = SettingsLayout.Brightness(viewport);
+            Require(a.Top == smooth.Top && a.Right < smooth.Left && smooth.Left == bobbing.Left && smooth.Bottom < bobbing.Top
+                && music.Top == brightness.Top && brightness.Right < music.Left && music.Left == smooth.Left,
+                "Settings controls are in the wrong rows or columns.");
             Require(a.Left >= 0 && a.Right <= size.X && a.Top >= 22 && a.Bottom < b.Top && b.Bottom < c.Top && c.Bottom <= size.Y,
                 "Settings controls overlap or leave the viewport.");
             Require(SettingsLayout.ValueAt(a, a.Left - 100) == 5 && SettingsLayout.ValueAt(a, a.Right + 100) == 360, "Slider dragging escaped bounds.");

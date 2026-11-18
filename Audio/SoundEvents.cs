@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using MDSM.Entities;
+using MDSM.Gameplay;
 using MDSM.Worlds;
 
 namespace MDSM.Audio;
@@ -18,6 +19,13 @@ public sealed class SoundEvents
     private bool _hasListener;
     public void SetListener(Vector3 position){Listener=position;_hasListener=true;}
     public bool Nearby(Vector3 position,float range)=>!_hasListener || Vector3.DistanceSquared(position,Listener)<=range*range;
+    internal bool IdleAudible(World world, Vector3 source)
+    {
+        if (!_hasListener) return true;
+        Vector3 direction = Listener - source;
+        float distance = direction.Length();
+        return distance <= .01f || BlockRaycaster.Cast(world, source, direction, distance, solidOnly:true) == null;
+    }
     public void Local(SoundKind kind,float gain=1)=>Enqueue(new(SoundCatalog.Find(kind),default,false,gain));
     public void At(SoundKind kind,Vector3 position,float gain=1)=>Enqueue(new(SoundCatalog.Find(kind),position,true,gain));
     public void Block(SoundKind kind,BlockType block,Vector3 position,float gain=1)

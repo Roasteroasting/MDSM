@@ -424,6 +424,14 @@
 /copy:Sounds/Ambient/firecrackle-1.wav
 # End generated procedural sounds
 
+# Prepared runtime audio. Original recordings remain in Sounds/References.
+/copy:Sounds/Ambient/Rain-Thunder-Ambience.ogg
+/copy:Sounds/Music/song-0.ogg
+/copy:Sounds/Music/song-1.ogg
+/copy:Sounds/Music/song-2.ogg
+/copy:Sounds/Music/song-3.ogg
+/copy:Sounds/Music/song-4.ogg
+
 # Six in-game landscape photographs; copied losslessly for the menu cubemap.
 /copy:UI/Panorama/0.png
 /copy:UI/Panorama/1.png

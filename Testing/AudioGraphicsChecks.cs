@@ -64,7 +64,9 @@ internal static class AudioGraphicsChecks
                 int group=_frame-2;
                 if(group>=0 && group<SoundCatalog.Groups.Length)
                 {
-                    Audio.Update(.1,null,null,Vector3.Zero,Vector3.Right,true);
+                    // The earlier voice-budget probe has already played some of
+                    // these groups. Advance their full cooldown before replay.
+                    Audio.Update(Math.Max(.1,SoundCatalog.Groups[group].Interval),null,null,Vector3.Zero,Vector3.Right,true);
                     Check(Audio.Play(new(group,new(2,0,0),true),Vector3.Zero,Vector3.Right),"Representative sound did not start: "+SoundCatalog.Groups[group].Path);
                     Check(Audio.ActiveVoices<=AudioManager.MaximumVoices,"Unbounded active audio voices.");
                 }
