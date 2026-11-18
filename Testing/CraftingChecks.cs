@@ -32,7 +32,7 @@ internal static class CraftingChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length == 90, "Survival recipe registry is incomplete.");
+        Require(CraftingRecipes.All.Length == 91, "Survival recipe registry is incomplete.");
         foreach (int width in new[] { 2, 3 }) for (int y = 0; y <= width - 2; y++) for (int x = 0; x <= width - 2; x++)
         {
             var grid = Fill(width, 3, x, y);
@@ -124,7 +124,7 @@ internal static class CraftingChecks
         Require((byte)BlockType.CraftingTable == 24 && Table.Value == 24 && Blocks.IsSolid(BlockType.CraftingTable) && Blocks.IsOpaque(BlockType.CraftingTable), "Table IDs/properties wrong.");
         Require(Blocks.Tile(BlockType.CraftingTable, Vector3.Up) == 16 && Blocks.Tile(BlockType.CraftingTable, Vector3.Right) == 17
             && Blocks.Tile(BlockType.CraftingTable, Vector3.Down) == 7, "Table face mappings incorrect.");
-        foreach (WorldSize size in WorldSizes.Finite)
+        foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {
             var world = new World(173, size, false); var session = Session(world);
             Require(Enumerable.Range(0, 36).All(i => Inventory.CreateNewWorld()[i].IsEmpty && session.Inventory[i].IsEmpty), "New world granted items.");

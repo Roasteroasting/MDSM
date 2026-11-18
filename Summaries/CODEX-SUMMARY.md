@@ -2815,3 +2815,101 @@ per integer FPS cap at desktop widths. Layout checks account for Music's new row
 
 Build, audio, lighting, menu style, and audio graphics checks passed. The
 320-by-240 Settings preview confirmed the order and label fit.
+
+### Underground movement, mob art, and survival generation - 2026-11-18
+
+Player collision clamps account for floating-point rounding at contact faces.
+Overlap recovery picks a nearby clear position within 1.25 blocks, so a mine
+ceiling cannot act as a path to the surface. Fence and gate meshes retain the
+exposed parts of touching faces by clipping only the neighboring rail or post.
+
+Hostile textures use smaller palettes at load time, preserving existing pixel
+placement and transparency. The skeleton draws the Bow item sprite from the
+item atlas, anchored to its hand and lit with the rest of the model.
+
+Breed cows and sheep with Wheat, pigs with Carrots or Potatoes, and chickens
+with Wheat Seeds. Restored animals resume breeding timers. Streamed worlds
+already persist all passive animals when chunks unload. The regression verifies
+that an animal in a closed fence-and-gate pen survives both eviction and a
+save/reload, without adding new despawning rules for free-roaming animals.
+
+New Infinite worlds use generator version 4. Dungeon candidate rates are a
+quarter of version 3, and dungeon chest loot occupies random distinct slots.
+Legacy world creation uses the same reduced density and scattered loot. Diamond
+veins target 2-5 blocks, averaging 3.27-3.53 ore blocks per chunk across the
+two 256-chunk Infinite samples. Those samples produced 8 dungeon chests compared
+with 38 in version 3. Existing worlds retain their saved generator versions and
+terrain.
+
+Rare temperate pond banks can have 2-5 wet, planted carrot or potato soils and
+nearby sandy banks blend into grass. Generated crops use the normal persisted
+growth timers. Deterministic pond tests found patches in seeds 173, -907, and
+137 and advanced their restored growth timers. Collision, hostile-model and
+fence graphics, dungeon density, water generation, and streaming persistence
+checks passed. The broader run flagged existing recipe-count, placeable-palette,
+and sign-atlas assertions. The mine fix used scripted collision fixtures.
+The final build passed without warnings. The corrected finite generation check
+passed for all four sizes, including complete save/load checksums.
+
+### Shore crop frequency
+
+Raised Infinite crop-patch candidates from one in eight chunks to one in six
+by keeping the old candidate set and adding another deterministic group.
+Legacy generation now considers one in four ponds instead of one in five.
+The forest shore requirements, patch sizes, and growth timers stay the same.
+
+### Biomes, seasons, snowy grass, and leads
+
+New worlds classify their biomes from independently seeded, multi-octave
+temperature and humidity fields in world coordinates. Infinite generator v5
+applies the new climate to terrain materials and decoration. Density, Far Lands
+noise, basin planning, cave logic, and ore/dungeon rules remain in place.
+Already saved worlds keep their original terrain and biome version.
+
+World creation offers Off, On, and Nuclear Winter. Seasons are a world rule
+with no runtime setting or command. On reads the local calendar and refreshes
+during play. Atlas variants recolor grass and foliage without remeshing terrain.
+Spring adds Peonies and Violets to newly generated forests. New winter trees
+grow larger branches with sparse foliage, while sapling-grown trees use the
+original form. Snow on grass selects a dedicated snowy side tile.
+
+Outdoor winter crops grow at one quarter speed and have lower yields.
+Greenhouses require a bounded, enclosed interior with a predominantly glass
+ceiling and artificial light at the crop. Enclosure results are cached and
+invalidated on nearby edits, door toggles, and chunk residency changes.
+Winter animals sometimes refuse food or fail to reproduce outdoors. Enclosed
+livestock keep their normal breeding behavior.
+
+Craft one Lead from leather/leather/empty, leather/string/empty,
+empty/empty/string. Right-click an animal with a Lead to attach it and
+right-click a Fence to tie nearby leashes there. Release a mob by right-clicking
+with a Lead or empty hand. Ropes sag and stretch, steer the animal through its
+normal collision, and return one item on disconnect. Stable leashed mob IDs,
+wide fence coordinates, and pending returns survive chunk retirement and saves.
+
+Finite save format 15 adds the season setting, biome flag, and leash data.
+Earlier saves default to seasons Off. Infinite manifests add the setting and
+existing chunk records carry the new mob fields without changing block IDs.
+Relevant build, seasonal, graphics, lighting, crafting, save and streaming
+tests passed, including cross-chunk leash ownership and Far Lands rendering.
+Finite generation and complete save/load checksums passed for all four sizes.
+Calendar boundaries were exercised with supplied dates and the new world rules
+were also selected through scripted mouse and keyboard input.
+
+### Infinite-first development
+
+Infinite is the primary implementation, regression, and performance target.
+Small, Normal, and Massive are out of the active test and benchmark cycle.
+The CPU and graphics suite entry points exercise Infinite and shared checks
+with compact hand-built fixtures. Shared fixture dimensions do not imply
+support for a retired world tier.
+
+Legacy (1024x1024) has an opt-in --legacy-smoke-test for generation, editing,
+save/load, and a spawn-area terrain mesh. The panorama capture utility now
+uses streamed Infinite terrain. Historical finite test code and the existing
+save-loading behavior are retained. See AGENTS.md for the ongoing policy.
+
+Verification: dotnet build completed without warnings or errors. The CPU suite
+passed 263/263 checks, the compression suite passed 7/7, and the graphics
+suite and opt-in Legacy smoke test passed. Infinite panorama capture produced
+six 1024x1024 PNGs in a scratch directory.

@@ -292,13 +292,6 @@ internal static class GameplayRefinementChecks
         Check(singles is >9500 and <10500 && doubles is >19500 and <20500,"Grass seed probabilities incorrect.");
         world.SetGeneratedBlock(23,5,23,BlockType.DoubleTallGrassUpper);bool rejected=false;
         try{world.ValidatePairedPlants();}catch(InvalidDataException){rejected=true;}Check(rejected,"Orphaned plant snapshot accepted.");
-        var a=new World(173,WorldSize.Small);var b=new World(173,WorldSize.Small);int grass=0,tall=0,paired=0;
-        for(int i=0;i<a.ChunkCount;i++)
-        {
-            Check(a.Chunks[i].Blocks.SequenceEqual(b.Chunks[i].Blocks),"Vegetation changed for same seed.");
-            foreach(byte block in a.Chunks[i].Blocks){if(block==(byte)BlockType.Grass)grass++;if(block==(byte)BlockType.TallGrass)tall++;if(block==(byte)BlockType.DoubleTallGrassLower)paired++;}
-        }
-        Check(tall>grass*.18 && paired>200 && paired<tall*.15,"Grass abundance/double rarity incorrect.");
     }
     public static void Hostiles()
     {

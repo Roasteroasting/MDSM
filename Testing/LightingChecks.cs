@@ -180,13 +180,17 @@ internal static class LightingChecks
     {int fail=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){fail++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}Console.WriteLine($"{All.Length-fail}/{All.Length} lighting checks passed.");return fail==0?0:1;}
     public static void Budgets()
     {
-        var w=new World(173,WorldSize.Large,false);w.Time.Restore(900);w.SetBlock(1,5,1,BlockType.Torch);
+        var cache=new World(173,WorldSize.Infinite,false).Lighting;
+        byte[] packed=new byte[Chunk.BlockCount];
+        cache.AcceptPage(0,0,packed);
+        var original=cache.GetPage(0,0);
+        for(int i=1;i<BlockLighting.MaximumCachedChunks+32;i++)cache.AcceptPage(i,0,packed);
+        Check(ReferenceEquals(original,cache.GetPage(BlockLighting.MaximumCachedChunks,0)),"Evicted light-page storage was allocated again rather than recycled.");
+        Check(cache.CachedChunks==BlockLighting.MaximumCachedChunks && cache.CachedBytes<64*1048576L,"Light cache scales with world dimensions.");
+
+        var w=PigChecks.Flat();w.Time.Restore(900);w.SetBlock(1,5,1,BlockType.Torch);
         Check(Block(w,2,5,1)==13,"Cache fixture failed.");
-        var original=w.Lighting.GetPage(0,0);
-        for(int i=1;i<BlockLighting.MaximumCachedChunks+32;i++)w.Lighting.GetPage(i%w.ChunksX,i/w.ChunksX);
-        Check(ReferenceEquals(original,w.Lighting.GetPage(BlockLighting.MaximumCachedChunks%w.ChunksX,BlockLighting.MaximumCachedChunks/w.ChunksX)),"Evicted light-page storage was allocated again rather than recycled.");
-        Check(w.Lighting.CachedChunks==BlockLighting.MaximumCachedChunks && w.Lighting.CachedBytes<64*1048576L,"Light cache scales with world dimensions.");
-        w.SetBlock(1,5,1,BlockType.Air);Check(Block(w,2,5,1)==0,"Evicted page reconstructed stale source.");
+        w.SetBlock(1,5,1,BlockType.Air);Check(Block(w,2,5,1)==0,"Invalidated page reconstructed stale source.");
         int[] revisions=w.Chunks.ToArray().Select(c=>c.Revision).ToArray();w.SetBlock(31,50,31,BlockType.Stone);
         Check(w.Chunks.ToArray().Where((c,i)=>c.Revision!=revisions[i]).Count()<=9,"Local edit invalidated the entire world.");
         var p=new Point3(2,5,1);w.Lighting.Effective(p);int pages=w.Lighting.BuiltPages;

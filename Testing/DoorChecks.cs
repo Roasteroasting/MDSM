@@ -100,7 +100,7 @@ internal static class DoorChecks
         private void Obtain(BlockType block,bool full=false)
         {
             ItemId item=Items.FromBlock(block);int index=Array.IndexOf(CreativeCatalog.All.ToArray(),item);
-            Check(index>=0 && index<InventoryLayout.BrowserRows(GraphicsDevice.Viewport)*5,"Regression item is not visible in browser.");
+            Check(index>=0 && index<InventoryLayout.BrowserRows(GraphicsDevice.Viewport)*9,"Regression item is not visible in browser.");
             Click(InventoryLayout.BrowserSlot(GraphicsDevice.Viewport,index),shift:full);
         }
         private void Capture(string name)
@@ -123,6 +123,7 @@ internal static class DoorChecks
                         RenderingPerformanceChecks.Warm(Field<WorldRenderer>("_renderer"),Session.Camera);Press(Keys.E);break;
                     case 2:
                         Obtain(BlockType.Door);Check(Session.Inventory.Selected.Item==Door && Session.Inventory.Selected.Count==1,"Actual Creative click did not grant Door.");
+                        Click(InventoryLayout.CreativeTab(GraphicsDevice.Viewport,items:false));
                         Click(InventoryLayout.Slot(GraphicsDevice.Viewport,0,true));Click(InventoryLayout.Slot(GraphicsDevice.Viewport,9,true));
                         Click(InventoryLayout.Slot(GraphicsDevice.Viewport,9,true),right:true);Click(InventoryLayout.Slot(GraphicsDevice.Viewport,0,true));
                         Check(Session.Inventory.Selected.Item==Door && Session.InventoryInteraction.Cursor.IsEmpty,"Door UI movement failed.");
@@ -137,8 +138,11 @@ internal static class DoorChecks
                     case 8:
                         Check(ReferenceEquals(Buffer,_largeBuffer),"Switching back to Door unnecessarily recreated the larger GPU buffer.");
                         var inventory=new Inventory();
+                        // New block models may need more vertices than the Fence. Warm the full catalog once.
                         foreach(ItemId item in Items.Obtainable){inventory.SetSlot(0,new(item,1));Held.Draw(GameState.Playing,inventory);}
-                        Check(ReferenceEquals(Buffer,_largeBuffer),"Repeated registered items unexpectedly recreated the held buffer.");
+                        var catalogBuffer=Buffer;
+                        foreach(ItemId item in Items.Obtainable){inventory.SetSlot(0,new(item,1));Held.Draw(GameState.Playing,inventory);}
+                        Check(ReferenceEquals(Buffer,catalogBuffer),"Repeated registered items unexpectedly recreated the held buffer.");
                         Press(Keys.E);Call("SetState",GameState.Paused);Call("HandleMenuAction",MenuAction.SaveAndReturn);Verified=true;Exit();return;
                 }
                 base.Draw(time);

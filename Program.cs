@@ -1,4 +1,21 @@
-if(args.Length==1 && args[0]=="--world-soundtrack-test")
+if(args.Length>0 && args[0] is "--finite-world-generation-test" or "--dungeon-generation-probe" or "--overnight-generation-probe"
+    or "--traversal-performance-test" or "--lighting-performance-test" or "--compression-benchmark" or "--compression-fixture"
+    or "--completion-performance-test" or "--gameplay-performance-test" or "--performance-test")
+{
+    System.Console.Error.WriteLine("Finite-world suites are retired. Use --self-test for Infinite regressions, --infinite-graphics-test for live Infinite profiling, or --legacy-smoke-test to triage Legacy (1024x1024).");
+    System.Environment.ExitCode=2;
+}
+else if(args.Length==1 && args[0]=="--legacy-smoke-test")
+{ System.Environment.ExitCode=MDSM.Testing.LegacySmokeChecks.Run(); }
+else if(args.Length==1 && args[0]=="--season-lead-test")
+{ System.Environment.ExitCode=MDSM.Testing.SeasonLeadChecks.Run(); }
+else if(args.Length==1 && args[0]=="--season-lead-graphics-test")
+{ System.Environment.ExitCode=MDSM.Testing.SeasonLeadChecks.RunGraphics(); }
+else if(args.Length==1 && args[0]=="--generation-balance-test")
+{ System.Environment.ExitCode=MDSM.Testing.GenerationBalanceChecks.Run(); }
+else if(args.Length==1 && args[0]=="--shore-crops-test")
+{ System.Environment.ExitCode=MDSM.Testing.GenerationBalanceChecks.RunShore(); }
+else if(args.Length==1 && args[0]=="--world-soundtrack-test")
 { System.Environment.ExitCode=MDSM.Testing.WorldSoundtrackChecks.Run(); }
 else if(args.Length==1 && args[0]=="--cactus-fire-test")
 { System.Environment.ExitCode=MDSM.Testing.CactusFireChecks.Run(); }
@@ -68,28 +85,15 @@ else if(args.Length==1 && args[0]=="--exploration-test")
 }
 else if(args.Length==1 && args[0]=="--dungeon-test")
 {
-    MDSM.Testing.DungeonFrequencyChecks.Generation();
-    MDSM.Testing.OvernightGameplayChecks.Dungeons();
-}
-else if(args.Length==2 && args[0]=="--dungeon-generation-probe" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var dungeonSize))
-{
-    System.Environment.ExitCode=MDSM.Testing.DungeonFrequencyChecks.Probe(dungeonSize);
+    System.Environment.ExitCode=MDSM.Testing.GenerationBalanceChecks.Run();
 }
 else if(System.Array.Exists(args,a=>a=="--landscape-update-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.LandscapeUpdateChecks.Run();
 }
-else if(args.Length==2 && args[0]=="--traversal-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var traverseSize))
-{
-    System.Environment.ExitCode=MDSM.Testing.GameplayPerformanceChecks.Run(traverseSize,traverse:true);
-}
 else if(System.Array.Exists(args,a=>a=="--sign-fire-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.SignFireChecks.Run();
-}
-else if(args.Length==2 && args[0]=="--overnight-generation-probe" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var overnightSize))
-{
-    System.Environment.ExitCode=MDSM.Testing.OvernightGameplayChecks.GenerationProbe(overnightSize);
 }
 else if(System.Array.Exists(args,a=>a=="--overnight-graphics-test"))
 {
@@ -163,21 +167,9 @@ else if(System.Array.Exists(args,a=>a=="--lighting-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.LightingChecks.Run();
 }
-else if(args.Length==2 && args[0]=="--lighting-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var lightingSize))
-{
-    System.Environment.ExitCode=MDSM.Testing.LightingChecks.Performance(lightingSize);
-}
-else if(args.Length==3 && args[0]=="--compression-benchmark" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var benchmarkWorldSize))
-{
-    System.Environment.ExitCode=MDSM.Testing.CompressionBenchmarks.Pipeline(benchmarkWorldSize,args[2]);
-}
 else if(System.Array.Exists(args,a=>a=="--compression-test"))
 {
     System.Environment.ExitCode=MDSM.Testing.CompressionChecks.Run();
-}
-else if(args.Length==2 && args[0]=="--compression-fixture" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1],out var fixtureSize))
-{
-    System.Environment.ExitCode=MDSM.Testing.CompressionBenchmarks.Fixture(fixtureSize);
 }
 else if (System.Array.Exists(args, argument => argument == "--audio-graphics-test"))
 {
@@ -219,6 +211,10 @@ else if (System.Array.Exists(args, argument => argument == "--door-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.DoorChecks.Run();
 }
+else if (System.Array.Exists(args, argument => argument == "--hostile-model-graphics-test"))
+{
+    System.Environment.ExitCode = MDSM.Testing.HostileModelChecks.RunGraphics();
+}
 else if (System.Array.Exists(args, argument => argument == "--hostile-model-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.HostileModelChecks.Run();
@@ -230,10 +226,6 @@ else if (System.Array.Exists(args, argument => argument == "--hostile-spawn-test
 else if (System.Array.Exists(args, argument => argument == "--gameplay-refinement-test"))
 {
     System.Environment.ExitCode = MDSM.Testing.GameplayRefinementChecks.Run();
-}
-else if (System.Array.Exists(args, argument => argument == "--completion-performance-test"))
-{
-    System.Environment.ExitCode = MDSM.Testing.CompletionPerformanceChecks.Run();
 }
 else if (System.Array.Exists(args, argument => argument == "--completion-test"))
 {
@@ -257,15 +249,7 @@ else if (System.Array.Exists(args, argument => argument == "--crafting-test"))
 }
 else if (System.Array.Exists(args, argument => argument == "--lake-test"))
 {
-    System.Environment.ExitCode = MDSM.Testing.LargeLakeChecks.Run();
-}
-else if (args.Length >= 2 && args[0] == "--gameplay-performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1], out var gameplaySize))
-{
-    System.Environment.ExitCode = MDSM.Testing.GameplayPerformanceChecks.Run(gameplaySize,System.Array.Exists(args,a=>a=="--cave"));
-}
-else if (args.Length >= 2 && args[0] == "--performance-test" && System.Enum.TryParse<MDSM.Worlds.WorldSize>(args[1], out var benchmarkSize))
-{
-    System.Environment.ExitCode = MDSM.Testing.PerformanceChecks.Run(benchmarkSize);
+    System.Environment.ExitCode = MDSM.Testing.InfiniteWaterChecks.Run();
 }
 else if (System.Array.Exists(args, argument => argument == "--self-test"))
 {
@@ -273,9 +257,19 @@ else if (System.Array.Exists(args, argument => argument == "--self-test"))
 }
 else if (System.Array.Exists(args, argument => argument == "--graphics-test"))
 {
-    System.Environment.ExitCode = System.Math.Max(MDSM.Testing.AudioGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.CollisionGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.DoorChecks.RunGraphics(),
-        System.Math.Max(System.Math.Max(MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.PigGraphicsChecks.Run()),
-        System.Math.Max(MDSM.Testing.WaterGraphicsChecks.Run(), System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(), MDSM.Testing.WorldExpansionGraphicsChecks.Run()))))));
+    int[] results =
+    {
+        MDSM.Testing.StreamingGraphicsChecks.Run(), MDSM.Testing.SeasonLeadChecks.RunGraphics(),
+        MDSM.Testing.WorldRuleGraphicsChecks.Run(), MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.AudioGraphicsChecks.Run(),
+        MDSM.Testing.CollisionGraphicsChecks.Run(), MDSM.Testing.DoorChecks.RunGraphics(),
+        MDSM.Testing.PigGraphicsChecks.Run(), MDSM.Testing.WaterGraphicsChecks.Run(),
+        MDSM.Testing.MobGraphicsChecks.Run()
+    };
+    System.Environment.ExitCode = System.Linq.Enumerable.Max(results);
+}
+else if (args.Length == 1 && args[0] == "--water-graphics-test")
+{
+    System.Environment.ExitCode = MDSM.Testing.WaterGraphicsChecks.Run();
 }
 else
 {

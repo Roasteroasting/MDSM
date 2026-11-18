@@ -16,7 +16,7 @@ public sealed partial class WorldRenderer : IDisposable
     public const float FogStart = 80, FogEnd = 144;
     private readonly GraphicsDevice _device;
     private readonly Effect _terrainEffect;
-    private readonly Texture2D _texture;
+    private readonly TextureAtlas _atlas;
     private readonly Texture2D _textTexture;
     private readonly SkyRenderer _sky;
     private readonly ParticleRenderer _particles;
@@ -174,7 +174,8 @@ public sealed partial class WorldRenderer : IDisposable
         _underwater=new UnderwaterView(device,atlas.Water);
         _cracks=new MiningCracks(device,atlas);
         _world = world;
-        _texture=atlas.Texture;_textTexture=atlas.Text;_sky=new SkyRenderer(device,atlas.Texture);
+        _atlas=atlas;
+        _textTexture=atlas.Text;_sky=new SkyRenderer(device,atlas.Texture);
         _particles=new ParticleRenderer(device,atlas.Texture);
         _weather=new WeatherRenderer(device);
         _burning=new BurningRenderer(device,atlas.Texture);
@@ -214,7 +215,8 @@ public sealed partial class WorldRenderer : IDisposable
         _device.DepthStencilState = DepthStencilState.Default;
         _device.RasterizerState = RasterizerState.CullCounterClockwise;
         _device.SamplerStates[0] = SamplerState.PointClamp;
-        FlatLighting.Apply(_terrainEffect,_device,_texture,_world,camera,Brightness,.5f);
+        Texture2D terrainTexture=_atlas.Terrain(_world.Seasons.Current);
+        FlatLighting.Apply(_terrainEffect,_device,terrainTexture,_world,camera,Brightness,.5f);
         foreach (EffectPass pass in _terrainEffect.CurrentTechnique.Passes)
         {
             pass.Apply();
@@ -233,7 +235,7 @@ public sealed partial class WorldRenderer : IDisposable
             {pass.Apply();for(int i=0;i<VisibleChunks;i++){if(_world.IsInfinite)ApplyChunkTransform(_visible[i],camera,pass);_visible[i].DrawText();}}
             // Keep the established terrain binding contract for later entity,
             // water and screenshot passes, including HUD-hidden frames.
-            _device.Textures[0]=null;_device.Textures[0]=_texture;
+            _device.Textures[0]=null;_device.Textures[0]=terrainTexture;
         }
 
         _items.Draw(camera, items,_world,Brightness,fallingInterpolation);

@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework.Graphics;
 using MDSM.Core;
 using MDSM.Entities;
 using MDSM.Gameplay;
+using MDSM.Inventories;
 using MDSM.Rendering;
 using MDSM.UI;
 using MDSM.Worlds;
@@ -90,9 +91,36 @@ internal static class HostileModelChecks
     public static int Run()
     {
         int failed=0;
-        foreach(var test in new (string Name,Action Check)[]{("Forward zombie arms and yaw/pivot consistency",ZombieArms),("Downward spider legs throughout the gait and turning",SpiderLegs),("Shared passive/skeleton geometry",()=>{MobChecks.Geometry();UnaffectedFingerprint();})})
+        foreach(var test in new (string Name,Action Check)[]{("Forward zombie arms and yaw/pivot consistency",ZombieArms),("Downward spider legs throughout the gait and turning",SpiderLegs),("Shared passive/skeleton geometry",()=>{MobChecks.Geometry();UnaffectedFingerprint();}),("Skeleton bow size, grip attachment and atlas UVs",Bow)})
             try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failed++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e.Message);}
         return failed==0?0:1;
+    }
+    private static void Bow()
+    {
+        var mesh=new CuboidModelBuilder(256,256);
+        var low=TextureAtlas.Uv(Items.Get(Items.Bow).Sprite,0,0);
+        var high=TextureAtlas.Uv(Items.Get(Items.Bow).Sprite,1,1);
+        foreach(float yaw in Headings)
+        {
+            var mob=new PassiveMob(new(MobSpecies.Skeleton,new(20,1,20),yaw,20),2);
+            mesh.Clear();PassiveMobModels.AppendBow(mesh,mob);
+            Check(mesh.Count==12,"Bow is missing its two-sided sprite.");
+            var vertices=mesh.Vertices.Take(mesh.Count).ToArray();
+            Check(vertices.All(v=>v.TextureCoordinate.X>=low.X&&v.TextureCoordinate.X<=high.X&&v.TextureCoordinate.Y>=low.Y&&v.TextureCoordinate.Y<=high.Y),"Bow uses the wrong atlas UVs.");
+            var center=vertices.Select(v=>v.Position).Aggregate(Vector3.Zero,(a,b)=>a+b)/mesh.Count;
+            var local=Vector3.Transform(center-mob.Position,Matrix.CreateRotationY(-yaw));
+            Check(local.X is >-.4f and <-.18f && local.Z is >-.32f and <-.12f && local.Y is >.67f and <.85f,"Bow did not follow the skeleton's grip through a turn.");
+            Check(Vector3.Distance(vertices[0].Position,vertices[2].Position) is >.75f and <.85f,"Bow scale changed.");
+        }
+    }
+    internal static int RunGraphics()
+    {
+        try{using var game=new HostilePreview();game.Run();return 0;}
+        catch(Exception e){Console.Error.WriteLine(e);return 1;}
+    }
+    private sealed class HostilePreview : Game1
+    {
+        protected override void Draw(GameTime gameTime){VerifyGraphics(this);Exit();}
     }
     public static void VerifyGraphics(Game1 game)
     {
@@ -105,17 +133,22 @@ internal static class HostileModelChecks
         var originalTargets=device.GetRenderTargets();Viewport originalViewport=device.Viewport;Texture originalTexture=device.Textures[0];
         try
         {
-            foreach(MobSpecies species in new[]{MobSpecies.Zombie,MobSpecies.Spider})
+            foreach(MobSpecies species in new[]{MobSpecies.Zombie,MobSpecies.Skeleton,MobSpecies.Spider})
             {
+                string asset=MobDefinitions.Get(species).Texture;
+                var source=game.Content.Load<Texture2D>(asset);var original=new Color[source.Width*source.Height];source.GetData(original);
+                var filtered=(Color[])original.Clone();HostilePalettes.Remap(filtered,species);
+                Check(filtered.Distinct().Count()<=12 && filtered.Distinct().Count()>3 &&
+                    original.Zip(filtered).All(pair=>pair.First.A==pair.Second.A),"Hostile palette or alpha was not preserved.");
                 device.SetRenderTarget(target);device.Clear(background);
                 for(int row=0;row<4;row++)for(int column=0;column<4;column++)
                 {
                     device.Viewport=new Viewport(column*256,row*224,256,224);
                     var population=new HostilePopulation(world,new[]{new MobState(species,new(20,1,20),row>=2?.7f:0,MobDefinitions.Get(species).MaximumHealth)});
                     var mob=population.Entities[0];Pose(mob,row%2==1,row==1?1.1f:4.2f);
-                    Vector3 center=mob.Position+Vector3.Up*(species==MobSpecies.Zombie?.9f:.4f);
+                    Vector3 center=mob.Position+Vector3.Up*(species==MobSpecies.Spider?.4f:.9f);
                     Vector3 offset=column switch{0=>Vector3.Forward,1=>Vector3.Right,2=>Vector3.Backward,_=>Vector3.Left};
-                    var camera=new Camera{Position=center+offset*(species==MobSpecies.Zombie?2.4f:1.8f)+Vector3.Up*.25f};
+                    var camera=new Camera{Position=center+offset*(species==MobSpecies.Spider?1.8f:2.4f)+Vector3.Up*.25f};
                     Vector3 forward=center-camera.Position;camera.RestoreOrientation(MathF.Atan2(forward.X,-forward.Z),MathF.Atan2(forward.Y,new Vector2(forward.X,forward.Z).Length()));
                     var blend=device.BlendState;var depth=device.DepthStencilState;var raster=device.RasterizerState;var sampler=device.SamplerStates[0];Texture texture=device.Textures[0];
                     renderer.Draw(camera,empty,population);
@@ -143,6 +176,6 @@ internal static class HostileModelChecks
             device.SetRenderTargets(originalTargets);device.Viewport=originalViewport;
             device.Textures[0]=null;device.Textures[0]=originalTexture;
         }
-        Console.WriteLine("PASS: Zombie/spider GPU front, rear, both sides, idle/walking poses, turning, textures and render-state preservation.");
+        Console.WriteLine("PASS: All hostile models rendered from four angles with reduced palettes, a held bow, and restored graphics state.");
     }
 }

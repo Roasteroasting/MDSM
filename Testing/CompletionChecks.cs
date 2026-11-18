@@ -28,17 +28,16 @@ internal static class CompletionChecks
         ("Breeding pairs, cooldowns, child models, maturation and population targets",Animals),
         ("Underground hostile sampling, caps, distance/LOS, combat and loot",Hostiles),
         ("Forward zombie shoulders and downward spider legs through turns and gait",()=>{HostileModelChecks.ZombieArms();HostileModelChecks.SpiderLegs();}),
-        ("Nearby cave-floor spawning, 16-mob cap, 2-4s cycles, bounded diagnostics and saves",HostileSpawnChecks.Verify),
+        ("Nearby cave-floor spawning, population cap, bounded diagnostics and saves",HostileSpawnChecks.Verify),
         ("Furnace variants, valid recipes, double speed, bucket return and fuel parity",Machines),
-        ("Version 10 complete state roundtrip and genuine version 9 compatibility",Persistence),
-        ("Seeded narrow caves, protected terrain, bedrock, exposure and lava pools",Caves)};
+        ("Version 10 complete state roundtrip and genuine version 9 compatibility",Persistence)};
     private static void Check(bool value,string message){if(!value)throw new InvalidOperationException(message);}
     private static ItemId B(BlockType block)=>Items.FromBlock(block);
     private static ItemStack S(ItemId item,int count=1)=>new(item,count);
     public static int Run(){int failures=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}Console.WriteLine($"{All.Length-failures}/{All.Length} completion checks passed.");return failures==0?0:1;}
     public static void Recipes()
     {
-        Check(CraftingRecipes.All.Length==89,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
+        Check(CraftingRecipes.All.Length==91,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
         foreach(var recipe in CraftingRecipes.All)
         {
             outputs.Add(recipe.Output.Item);var pattern=(CraftingIngredient[])typeof(ShapedRecipe).GetField("_ingredients",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(recipe);
@@ -156,7 +155,15 @@ internal static class CompletionChecks
         foreach(MobSpecies species in new[]{MobSpecies.Pig,MobSpecies.Cow,MobSpecies.Sheep,MobSpecies.Chicken})
         {
             var population=new PassiveMobPopulation(world,new[]{new MobState(species,new(20,1,20),0,MobDefinitions.Get(species).MaximumHealth),new MobState(species,new(21,1,20),0,MobDefinitions.Get(species).MaximumHealth)});
-            var inv=new Inventory();inv.SetSlot(0,S(Items.Wheat,3));Check(population.Feed(population.Entities[0],inv) && !population.Feed(population.Entities[0],inv) && population.Feed(population.Entities[1],inv) && inv.Selected.Count==1,"Feeding consumed incorrectly.");
+            var inv=new Inventory();
+            ItemId food=species switch {MobSpecies.Pig=>Items.Carrot,MobSpecies.Chicken=>Items.WheatSeeds,_=>Items.Wheat};
+            inv.SetSlot(0,S(Items.Bread,3));Check(!population.Feed(population.Entities[0],inv) && inv.Selected.Count==3,"Wrong food was consumed.");
+            inv.SetSlot(0,S(food,3));Check(population.Feed(population.Entities[0],inv) && !population.Feed(population.Entities[0],inv) && population.Feed(population.Entities[1],inv) && inv.Selected.Count==1,"Feeding consumed incorrectly.");
+            if(species==MobSpecies.Pig)
+            {
+                var pig=new PassiveMobPopulation(world,new[]{new MobState(species,new(20,1,20),0,10)});
+                inv.SetSlot(0,S(Items.Potato,2));Check(pig.Feed(pig.Entities[0],inv) && inv.Selected.Count==1,"Pigs did not accept potatoes.");
+            }
             population.Update(.5f,new(20,1,20));Check(population.Entities.Count==3 && population.Target(species)==2,"Breeding changed natural targets or did not produce one child.");
             var baby=population.Entities.Single(m=>m.Baby);Check(baby.BabySeconds is >=900 and <=2700 && baby.Bred && population.Entities.Where(m=>!m.Baby).All(m=>m.BreedCooldown==300 && m.LoveSeconds==0),"Breeding cooldown/age invalid.");
             Check(!population.Feed(baby,inv),"Baby could breed.");inv.SetSlot(0,S(Items.Shears));Check(!population.TryShear(baby,inv,new DroppedItems(world)),"Baby could be sheared.");

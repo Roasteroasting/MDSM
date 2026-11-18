@@ -285,7 +285,8 @@ internal sealed partial class ChunkMeshBuilder
                 if (Blocks.IsOpaque(neighbor) || block==BlockType.Glass && neighbor==BlockType.Glass)
                     continue;
 
-                int tile = Blocks.Tile(block, face.Normal);
+                int tile = block==BlockType.Grass && face.Normal.Y==0 &&
+                    world.GetBlock(worldX,y+1,worldZ)==BlockType.Snow ? Blocks.SnowyGrassTile : Blocks.Tile(block, face.Normal);
                 // Shading changes RGB only: reducing vertex alpha would discard dark leaf faces.
                 Color color = new(new Vector3(face.Shade));
                 AddQuad(position + face.A, position + face.B, position + face.C, position + face.D, tile, color, false);

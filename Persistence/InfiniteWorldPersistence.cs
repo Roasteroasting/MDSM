@@ -34,6 +34,7 @@ internal sealed record InfiniteManifest
     public bool Cheats {get;init;}
     public GameMode Mode {get;init;}
     public Difficulty Difficulty {get;init;}=Difficulty.Normal;
+    public SeasonsMode Seasons { get; init; }
     public double Time {get;init;}
     public WeatherState Weather {get;init;}
     public WorldPosition WeatherCenter {get;init;}
@@ -59,14 +60,14 @@ internal static class InfiniteWorldPersistence
         if(s.Version!=1||s.Generator is <1 or >BetaDensityGenerator.Version||!s.Position.Valid||!s.Spawn.Valid||s.Position.X>=Coordinates.MaximumBlock||s.Position.Z>=Coordinates.MaximumBlock||s.Spawn.X>=Coordinates.MaximumBlock||s.Spawn.Z>=Coordinates.MaximumBlock||s.Spawn.Y<0||s.Spawn.Y>144
             ||!double.IsFinite(s.Position.X)||!double.IsFinite(s.Position.Y)||!double.IsFinite(s.Position.Z)||s.Position.Y< -16||s.Position.Y>256
             ||!double.IsFinite(s.Health)||s.Health<0||s.Health>20||!float.IsFinite(s.Yaw)||!float.IsFinite(s.Pitch)||s.Inventory?.Length!=36||s.Armor?.Length!=4||s.Selected is <0 or >8
-            ||!Enum.IsDefined(s.Mode)||!Enum.IsDefined(s.Difficulty)||s.OriginX%16!=0||s.OriginZ%16!=0||!Coordinates.Valid(s.OriginX,s.OriginZ))throw new InvalidDataException("Invalid Infinite world/player data.");
+            ||!Enum.IsDefined(s.Mode)||!Enum.IsDefined(s.Difficulty)||!Enum.IsDefined(s.Seasons)||s.OriginX%16!=0||s.OriginZ%16!=0||!Coordinates.Valid(s.OriginX,s.OriginZ))throw new InvalidDataException("Invalid Infinite world/player data.");
         return s;
     }
     internal static WorldMetadata Metadata(string directory)
     {var s=Read(Path.Combine(directory,WorldSaveManager.FileName));return new(s.Name,s.Seed,Vector3.Zero,s.Yaw,s.Pitch,WorldSize.Infinite);}
     internal static WorldSave Load(string directory)
     {
-        Recover(directory);var s=Read(Path.Combine(directory,WorldSaveManager.FileName));var world=World.OpenStreamed(s.Seed,Path.Combine(directory,"regions"),generatorVersion:s.Generator);
+        Recover(directory);var s=Read(Path.Combine(directory,WorldSaveManager.FileName));var world=World.OpenStreamed(s.Seed,Path.Combine(directory,"regions"),generatorVersion:s.Generator,seasons:s.Seasons);
         var focus=s.Health==0?s.Spawn:s.Position;world.SetOrigin(focus.Chunk.BlockX,focus.Chunk.BlockZ);world.InfiniteSpawn=s.Spawn;world.AllowCheats=s.Cheats;world.SavedDifficulty=s.Difficulty;world.SavedGameMode=s.Mode;world.Climate.VariedGeneration=true;
         world.Time.Restore(s.Time);world.Weather.Restore(s.Weather);world.Weather.RestoreCenter(s.WeatherCenter);
         var inventory=new Inventory{SelectedSlot=s.Selected};for(int i=0;i<36;i++)inventory.SetSlot(i,s.Inventory[i]);for(int i=0;i<4;i++)inventory.SetEquipment(i,s.Armor[i]);
@@ -80,7 +81,7 @@ internal static class InfiniteWorldPersistence
         var w=save.World;var inventory=save.Inventory??new Inventory();var s=new InfiniteManifest{Generator=w.ChunkLifecycle.GeneratorVersion,Name=save.Name,Seed=w.Seed,OriginX=w.OriginX,OriginZ=w.OriginZ,
             Position=save.ExactPosition??w.AbsolutePosition(save.PlayerPosition),Spawn=w.InfiniteSpawn,Yaw=save.Yaw,Pitch=save.Pitch,Health=save.ExactHealth<0?save.Health:save.ExactHealth,Burning=save.PlayerFire,
             Inventory=Enumerable.Range(0,36).Select(i=>inventory[i]).ToArray(),Armor=Enumerable.Range(0,4).Select(i=>inventory.Equipped(i)).ToArray(),Selected=inventory.SelectedSlot,
-            Cheats=w.AllowCheats,Mode=w.SavedGameMode??GameMode.Survival,Difficulty=w.SavedDifficulty,Time=w.Time.Seconds,Weather=w.Weather.Capture(),WeatherCenter=w.Weather.Center};
+            Cheats=w.AllowCheats,Mode=w.SavedGameMode??GameMode.Survival,Difficulty=w.SavedDifficulty,Seasons=w.Seasons.Mode,Time=w.Time.Seconds,Weather=w.Weather.Capture(),WeatherCenter=w.Weather.Center};
         var chunks=w.ChunkLifecycle.CaptureCheckpoint();byte[] manifest=Envelope(s);
         return System.Threading.Tasks.Task.Run(()=>WritePrepared(directory,w,chunks,manifest));
     }

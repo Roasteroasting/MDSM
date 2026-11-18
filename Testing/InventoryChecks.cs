@@ -123,8 +123,8 @@ internal static class InventoryChecks
             else world.SetBlock(15,10,16,block);
             int before=drops.Entities.Count;float duration=MiningRules.Seconds(block,inventory.Selected);
             if(block==BlockType.Bedrock){Require(duration<0 && !Mine(hit,true,100) && world.GetBlock(15,10,16)==block && drops.Entities.Count==before,"Bedrock broke/dropped.");continue;}
-            bool instant=block is BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower or BlockType.Sapling or BlockType.Torch or BlockType.DeadBush;
-            Require(instant?duration==0:duration>0,"Mining duration policy invalid.");
+            bool instant=Blocks.Flower(block) || block is BlockType.TallGrass or BlockType.Sapling or BlockType.Torch or BlockType.DeadBush;
+            Require(instant?duration==0:duration>0,$"Mining duration policy invalid for {block}.");
             if(!instant)Require(!Mine(hit,true,duration-.01f) && mining.Progress>0,"Block broke too early.");
             Require(Mine(hit,true,instant?0:.02f) && world.GetBlock(15,10,16)==BlockType.Air && mining.Progress==0,"Block did not break at duration.");
             if(block is BlockType.Glass or BlockType.GlassPane){Require(drops.Entities.Count==before,"Glass should not drop a block.");continue;}

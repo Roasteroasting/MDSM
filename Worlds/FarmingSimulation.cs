@@ -11,7 +11,7 @@ public readonly record struct CropState(Point3 Cell,double Remaining,double Stag
 public sealed partial class FarmingSimulation(World world)
 {
     public const int MaximumCrops=65536,Budget=256;
-    private sealed class Crop { public double Remaining,Interval,Due;public int Version;public bool Wet; }
+    private sealed class Crop { public double Remaining,Interval,Due,Checked,Rate=1;public int Version;public bool Wet; }
     private readonly Dictionary<Point3,Crop> _crops=new();
     private readonly PriorityQueue<(Point3 Cell,int Version),double> _growth=new();
     private readonly Queue<Point3> _hydration=new();private readonly HashSet<Point3> _queued=new();
@@ -46,9 +46,21 @@ public sealed partial class FarmingSimulation(World world)
     private void Wet(Point3 p,Crop crop,bool wet)
     {
         if(crop.Wet==wet)return;
-        if(crop.Wet)crop.Remaining=Math.Max(0,crop.Due-_time);
+        if(crop.Wet)crop.Remaining=RemainingAt(crop,_time);
         crop.Wet=wet;crop.Version++;
-        if(wet && !Blocks.MatureCrop(world.GetBlock(p.X,p.Y,p.Z))){crop.Due=_time+crop.Remaining;_growth.Enqueue((p,crop.Version),crop.Due);}
+        if(wet && !Blocks.MatureCrop(world.GetBlock(p.X,p.Y,p.Z)))Schedule(p,crop,_time);
+    }
+    private static double RemainingAt(Crop crop,double time)
+        => crop.Wet?Math.Max(0,crop.Remaining-(time-crop.Checked)*crop.Rate):crop.Remaining;
+
+    private void Schedule(Point3 p,Crop crop,double time)
+    {
+        crop.Checked=time;
+        crop.Rate=world.WinterCrop(p)?SeasonManager.WinterCropRate:1;
+        double delay=crop.Remaining/crop.Rate;
+        if(world.Seasons.Mode!=SeasonsMode.Off)delay=Math.Min(20,delay);
+        crop.Due=time+delay;
+        _growth.Enqueue((p,crop.Version),crop.Due);
     }
     public bool Till(Point3 p,Inventory inventory,bool creative=false)
     {
@@ -78,15 +90,22 @@ public sealed partial class FarmingSimulation(World world)
         {
             _growth.Dequeue();LastProcessed++;
             if(!_crops.TryGetValue(entry.Cell,out var crop) || !crop.Wet || crop.Version!=entry.Version)continue;
-            if(!world.IsSimulated(entry.Cell)){crop.Due=_time+1;_growth.Enqueue((entry.Cell,crop.Version),crop.Due);continue;}
+            if(!world.IsSimulated(entry.Cell))
+            {crop.Checked=_time;crop.Due=_time+1;_growth.Enqueue((entry.Cell,crop.Version),crop.Due);continue;}
             Point3 p=entry.Cell;BlockType stage=world.GetBlock(p.X,p.Y,p.Z);
             if(!Blocks.Crop(stage)||Blocks.MatureCrop(stage))continue;
-            world.SetBlock(p.X,p.Y,p.Z,stage+1);crop.Remaining=crop.Interval;crop.Due=due+crop.Interval;_growth.Enqueue((p,crop.Version),crop.Due);
+            crop.Remaining=RemainingAt(crop,due);
+            if(crop.Remaining<.000001)
+            {
+                world.SetBlock(p.X,p.Y,p.Z,stage+1);crop.Remaining=crop.Interval;
+                if(Blocks.MatureCrop(stage+1)){crop.Checked=due;continue;}
+            }
+            Schedule(p,crop,due);
         }
     }
     public CropState[] Capture()
     {
-        var result=new CropState[_crops.Count];int i=0;foreach(var pair in _crops)result[i++]=new(pair.Key,pair.Value.Wet?Math.Max(0,pair.Value.Due-_time):pair.Value.Remaining,pair.Value.Interval);
+        var result=new CropState[_crops.Count];int i=0;foreach(var pair in _crops)result[i++]=new(pair.Key,RemainingAt(pair.Value,_time),pair.Value.Interval);
         Array.Sort(result,(a,b)=>a.Cell.Y!=b.Cell.Y?a.Cell.Y.CompareTo(b.Cell.Y):a.Cell.Z!=b.Cell.Z?a.Cell.Z.CompareTo(b.Cell.Z):a.Cell.X.CompareTo(b.Cell.X));return result;
     }
     public Point3[] CaptureHydration()

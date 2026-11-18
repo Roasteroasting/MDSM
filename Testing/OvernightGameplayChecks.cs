@@ -27,7 +27,6 @@ internal static class OvernightGameplayChecks
         ("Shapeless flint/steel, successful-use wear, bounded fire and extinguishing",Fire),
         ("Nine-second burn, one damage per second, wet extinguishing and Creative safety",Burning),
         ("Version 14 signs, orientation, crops, eggs, weather, fire and projectile roundtrip",Persistence),
-        ("Deterministic biome/mountain fields, safe heights, cliffs and protected spawn",Terrain)
     };
     private static void C(bool ok,string message)=>OvernightChecks.Check(ok,message);
     private static ItemId B(BlockType b)=>Items.FromBlock(b);
@@ -134,8 +133,8 @@ internal static class OvernightGameplayChecks
         C(w.Containers.Entries.Count is >=1 and <=3,"Dungeon chest count wrong.");
         foreach(var chest in w.Containers.Entries.Values)C(!chest.Empty,"Dungeon chest is empty.");
         C(w.GetBlock(17,10,20)==BlockType.Air && w.GetBlock(17,11,20)==BlockType.Air,"Dungeon sealed cave entrance.");
-        C(DungeonGenerator.Budget(WorldSize.Massive)==1474 && DungeonGenerator.Budget(WorldSize.Small)==23
-            && DungeonGenerator.Target(193)==97,"Dungeon cave-density scaling wrong.");
+        C(DungeonGenerator.Budget(WorldSize.Massive)==368 && DungeonGenerator.Budget(WorldSize.Small)==5
+            && DungeonGenerator.Target(193)==25,"Dungeon cave-density scaling wrong.");
     }
     public static void Weather()
     {

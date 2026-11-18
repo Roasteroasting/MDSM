@@ -173,6 +173,19 @@ internal static class InfiniteIntegrationChecks
             session.Mobs.AttachChunk(new[]{new LocatedMob(new(MobSpecies.Pig,Vector3.Zero,1,7),new(10.5,111,10.5))},Array.Empty<MobRespawnState>());
             var pig=session.Mobs.Entities.Last(m=>m.Species==MobSpecies.Pig);C(session.Mobs.Hit(pig,7,session.Player.Position,session.Items),"Pending replacement fixture failed.");
             int pending=session.Mobs.PendingRespawns.Count;C(pending>0,"Natural death did not schedule a replacement.");
+            for(int z=8;z<=13;z++)for(int x=8;x<=13;x++)
+                if((x is 8 or 13 || z is 8 or 13) && (x!=9 || z!=8))world.SetBlock(x,111,z,BlockType.Fence);
+            C(world.PlaceStructure(new(9,111,8),BlockType.FenceGate,0,new(0,-1,0),session.Player.Bounds),
+                "Closed pen gate fixture failed.");
+            var penned=new WorldPosition(10.5,111,10.5);
+            C(session.Mobs.TrySummon(MobSpecies.Cow,world.LocalPosition(penned)),"Pen animal fixture failed.");
+            var cow=session.Mobs.Entities.Last(m=>m.AbsolutePosition==penned);
+            session.Inventory.SetSlot(0,new(Items.Lead,1));
+            C(session.Mobs.TryLeash(cow,session.Inventory),"Streamed cow could not be leashed.");
+            var crossChunkPost=new Point3(16,111,10);
+            C(world.SetBlock(16,111,10,BlockType.Fence) &&
+                session.Mobs.InteractFence(crossChunkPost,session.Inventory,session.Items),"Cross-chunk fence attachment failed.");
+            var cowId=cow.Id;
             session.Inventory.SetSlot(0,new(Items.FromBlock(BlockType.WoodenPlanks),17));session.Inventory.SetSlot(5,tool);session.Inventory.SelectedSlot=5;
             session.Player.SetAbsolute(new(8.5,111,12.5));session.Player.RestoreFraction(17.25);world.Time.Restore(471);
             double growth=world.CaptureGameplay(new(0,0)).Vegetation.Saplings.Single().Remaining;
@@ -187,6 +200,8 @@ internal static class InfiniteIntegrationChecks
             Pump(world,new(0,0),()=>world.IsLoaded(chest)&&world.IsLoaded(new(-16,0,-16))&&world.IsLoaded(new(16,0,16)));
             C(world.Containers.Get(chest)[0]==tool&&world.Containers.Get(chest)[1].Count==23,"Container contents lost on unload.");
             C(session.Items.Entities.Sum(i=>i.Count)==totalDrops&&session.Mobs.PendingRespawns.Count==pending,"Unload duplicated/lost entities or pending respawns.");
+            C(session.Mobs.Entities.Count(m=>m.Species==MobSpecies.Cow&&m.AbsolutePosition==penned&&m.Id==cowId
+                && m.Leash==new LeashState(LeashAnchor.Fence,crossChunkPost))==1,"Enclosed cow or leash was lost or duplicated on unload.");
             C(Math.Abs(world.CaptureGameplay(new(0,0)).Vegetation.Saplings.Single().Remaining-growth)<1e-9,"Dormant growth timer advanced.");
             C(world.Signs[new(9,111,4)]=="Streamed text"&&world.Structure(new(12,111,4)).Facing%4==3&&world.Gravity.Active.Count==1,"Sign, orientation or active fall lost.");
             manager.Save(made.Id,session.Capture());session.CloseStreaming();session=null;
@@ -194,6 +209,8 @@ internal static class InfiniteIntegrationChecks
             var save=manager.Load(made.Id);session=new GameSession(made.Id,save);world=session.World;Pump(world,new(0,0),()=>world.IsLoaded(chest)&&world.IsLoaded(new(-16,0,-16))&&world.IsLoaded(new(16,0,16)));
             C(session.Inventory[0].Count==17&&session.Inventory[5]==tool&&session.Inventory.SelectedSlot==5&&session.Player.HealthValue==17.25&&world.Time.Seconds==471,"Manifest lost player/time/item metadata.");
             C(world.Containers.Get(chest)[0]==tool&&session.Items.Entities.Sum(i=>i.Count)==totalDrops&&world.Gravity.Active.Count==1&&session.Mobs.PendingRespawns.Count==pending,"Checkpoint lost gameplay state.");
+            C(session.Mobs.Entities.Count(m=>m.Species==MobSpecies.Cow&&m.AbsolutePosition==penned&&m.Id==cowId
+                && m.Leash==new LeashState(LeashAnchor.Fence,crossChunkPost))==1,"Enclosed cow or leash was lost or duplicated on save/reload.");
             var commands=new WorldCommands();C(commands.Execute("/tp @p 12550824.5 132 -12550824.5",session,new GameSettings{GameMode=GameMode.Creative}).Success,"Wide teleport command rejected.");
             var watch=Stopwatch.StartNew();while(!session.AdvanceStreaming(out _)){if(watch.Elapsed.TotalSeconds>60)throw new Exception("Teleport streaming stalled: "+session.StreamingNotice);Thread.Sleep(1);}
             C(session.Player.AbsolutePosition==new WorldPosition(12550824.5,132,-12550824.5),"Teleport rounded absolute coordinates.");

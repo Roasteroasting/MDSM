@@ -326,10 +326,10 @@ internal static class WaterChecks
             original.SetBlock(15, 6, 15, BlockType.Air); saved.World.SetBlock(15, 6, 15, BlockType.Air); Settle(original); Settle(saved.World); Equal(original, saved.World);
             foreach (Chunk chunk in saved.World.Chunks) Require(chunk.WaterCount == 0, "Restored unsupported flow did not recede.");
             // A pre-water v4 layout remains byte-for-byte compatible; loading never generates lakes.
-            bytes.SetLength(0); var dry = new World(12, size);
+            bytes.SetLength(0); var dry = Floor(12,size);
             bytes.Write(MobChecks.Version4(new WorldSave(dry, "Existing dry world", dry.Spawn, 0, 0))); bytes.Position = 0;
             WorldSave old = WorldSerializer.Read(bytes); Equal(dry, old.World);
-            Require(old.World.Fluids.PendingCount == 0 && WorldSerializer.FormatVersion == 14, "Loading old terrain introduced water or changed the expected save version.");
+            Require(old.World.Fluids.PendingCount == 0 && WorldSerializer.FormatVersion == 15, "Loading old terrain introduced water or changed the expected save version.");
         }
     }
 }

@@ -111,9 +111,11 @@ internal readonly record struct WaterColumn(int Original,int Floor,int Level,Nat
 // The single water geometry/material stage for generator v3. Reads immutable
 // pre-feature density terrain; never sees structures or another chunk's edits.
 internal sealed class InfiniteWaterTerrain(int seed,Func<long,long,int> surface,Func<long,long,int> planSurface,Func<long,int,long,BlockType> raw,
-    WaterFeaturePlans shared,CancellationToken cancellation)
+    WaterFeaturePlans shared,CancellationToken cancellation,Climate surfaceClimate=null)
 {
     internal const int Sea=BetaDensityGenerator.SeaLevel-1;
+    // Basin suitability retains its original climate inputs. The versioned
+    // surface climate only controls materials, including the desert filler.
     private readonly Climate _climate=new(seed){VariedGeneration=true};
     private readonly Dictionary<(long,long),WaterColumn> _columns=new();
     private readonly Dictionary<(long,long),BlockType> _materials=new();
@@ -305,7 +307,7 @@ internal sealed class InfiniteWaterTerrain(int seed,Func<long,long,int> surface,
         if(y<top-16)return original;
         if(top is <45 or >88)
         {
-            if(_climate.At(x,z)!=Biome.Desert)return original;
+            if((surfaceClimate??_climate).At(x,z)!=Biome.Desert)return original;
             if(raw(x,top,z) is not (BlockType.Grass or BlockType.Dirt))return original;
             if(y>=top-2 && original is (BlockType.Grass or BlockType.Dirt))return BlockType.Sand;
             return y<top-2 && original is (BlockType.Stone or BlockType.Dirt)
@@ -330,7 +332,7 @@ internal sealed class InfiniteWaterTerrain(int seed,Func<long,long,int> surface,
             var n=Column(x+dx*3,z+dz*3);slope=Math.Max(slope,Math.Abs(n.Floor-c.Floor));
             if(n.Wet)nearLevel=Math.Max(nearLevel,n.Level);
         }
-        bool desert=_climate.At(x,z)==Biome.Desert;
+        bool desert=(surfaceClimate??_climate).At(x,z)==Biome.Desert;
         if(!c.Wet && c.Kind==NaturalWater.None && nearLevel<0)
         {
             if(desert)return BlockType.Sand;

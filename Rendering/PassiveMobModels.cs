@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using MDSM.Entities;
+using MDSM.Inventories;
 
 namespace MDSM.Rendering;
 
@@ -26,11 +27,9 @@ internal static class PassiveMobModels
                     Matrix leg=Matrix.CreateRotationX(swing*side)*Matrix.CreateTranslation(side*.13f,.7f,0)*world;
                     mesh.Cuboid(new(-limb,-.7f,-limb),new(limb,0,limb),leg,3,tint);
                     // Limbs start along -Y; positive X rotation points zombie arms toward local -Z (forward).
-                    Matrix arm=Matrix.CreateRotationX(skeleton?.35f:MathHelper.PiOver2)*Matrix.CreateTranslation(side*.31f,1.28f,0)*world;
+                    Matrix arm=HumanoidArm(skeleton,side,world);
                     mesh.Cuboid(new(-limb,-.65f,-limb),new(limb,0,limb),arm,0,tint);
                 }
-                if(skeleton)
-                    for(int segment=0;segment<3;segment++)mesh.Cuboid(new(-.48f,.75f+segment*.17f,-.48f),new(-.42f,.95f+segment*.17f,-.40f),world,3,new Color(155,95,45));
                 break;
             case MobSpecies.Spider:
                 mesh.Cuboid(new(-.32f,.3f,-.2f),new(.32f,.7f,.55f),world,2,tint);
@@ -91,5 +90,21 @@ internal static class PassiveMobModels
                 mesh.Cuboid(new(-radius,-height,-radius), new(radius,0,radius), transform, 3, tint);
             }
         }
+    }
+
+    private static Matrix HumanoidArm(bool skeleton,int side,Matrix world) =>
+        Matrix.CreateRotationX(skeleton?.35f:MathHelper.PiOver2)*Matrix.CreateTranslation(side*.31f,1.28f,0)*world;
+
+    internal static void AppendBow(CuboidModelBuilder mesh,PassiveMob mob)
+    {
+        Matrix world=Matrix.CreateRotationY(mob.Yaw)*Matrix.CreateTranslation(mob.Position);
+        Vector3 grip=Vector3.Transform(new(-.035f,-.59f,-.045f),HumanoidArm(true,-1,world));
+        // Rotate the diagonal inventory artwork so the bow's tips point up and
+        // down. Anchor the wooden grip pixel instead of centering the tile.
+        Matrix turn=Matrix.CreateRotationZ(.74f)*Matrix.CreateRotationY(mob.Yaw+.24f);
+        Vector3 right=Vector3.TransformNormal(Vector3.Right,turn)*3.2f;
+        Vector3 up=Vector3.TransformNormal(Vector3.Up,turn)*3.2f;
+        Vector3 center=grip+right*(2.5f/64)-up*(.5f/64);
+        mesh.Sprite(Items.Bow,center,right,up,mob.HurtSeconds>0?new Color(255,85,85):Color.White);
     }
 }

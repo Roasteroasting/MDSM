@@ -32,7 +32,8 @@ public enum BlockType : byte
     DoubleTallGrassLower=58,DoubleTallGrassUpper=59,GlassPane=60,Bed=61,BedHead=62,
     WoodenSlab=63,CobblestoneSlab=64,WoodenStairs=65,CobblestoneStairs=66,Sign=67,DoubleWoodenSlab=68,DoubleCobblestoneSlab=69,
     MossyCobblestone=70,Carrot1=71,Carrot2=72,Carrot3=73,Carrot4=74,Carrot5=75,Carrot6=76,Carrot7=77,
-    Potato1=78,Potato2=79,Potato3=80,Potato4=81,Potato5=82,Potato6=83,Potato7=84,Snow=85,Fire=86,Cactus=87,DeadBush=88,Sandstone=89
+    Potato1=78,Potato2=79,Potato3=80,Potato4=81,Potato5=82,Potato6=83,Potato7=84,Snow=85,Fire=86,Cactus=87,DeadBush=88,Sandstone=89,
+    Peony=90,Violet=91
 }
 
 public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus }
@@ -48,6 +49,7 @@ public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaq
 
 public static class Blocks
 {
+    internal const int SnowyGrassTile=84;
     private static readonly BlockDefinition[] Definitions =
     {
         new("AIR", false, false, BlockShape.None, 0, Placeable: false, MiningSeconds: -1),
@@ -139,7 +141,9 @@ public static class Blocks
         new("FIRE",false,false,BlockShape.Fire,62,Placeable:false,MiningSeconds:0),
         new("CACTUS",true,false,BlockShape.Cactus,77,78,79,MiningSeconds:.6f),
         new("DEAD BUSH",false,false,BlockShape.Cross,80,MiningSeconds:0),
-        new("SANDSTONE",true,true,BlockShape.Cube,81,82,83,MiningSeconds:1.2f)
+        new("SANDSTONE",true,true,BlockShape.Cube,81,82,83,MiningSeconds:1.2f),
+        new("PEONY",false,false,BlockShape.Cross,85,MiningSeconds:0),
+        new("VIOLET",false,false,BlockShape.Cross,86,MiningSeconds:0)
     };
     private static readonly BlockType[] Palette =
     {
@@ -148,7 +152,7 @@ public static class Blocks
         BlockType.Bedrock, BlockType.TallGrass, BlockType.RedFlower, BlockType.YellowFlower, BlockType.WhiteWool, BlockType.CraftingTable,
         BlockType.Glass,BlockType.IronOre,BlockType.CoalOre,BlockType.DiamondOre,BlockType.Furnace,BlockType.Chest,BlockType.Sapling,
         BlockType.Obsidian,BlockType.Fence,BlockType.FenceGate,BlockType.Door,BlockType.Torch,BlockType.Smoker,BlockType.BlastFurnace,BlockType.GlassPane,BlockType.Bed,
-        BlockType.WoodenSlab,BlockType.CobblestoneSlab,BlockType.WoodenStairs,BlockType.CobblestoneStairs,BlockType.Sign,BlockType.MossyCobblestone,BlockType.Cactus,BlockType.DeadBush,BlockType.Sandstone
+        BlockType.WoodenSlab,BlockType.CobblestoneSlab,BlockType.WoodenStairs,BlockType.CobblestoneStairs,BlockType.Sign,BlockType.MossyCobblestone,BlockType.Cactus,BlockType.DeadBush,BlockType.Sandstone,BlockType.Peony,BlockType.Violet
     };
     public static ReadOnlySpan<BlockType> Selection => Palette;
     public static byte MaximumId=>(byte)(Definitions.Length-1);
@@ -170,9 +174,10 @@ public static class Blocks
     // Occupied voxel may be replaced, independently of collision/selection bounds.
     public static bool Replaceable(BlockType block)=>block==BlockType.Air || block==BlockType.Snow || Get(block).Shape==BlockShape.Cross || Crop(block);
     public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + CropStage(block)*.125f)
-        :block==BlockType.Sapling?.8f:block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.DeadBush?.7f:.9f;
+        :block==BlockType.Sapling?.8f:Flower(block) || block==BlockType.DeadBush?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
     public static bool Bed(BlockType block)=>block is BlockType.Bed or BlockType.BedHead;
-    public static bool RejectsUnderside(BlockType block)=>block is BlockType.Torch or BlockType.TallGrass or BlockType.RedFlower or BlockType.YellowFlower;
+    internal static bool Flower(BlockType block)=>block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.Peony or BlockType.Violet;
+    public static bool RejectsUnderside(BlockType block)=>block is BlockType.Torch or BlockType.TallGrass || Flower(block);
     public static bool ConnectsPane(BlockType block)=>block==BlockType.GlassPane || IsSolid(block) && Get(block).Shape==BlockShape.Cube;
 }

@@ -35,7 +35,6 @@ public sealed partial class PassiveMobPopulation
         _respawnRandom = new Random(unchecked(world.Seed ^ 0x5253504E));
         foreach (MobState state in saved) AddSaved(state);
         RestorePopulation(population);
-        foreach(var mob in _mobs)if(mob.LoveSeconds>0)_breedingActive=true;
     }
     public PassiveMobPopulation(World world, ReadOnlySpan<PigState> pigs, ReadOnlySpan<MobState> others, MobPopulationState population = null) : this(world)
     {
@@ -47,7 +46,6 @@ public sealed partial class PassiveMobPopulation
             AddSaved(state);
         }
         RestorePopulation(population);
-        foreach(var mob in _mobs)if(mob.LoveSeconds>0)_breedingActive=true;
     }
     private void RestorePopulation(MobPopulationState state)
     {
@@ -70,8 +68,14 @@ public sealed partial class PassiveMobPopulation
     {
         if (_mobs.Count >= MaximumMobs) throw new InvalidDataException("Too many passive mobs.");
         Validate(state, _world.Size);
-        var mob=new PassiveMob(state,_random.Next());mob.Bind(_world);_mobs.Add(mob);
+        state.Leash.Validate(state.Id);
+        if(state.Leash.Anchor==LeashAnchor.Fence && !_world.Contains(state.Leash.Fence.X,state.Leash.Fence.Y,state.Leash.Fence.Z))
+            throw new InvalidDataException("Leash anchor is outside the world.");
+        var mob=new PassiveMob(state,_random.Next());
+        if(mob.Id!=Guid.Empty && !_ids.Add(mob.Id))throw new InvalidDataException("Duplicate passive mob identity.");
+        mob.Bind(_world);_mobs.Add(mob);
         if(!state.Bred)_living[(int)state.Species]++;
+        if(mob.LoveSeconds>0)_breedingActive=true;
     }
 
     public static MobState[] Generate(World world) => Generate(world, null);
@@ -121,8 +125,8 @@ public sealed partial class PassiveMobPopulation
         {
             if(!_world.IsSimulated(_world.GlobalCell(mob.Position)))continue;
             float playerDistanceSquared=playerPosition.HasValue?Vector3.DistanceSquared(mob.Position,playerPosition.Value):float.PositiveInfinity;
-            Vector3? direction=null;
-            if(heldItem==Items.Wheat && playerDistanceSquared<=WheatFollowRange*WheatFollowRange)
+            Vector3? direction=LeashSteering(mob,playerPosition,items);
+            if(!direction.HasValue && heldItem==Items.Wheat && playerDistanceSquared<=WheatFollowRange*WheatFollowRange)
             {
                 Vector3 toward=playerPosition.Value-mob.Position;toward.Y=0;
                 if(toward.LengthSquared()>WheatStopDistance*WheatStopDistance)
@@ -133,11 +137,11 @@ public sealed partial class PassiveMobPopulation
                 else toward=Vector3.Zero;
                 direction=toward; // Overrides wandering, including standing still near the player.
             }
-            else if(mob.LoveSeconds>0)
+            else if(!direction.HasValue && mob.LoveSeconds>0)
             {
                 PassiveMob partner=Partner(mob);if(partner!=null)direction=partner.Position-mob.Position;
             }
-            if(!playerPosition.HasValue || playerDistanceSquared<=32*32)mob.Update(_world,elapsed,direction);
+            if(!playerPosition.HasValue || playerDistanceSquared<=32*32 || mob.Leash.Active)mob.Update(_world,elapsed,direction);
             else mob.TickLife(elapsed);
             mob.LayEgg(elapsed,items);
         }
@@ -196,13 +200,15 @@ public sealed partial class PassiveMobPopulation
         {
             int count=mob.Baby || mob.Species==MobSpecies.Sheep && mob.Sheared?0:_random.Next(1,mob.Definition.MaximumDrop+1);
             int limit=Items.StackLimit(mob.Definition.Drop),entities=(count+limit-1)/limit;
-            if(!items.CanSpawn(entities))return false;
+            if(!items.CanSpawn(entities+(mob.Leash.OwnsLead?1:0)))return false;
+            if(mob.Leash.OwnsLead && !TryUnleash(mob,null,items))return false;
             while(count>0){int take=Math.Min(count,limit);items.TrySpawn(new ItemStack(mob.Definition.Drop,take),mob.Position+Vector3.Up*.25f,.35f);count-=take;}
         }
         mob.Damage(damage, mob.Position - attacker,knockback);
         _world.Sounds?.Mob(mob.IsDead?SoundKind.MobDeath:SoundKind.MobHurt,mob);
         if (mob.IsDead && _mobs.Remove(mob))
         {
+            _ids.Remove(mob.Id);
             if(!mob.Bred){_living[(int)mob.Species]--;
             _pending.Add(new MobRespawnState(mob.Species, MinimumRespawnSeconds + _respawnRandom.NextDouble() * (MaximumRespawnSeconds - MinimumRespawnSeconds),_world.IsInfinite?_world.GlobalCell(mob.Position):null));}
         }
@@ -224,7 +230,7 @@ public sealed partial class PassiveMobPopulation
     {
         int count = 0; foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) count++;
         var result = new PigState[count]; int i = 0;
-        foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) result[i++] = new PigState(mob.Position, mob.Yaw, mob.Health,mob.BabySeconds,mob.LoveSeconds,mob.BreedCooldown,mob.Bred,mob.Burning.Capture());
+        foreach (PassiveMob mob in _mobs) if (mob.Species == MobSpecies.Pig) result[i++] = new PigState(mob.Position, mob.Yaw, mob.Health,mob.BabySeconds,mob.LoveSeconds,mob.BreedCooldown,mob.Bred,mob.Burning.Capture(),mob.Id,mob.Leash);
         return result;
     }
     public MobState[] CaptureOthers()
@@ -267,13 +273,28 @@ public sealed partial class PassiveMobPopulation
             if(b==null || Vector3.DistanceSquared(a.Position,b.Position)>2.25f)continue;
             Vector3 p=(a.Position+b.Position)*.5f;BoundingBox box=PassiveMob.BoundsAt(a.Species,p);
             if(_world.IntersectsSolid(box)||Water.Intersects(_world,box)||Lava.Intersects(_world,box))continue;
-            a.Parent();b.Parent();AddSaved(new(a.Species,p,0,a.Definition.MaximumHealth,BabySeconds:900+_random.NextDouble()*1800,Bred:true));
+            a.Parent();b.Parent();
+            if((WinterOutdoors(a)||WinterOutdoors(b)) && _random.NextDouble()>=SeasonManager.WinterBreedingChance)continue;
+            AddSaved(new(a.Species,p,0,a.Definition.MaximumHealth,BabySeconds:900+_random.NextDouble()*1800,Bred:true));
             if(_mobs.Count+_pending.Count>=cap)break;
         }
     }
+    internal static bool BreedingFood(MobSpecies species,ItemId item) => species switch
+    {
+        MobSpecies.Cow or MobSpecies.Sheep => item==Items.Wheat,
+        MobSpecies.Pig => item==Items.Carrot || item==Items.Potato,
+        MobSpecies.Chicken => item==Items.WheatSeeds,
+        _ => false
+    };
+    internal static bool IsBreedingFood(ItemId item) =>
+        item==Items.Wheat || item==Items.Carrot || item==Items.Potato || item==Items.WheatSeeds;
+
     public bool Feed(PassiveMob mob,Inventory inventory)
     {
-        if(mob==null||!_mobs.Contains(mob)||mob.Baby||mob.IsDead||mob.LoveSeconds>0||mob.BreedCooldown>0||inventory.Selected.Item!=Items.Wheat)return false;
+        if(mob==null||!_mobs.Contains(mob)||mob.Baby||mob.IsDead||mob.LoveSeconds>0||mob.BreedCooldown>0||!BreedingFood(mob.Species,inventory.Selected.Item))return false;
+        if(WinterOutdoors(mob) && _random.NextDouble()>=SeasonManager.WinterFeedChance){mob.RefuseFood();return false;}
         mob.Feed();_breedingActive=true;inventory.ConsumeSelected();_world.Sounds?.At(SoundKind.Feed,mob.Position);return true;
     }
+    private bool WinterOutdoors(PassiveMob mob) =>
+        _world.Seasons.Winter && _world.Shelters.At(_world.GlobalCell(mob.Position+Vector3.Up*.1f))==ShelterKind.Outdoors;
 }

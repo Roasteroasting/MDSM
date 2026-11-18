@@ -85,10 +85,10 @@ public sealed class WorldSaveManager
         using(var stream=File.OpenRead(Path.Combine(directory,FileName)))if(!InfiniteWorldPersistence.IsInfinite(stream))return WorldSerializer.Read(stream);
         return InfiniteWorldPersistence.Load(directory);
     }
-    internal (string Id,WorldSave Save) CreateInfinite(int seed,string name,bool cheats,MDSM.Core.Difficulty difficulty,MDSM.Core.GameMode mode)
+    internal (string Id,WorldSave Save) CreateInfinite(int seed,string name,bool cheats,MDSM.Core.Difficulty difficulty,MDSM.Core.GameMode mode,SeasonsMode seasons=SeasonsMode.Off)
     {
         WorldSerializer.ValidateName(name);string id=Guid.NewGuid().ToString("N"),directory=WorldDirectory(id);
-        var world=World.OpenStreamed(seed,Path.Combine(directory,"regions"));world.Climate.VariedGeneration=true;world.AllowCheats=cheats;world.SavedDifficulty=difficulty;world.SavedGameMode=mode;
+        var world=World.OpenStreamed(seed,Path.Combine(directory,"regions"),seasons:seasons);world.AllowCheats=cheats;world.SavedDifficulty=difficulty;world.SavedGameMode=mode;
         try
         {
             var deadline=Stopwatch.StartNew();bool ready=false;

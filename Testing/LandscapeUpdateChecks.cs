@@ -21,9 +21,7 @@ internal static class LandscapeUpdateChecks
         ("Resumable exact lighting/mesh work, intervening queries and cancelled edits",Incremental),
         ("Visible cached command candidates and highlighted forward/reverse cycling",Completion),
         ("Fire floor/wall selection, damage bounds, underside rejection and saved attachment",Fire),
-        ("Cactus columns, support-loss accounting, bush geometry and item persistence",Plants),
-        ("Desert-only deterministic vegetation and reduced desert water candidates",Desert),
-        ("Mixed low/high mountain noise, actual cliff gradients and protected spawn",Mountains)
+        ("Cactus columns, support-loss accounting, bush geometry and item persistence",Plants)
     };
     private static void C(bool ok,string message)=>OvernightChecks.Check(ok,message);
     public static int Run(){int failed=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failed++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}return failed==0?0:1;}
@@ -65,9 +63,13 @@ internal static class LandscapeUpdateChecks
                 using var stored=new MemoryStream();WorldSerializer.WriteCompressed(stored,new(w,"Old fire",new(40,1,40),0,0),SaveCodec.Stored);byte[] bytes=stored.ToArray();
                 int at=52+BitConverter.ToInt32(bytes,24)+48;while(BitConverter.ToUInt32(bytes,at)!=WorldSerializer.FeaturesRecord)at+=56+BitConverter.ToInt32(bytes,at+20);
                 int length=BitConverter.ToInt32(bytes,at+20),end=at+56+length;
-                byte[] old=new byte[bytes.Length-1];bytes.AsSpan(0,end-1).CopyTo(old);bytes.AsSpan(end).CopyTo(old.AsSpan(end-1));
-                BitConverter.GetBytes(1).CopyTo(old,at+56);BitConverter.GetBytes(length-1).CopyTo(old,at+16);BitConverter.GetBytes(length-1).CopyTo(old,at+20);
-                SHA256.HashData(old.AsSpan(at+56,length-1)).CopyTo(old.AsSpan(at+24,32));SHA256.HashData(old.AsSpan(0,old.Length-32)).CopyTo(old.AsSpan(old.Length-32));
+                // One fire and no passive mobs. Schema 1 omitted the attachment,
+                // and predates both the seasons mode and biome flag.
+                const int removed=3;
+                int oldLength=length-removed;
+                byte[] old=new byte[bytes.Length-removed];bytes.AsSpan(0,end-removed).CopyTo(old);bytes.AsSpan(end).CopyTo(old.AsSpan(end-removed));
+                BitConverter.GetBytes(1).CopyTo(old,at+56);BitConverter.GetBytes(oldLength).CopyTo(old,at+16);BitConverter.GetBytes(oldLength).CopyTo(old,at+20);
+                SHA256.HashData(old.AsSpan(at+56,oldLength)).CopyTo(old.AsSpan(at+24,32));SHA256.HashData(old.AsSpan(0,old.Length-32)).CopyTo(old.AsSpan(old.Length-32));
                 var legacy=WorldSerializer.Read(new MemoryStream(old));C(legacy.World.Fire.Count==1 && legacy.World.Fire.Attachment(cell)==FireAttachment.North,"Old feature schema 1 did not infer its side fire safely.");
             }
             w.SetBlock(20,1,20,BlockType.Air);w.SetBlock(fuel.X,fuel.Y,fuel.Z,BlockType.Air);

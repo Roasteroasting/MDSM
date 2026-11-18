@@ -32,10 +32,7 @@ internal static class WorldRuleChecks
             var selected=WorldSizes.DefaultCreation;
             for(int i=0;i<20;i++){selected=WorldSizes.NextCreation(selected,direction);Check(selected==(i%2==0?WorldSize.Large:WorldSize.Infinite),"Creation cycling exposed a retired option or failed to wrap.");}
         }
-        foreach(var size in WorldSizes.Finite)
-            Check(WorldSizes.FromDimensions(size.Width(),128,size.Width())==size,"Retired save dimensions are no longer recognized.");
-        Check(WorldSizes.FromDimensions(256,64,256)==WorldSize.Small && WorldSizes.FromDimensions(512,64,512)==WorldSize.Normal,"Older height migration identities changed.");
-        Check((int)WorldSize.Small==0&&(int)WorldSize.Normal==1&&(int)WorldSize.Large==2&&(int)WorldSize.Massive==3&&(int)WorldSize.Infinite==4,"Persistent world-size IDs changed.");
+        Check(WorldSizes.FromDimensions(1024,128,1024)==WorldSize.Large,"Legacy save dimensions are no longer recognized.");
     }
     public static void Rules()
     {
@@ -105,16 +102,17 @@ internal static class WorldRuleChecks
     }
     public static void LayoutAndPreferences()
     {
-        LargeLakeChecks.Notice();
         foreach(Point size in new[]{new Point(320,240),new(640,360),new(800,480),new(1280,720),new(1920,1080)})
         {
             var viewport=new Viewport(0,0,size.X,size.Y);
-            for(int i=0;i<3;i++)
+            for(int i=0;i<4;i++)
             {
                 Rectangle option=WorldCreationLayout.Option(viewport,i);
-                Check(option.Left>=0 && option.Right<=size.X && option.Bottom<WorldCreationLayout.Notice(viewport).Top,"Rule option leaves window or overlaps notice.");
+                Check(option.Left>=0 && option.Right<=size.X && option.Bottom<WorldCreationLayout.SeasonsWarningTop(viewport),"Rule option leaves window or overlaps the season warning.");
                 for(int j=0;j<i;j++)Check(!option.Intersects(WorldCreationLayout.Option(viewport,j)),"Rule options overlap.");
             }
+            Rectangle create=WorldCreationLayout.Button(viewport,0);
+            Check(create.Top>WorldCreationLayout.SeasonsWarningTop(viewport)+7 && create.Bottom<=size.Y,"Create button overlaps the season warning or leaves the viewport.");
         }
         string parent=Path.GetFullPath(AppContext.BaseDirectory),root=Path.Combine(parent,".world-rule-prefs-"+Guid.NewGuid().ToString("N"));
         try

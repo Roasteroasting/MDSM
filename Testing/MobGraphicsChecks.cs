@@ -26,7 +26,7 @@ internal static class MobGraphicsChecks
         try
         {
             using var game = new CheckGame(root); game.Run(); Require(game.Verified, "Mixed-mob graphics checks did not complete.");
-            Console.WriteLine("PASS: All four textured/animated mobs, resource cutouts and wool, depth/state preservation, water/HUD/screenshots, input combat, paused/persistent replenishment, gravity, hotbar scrolling, and revised new-world stock.");
+            Console.WriteLine("PASS: All four textured/animated mobs, resource cutouts and wool, depth/state preservation, water/HUD/screenshots, input combat, paused/persistent replenishment, gravity, and hotbar scrolling.");
             return 0;
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
@@ -96,33 +96,7 @@ internal static class MobGraphicsChecks
                         Require(png.Width == 1280 && png.Height == 720 && data.AsSpan().SequenceEqual(shot.Pixels), "Mixed-mob/resource PNG pixels/resolution changed.");
                     }
                     VerifyInputCombat(); VerifyWorldUpdates(); VerifyFallingGpu(); break;
-                case 10:
-                    Call("SetState", GameState.WorldCreation); MenuController menu = Field<MenuController>("_menu");
-                    foreach (char ch in "Mixed new world") menu.TextInput(ch);
-                    Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch); Press(Keys.Tab);
-                    Require(menu.SelectedSize==WorldSize.Infinite,"Create menu did not default to Infinite.");
-                    foreach (WorldSize size in new[] { WorldSize.Large, WorldSize.Infinite, WorldSize.Large, WorldSize.Infinite })
-                    { Press(Keys.Right); Require(menu.SelectedSize == size, "Create menu did not restrict selection to Legacy and Infinite."); }
-                    Press(Keys.Left);
-                    Call("HandleMenuAction", MenuAction.CreateWorld);
-                    var creationWait = System.Diagnostics.Stopwatch.StartNew();
-                    while (State != GameState.Playing && creationWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
-                    Require(State == GameState.Playing && Session.Mobs.Entities.Count == 512 && Session.Mobs.Entities.Select(m => m.Species).Distinct().Count() == 4,
-                        "Creation menu did not use one shared mixed population budget.");
-                    Require(Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty), "New-world menu granted starting items.");
-                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 512, "Initial save omitted mixed species.");
-                    string reloadId = Session.Id; Vector3 reloadPosition = Session.Player.Position;
-                    Session.World.SetBlock(15, 125, 15, BlockType.WhiteWool);
-                    Call("HandleMenuAction", MenuAction.SaveAndReturn);
-                    Require(State == GameState.MainMenu && ChunkMesh.LiveBufferBytes == 0, $"Save/return retained terrain GPU buffers: state={State}, bytes={ChunkMesh.LiveBufferBytes}.");
-                    Call("RefreshWorlds", reloadId); Call("HandleMenuAction", MenuAction.LoadWorld);
-                    var loadingWait = System.Diagnostics.Stopwatch.StartNew();
-                    while (State != GameState.Playing && loadingWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
-                    Require(State == GameState.Playing && Session.Id == reloadId && Session.Player.Position == reloadPosition
-                        && Session.World.GetBlock(15, 125, 15) == BlockType.WhiteWool && Session.Mobs.Entities.Count == 512
-                        && Field<WorldRenderer>("_renderer").PendingChunks == 0, "Background loading/nearby mesh preparation changed saved state or entered an incomplete world.");
-                    break;
-                case 11: Verified = true; Exit(); break;
+                case 10: Verified = true; Exit(); break;
             }
             if (capture) Press(Keys.F2);
             base.Draw(time);

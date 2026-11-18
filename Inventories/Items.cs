@@ -29,6 +29,7 @@ public static class Items
     public static readonly ItemId WheatSeeds=new(287),Wheat=new(288),Bread=new(289),RottenFlesh=new(290),Bone=new(291),
         Bucket=new(292),WaterBucket=new(293),LavaBucket=new(294);
     public static readonly ItemId Egg=new(328),Carrot=new(329),Potato=new(330),BakedPotato=new(331),FlintAndSteel=new(332),Snowball=new(333);
+    public static readonly ItemId Lead=new(334);
     private static readonly ItemDefinition[] Definitions = CreateDefinitions();
     private static readonly ItemId[] SpriteItems = CreateSprites();
     private static readonly ItemId[] Catalog = CreateCatalog();
@@ -42,7 +43,7 @@ public static class Items
     }
     private static ItemDefinition[] CreateDefinitions()
     {
-        var definitions = new ItemDefinition[78];
+        var definitions = new ItemDefinition[79];
         string[] names = { "RAW PORKCHOP", "LEATHER", "FEATHER", "IRON INGOT", "COAL", "FLINT", "DIAMOND", "STICK", "ARROW", "STRING", "CHARCOAL" };
         for (int i=0;i<names.Length;i++) definitions[i] = new(names[i], i==0?1:64, Sprite: i);
         int[] uses = {59,131,250,1561};
@@ -64,9 +65,10 @@ public static class Items
         definitions[74]=new("POTATO",Sprite:76);definitions[75]=new("BAKED POTATO",Sprite:77);
         definitions[76]=new("FLINT AND STEEL",1,ToolKind.FlintAndSteel,Durability:64,Sprite:78);
         definitions[77]=new("SNOWBALL",16,Sprite:79);
+        definitions[78]=new("LEAD",Sprite:80);
         return definitions;
     }
-    private static ItemId[] CreateSprites() { var all=new ItemId[80];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;all[73]=new((byte)BlockType.Bed);for(int i=0;i<6;i++)all[74+i]=new((ushort)(328+i));return all; }
+    private static ItemId[] CreateSprites() { var all=new ItemId[81];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;all[73]=new((byte)BlockType.Bed);for(int i=0;i<7;i++)all[74+i]=new((ushort)(328+i));return all; }
     public static ItemId Armor(ArmorMaterial material,ArmorSlot slot)=>material is >=ArmorMaterial.Leather and <=ArmorMaterial.Obsidian && slot is >=ArmorSlot.Helmet and <=ArmorSlot.Boots
         ?new((ushort)(304+(int)material*4+(int)slot)):throw new ArgumentException("Invalid armor.");
     public static bool LavaResistant(ItemId item)=>item.Value==(byte)BlockType.Obsidian || Get(item).Tier==ToolTier.Obsidian || item.Value is >=324 and <=327;

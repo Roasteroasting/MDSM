@@ -18,7 +18,7 @@ public static class OreGenerator
             for(int material=0;material<3;material++)for(int attempt=0;attempt<(material==0?18:material==1?10:1);attempt++)
             {
                 BlockType block=material==0?BlockType.CoalOre:material==1?BlockType.IronOre:BlockType.DiamondOre;
-                int ceiling=material==2?20:60,target=random.Next(2,9),count=0;
+                int ceiling=material==2?20:60,target=random.Next(2,material==2?6:9),count=0;
                 Point3 cell=new(cx*16+random.Next(16),random.Next(4,ceiling+1),cz*16+random.Next(16));
                 for(int step=0;step<32 && count<target;step++)
                 {

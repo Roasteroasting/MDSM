@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using MDSM.Inventories;
 
 namespace MDSM.Rendering;
 
@@ -10,6 +11,14 @@ internal sealed class CuboidModelBuilder(int textureWidth, int textureHeight)
     public VertexPositionColorTexture[] Vertices = new VertexPositionColorTexture[4096];
     public int Count { get; private set; }
     public void Clear() => Count = 0;
+
+    internal void Sprite(ItemId item,Vector3 center,Vector3 right,Vector3 up,Color tint)
+    {
+        if(Count+ItemSpriteGeometry.VertexCount>Vertices.Length)Array.Resize(ref Vertices,Vertices.Length*2);
+        ItemSpriteGeometry.Fill(Vertices,Count,center,right,up,item);
+        int end=Count+ItemSpriteGeometry.VertexCount;
+        for(;Count<end;Count++)Vertices[Count].Color=tint;
+    }
 
     public void Cuboid(Vector3 min, Vector3 max, Matrix transform, int tile, Color tint, int frontTile = -1, Rectangle? region = null)
     {

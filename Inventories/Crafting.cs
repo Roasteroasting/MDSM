@@ -107,6 +107,7 @@ public static class CraftingRecipes
         Add(3,3,Items.FromBlock(BlockType.Chest),1,P,P,P,P,default,P,P,P,P);
         Add(3,3,Items.FromBlock(BlockType.Furnace),1,C,C,C,C,default,C,C,C,C);
         Add(1,3,Items.Arrow,4,Items.Flint,S,Items.Feather);
+        Add(3,3,Items.Lead,1,Items.Leather,Items.Leather,default,Items.Leather,T,default,default,default,T);
         Add(2,2,Items.FromBlock(BlockType.WhiteWool),1,T,T,T,T);
         Add(3,3,Items.Bow,1,default,S,T,S,default,T,default,S,T);
         Add(3,3,Items.Bow,1,T,S,default,T,default,S,T,S,default);

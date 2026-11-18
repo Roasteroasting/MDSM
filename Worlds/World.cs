@@ -36,6 +36,10 @@ public sealed partial class World
     public FireSimulation Fire {get;}
     public MDSM.Core.GameMode? SavedGameMode { get; internal set; } = MDSM.Core.GameMode.Survival;
     public MDSM.Core.Difficulty SavedDifficulty { get; internal set; } = MDSM.Core.Difficulty.Normal;
+    public SeasonManager Seasons { get; private set; }
+    internal ShelterCache Shelters { get; }
+    internal void RestoreSeasons(SeasonsMode mode)=>Seasons=new(mode);
+    internal bool WinterCrop(Point3 crop)=>Seasons.Winter && !Shelters.ShelteredCrop(crop);
     public bool AllowCheats { get; internal set; } = true; // Legacy worlds/test fixtures retain command access.
     public WaterFeatureCounts GeneratedWaterFeatures { get; private set; }
     public OreGenerationStats GeneratedOres { get; private set; }
@@ -48,10 +52,10 @@ public sealed partial class World
     // Loading and test fixtures fill empty storage directly without generating terrain.
     internal World(int seed, bool generateTerrain) : this(seed, WorldSize.Normal, generateTerrain) { }
 
-    internal World(int seed, WorldSize size, bool generateTerrain)
+    internal World(int seed, WorldSize size, bool generateTerrain, SeasonsMode seasons=SeasonsMode.Off)
     {
         Seed = seed;
-        Climate=new(seed);Weather=new(this);Fire=new(this);
+        Seasons=new(seasons);Shelters=new(this);Climate=new(seed);Weather=new(this);Fire=new(this);
         Lighting = new BlockLighting(this);
         Farming=new FarmingSimulation(this);
         Vegetation=new VegetationSimulation(this);
@@ -79,11 +83,12 @@ public sealed partial class World
     }
 
     // Explicit new-world pipeline. Base-terrain fixtures and deserialization never add lakes.
-    public static World CreateNew(int seed, WorldSize size = WorldSize.Normal, Action<string> progress = null)
+    public static World CreateNew(int seed, WorldSize size = WorldSize.Normal, Action<string> progress = null, SeasonsMode seasons=SeasonsMode.Off)
     {
         progress?.Invoke("ALLOCATING WORLD");
-        var world = new World(seed, size, false);
+        var world = new World(seed, size, false,seasons);
         world.Climate.VariedGeneration=true;
+        world.Climate.NoiseBiomes=true;
         world.SavedGameMode=MDSM.Core.GameMode.Survival;
         world.AllowCheats=false;
         progress?.Invoke("GENERATING TERRAIN");
@@ -99,6 +104,7 @@ public sealed partial class World
         new WorldDecorator(seed).Decorate(world);
         DesertVegetation.Generate(world);
         world.Climate.SnowCover(world);
+        world.GenerateShoreCrops(water.PondFootprints);
         progress?.Invoke("PLACING COAL, IRON AND DIAMONDS");
         UndergroundDeposits.Generate(world);
         world.GeneratedOres=OreGenerator.Generate(world);
@@ -107,6 +113,25 @@ public sealed partial class World
         world.Fluids.Initialize();
         world.LavaFlow.Initialize();
         return world;
+    }
+
+    private void GenerateShoreCrops(System.Collections.Generic.IReadOnlyList<Rectangle> ponds)
+    {
+        var random=new Random(unchecked(Seed^0x43524f50));
+        var crops=new System.Collections.Generic.List<CropState>();
+        foreach(var pond in ponds)
+        {
+            if(random.Next(4)!=0)continue;
+            for(int attempt=0;attempt<pond.Width*pond.Height;attempt++)
+            {
+                int x=random.Next(pond.Left+2,pond.Right-2),z=random.Next(pond.Top+2,pond.Bottom-2);
+                int y=SurfaceY(x,z);
+                if(GetBlock(x,y,z) is not (BlockType.Sand or BlockType.Grass) || GetBlock(x,y+1,z)!=BlockType.Air)continue;
+                if(Climate.At(x,z)!=Biome.Temperate || !Farming.Hydrated(new(x,y,z)))continue;
+                if(ShoreCropPatch.TryPlant(new(x,y,z),random,Climate.At,SurfaceY,GetBlock,SetGeneratedBlock,Farming.Hydrated,crops))break;
+            }
+        }
+        Farming.Restore(crops.ToArray());
     }
 
     public Chunk GetChunk(long x, long z)
@@ -157,6 +182,8 @@ public sealed partial class World
         Chunk chunk = GetChunk(chunkX, chunkZ);
         BlockType previous = chunk.GetBlock(localX, y, localZ);
         chunk.SetBlock(localX, y, localZ, block);
+        if(previous==BlockType.Fence)LiveMobs?.FenceRemoved(new(x,y,z));
+        if(Seasons.Mode!=SeasonsMode.Off && ShelterCache.AffectsEnclosure(previous,block))Shelters.Invalidate(new(chunkX,chunkZ));
         if(IsInfinite)MarkStreamedDirty(chunkX,chunkZ);
         Lighting.Changed(new(x,y,z),previous,block);
         Point3 changedCell=new(x,y,z);

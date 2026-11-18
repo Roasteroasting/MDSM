@@ -28,7 +28,7 @@ internal static class DungeonFrequencyChecks
         {
             World world=Measure(size,seed);
             int count=world.GeneratedDungeons.Count,systems=world.GeneratedCaves.Systems;
-            Check(count>=systems*.4 && count<=DungeonGenerator.Target(systems),"Dungeon population is not approximately one per two cave walks.");
+            Check(count>=systems*.09 && count<=DungeonGenerator.Target(systems),"Dungeon population is not approximately one per eight cave walks.");
             Check(world.CaveSystemSites.Count==0 && world.CaveOreSites.Count==0,"Generation retained temporary cave-site data.");
             foreach(Point3 room in world.GeneratedDungeons)
             {

@@ -13,6 +13,15 @@ public static class SurvivalInteractions
     public static bool BeforeBlocks(GameSession session)
     {
         ItemId item=session.Inventory.Selected.Item;
+        if(item==Items.Lead || item==default)
+        {
+            var target=EntityRaycaster.Cast(session.World,session.Mobs,session.Camera.Position,session.Camera.Forward);
+            if(target!=null)
+            {
+                if(target.Leash.OwnsLead){session.Mobs.TryUnleash(target,session.Inventory,session.Items);return true;}
+                if(session.Mobs.TryLeash(target,session.Inventory))return true;
+            }
+        }
         if(item==Items.FlintAndSteel)
         {
             BlockHit? target=BlockRaycaster.Cast(session.World,session.Camera.Position,session.Camera.Forward);
@@ -21,10 +30,11 @@ public static class SurvivalInteractions
             return true;
         }
         if(item==Items.Snowball){if(session.Projectiles.ThrowSnowball(session.Inventory,session.Camera.Position,session.Camera.Forward,session.Player.Creative))session.Swing.Trigger();return true;}
-        if(item==Items.Wheat)
+        if(PassiveMobPopulation.IsBreedingFood(item))
         {
             PassiveMob mob=EntityRaycaster.Cast(session.World,session.Mobs,session.Camera.Position,session.Camera.Forward);
-            if(mob!=null){session.Mobs.Feed(mob,session.Inventory);return true;}
+            if(mob!=null && PassiveMobPopulation.BreedingFood(mob.Species,item))
+            {session.Mobs.Feed(mob,session.Inventory);return true;}
         }
         if(item==Items.Bucket)
         {
@@ -39,9 +49,8 @@ public static class SurvivalInteractions
         ItemStack held=session.Inventory.Selected;World world=session.World;
         if(hit is BlockHit bed && Blocks.Bed(world.GetBlock(bed.Cell.X,bed.Cell.Y,bed.Cell.Z)))
         {session.Sleep.TryBegin(session,bed);return true;}
+        if(hit is BlockHit post && session.Mobs.InteractFence(post.Cell,session.Inventory,session.Items))return true;
         if(hit is BlockHit structure && world.Toggle(structure.Cell))return true;
-        if(held.Item==Items.Wheat)
-        {session.Mobs.Feed(EntityRaycaster.Cast(world,session.Mobs,session.Camera.Position,session.Camera.Forward),session.Inventory);return true;}
         if(held.Item==Items.Bucket || held.Item==Items.WaterBucket || held.Item==Items.LavaBucket)
         {UseBucket(session,hit);return true;}
         if(hit is not BlockHit block)return false;

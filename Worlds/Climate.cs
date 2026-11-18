@@ -8,9 +8,45 @@ public sealed class Climate(int seed)
 {
     // Older saves keep their original landscape and temperate weather identity.
     public bool VariedGeneration {get;internal set;}
+    internal bool NoiseBiomes { get; set; }
     internal long OriginX,OriginZ;
     public Biome At(int x,int z)=>At(OriginX+x,OriginZ+z);
-    public Biome At(long x,long z)=>!VariedGeneration?Biome.Temperate:(x>=int.MinValue && x<=int.MaxValue && z>=int.MinValue && z<=int.MaxValue?Temperature(seed,(int)x,(int)z):WideTemperature(seed,x,z)) switch{> .32f=>Biome.Desert,< -.30f=>Biome.SnowyForest,_=>Biome.Temperate};
+    public Biome At(long x,long z)
+    {
+        if (!VariedGeneration) return Biome.Temperate;
+        if (NoiseBiomes)
+        {
+            double temperature = Field(seed ^ 0x54454d50,x,z,512);
+            if (temperature < -.26) return Biome.SnowyForest;
+            return temperature > .19 && Field(seed ^ 0x48554d49,x,z,640) < .07 ? Biome.Desert : Biome.Temperate;
+        }
+        return (x>=int.MinValue && x<=int.MaxValue && z>=int.MinValue && z<=int.MaxValue?Temperature(seed,(int)x,(int)z):WideTemperature(seed,x,z))
+            switch { > .32f => Biome.Desert, < -.30f => Biome.SnowyForest, _ => Biome.Temperate };
+    }
+
+    private static double Field(int seed,long x,long z,int scale)
+        => Noise(seed,x,z,scale)*.67 + Noise(seed+1,x,z,scale/2)*.23 + Noise(seed+2,x,z,scale/4)*.10;
+
+    private static double Noise(int seed,long x,long z,int scale)
+    {
+        long ix=Streaming.Coordinates.FloorDiv(x,scale),iz=Streaming.Coordinates.FloorDiv(z,scale);
+        double fx=(x-ix*scale)/(double)scale,fz=(z-iz*scale)/(double)scale;
+        double u=Fade(fx),v=Fade(fz);
+        double a=Gradient(0,0),b=Gradient(1,0),c=Gradient(0,1),d=Gradient(1,1);
+        return 2*((a+(b-a)*u)*(1-v)+(c+(d-c)*u)*v);
+
+        static double Fade(double t)=>t*t*t*(t*(t*6-15)+10);
+        double Gradient(int dx,int dz)
+        {
+            double px=fx-dx,pz=fz-dz;
+            return (Streaming.InfiniteFeatures.Hash(seed,ix+dx,0,iz+dz)&7) switch
+            {
+                0=>px,1=>-px,2=>pz,3=>-pz,
+                4=>(px+pz)*.707106781,5=>(px-pz)*.707106781,
+                6=>(pz-px)*.707106781,_=>(-px-pz)*.707106781
+            };
+        }
+    }
     private static float WideTemperature(int seed,long x,long z)
     {double fx=x/180.0,fz=z/180.0;long ix=(long)Math.Floor(fx),iz=(long)Math.Floor(fz);fx-=ix;fz-=iz;fx=fx*fx*(3-2*fx);fz=fz*fz*(3-2*fz);float H(long a,long b){ulong h=unchecked((ulong)(a*73856093L^b*19349663L^seed));h=(h^(h>>32))*0x9e3779b97f4a7c15UL;return (h&65535)/32767.5f-1;}return (float)((H(ix,iz)*(1-fx)+H(ix+1,iz)*fx)*(1-fz)+(H(ix,iz+1)*(1-fx)+H(ix+1,iz+1)*fx)*fz);}
     internal bool WaterCandidate(int x,int z)

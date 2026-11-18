@@ -24,7 +24,7 @@ internal static class WaterGraphicsChecks
         {
             using var game = new CheckGame(root); game.Run();
             Require(game.Verified, "Water graphics checks did not complete.");
-            Console.WriteLine("PASS: Water GPU alpha/depth/state, unchanged opaque pass, repeated F1/F2/F3 frames, PNG pixels/resizing, swimming input, and new lakes.");
+            Console.WriteLine("PASS: Water GPU alpha/depth/state, unchanged opaque pass, repeated F1/F2/F3 frames, PNG pixels/resizing, and swimming input.");
             return 0;
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
@@ -98,20 +98,20 @@ internal static class WaterGraphicsChecks
                     Require(Session.Player.Position.Y > 5 && Session.Player.Health == 20, "Held Space input did not swim upward.");
                     break;
                 case 11:
-                    World lake = World.CreateNew(173, WorldSize.Small); Point3 surface = default;
-                    foreach (Chunk chunk in lake.Chunks)
+                    // InfiniteWaterChecks covers natural generation. Use a stable basin for the graphics checks.
+                    World lake = WaterChecks.Floor();
+                    lake.SetGeneratedBlock(64, 0, 70, BlockType.Bedrock);
+                    for (int z = 55; z <= 66; z++) for (int x = 58; x <= 70; x++)
                     {
-                        if (surface != default) break;
-                        for (int z = checked((int)chunk.OriginZ); z < checked((int)chunk.OriginZ) + 16 && surface == default; z++)
-                        for (int x = checked((int)chunk.OriginX); x < checked((int)chunk.OriginX) + 16 && surface == default; x++)
-                        for (int y = 1; y < World.Height; y++)
-                            if (Water.IsSource(lake.GetBlock(x, y, z)) && !Water.IsWater(lake.GetBlock(x, y + 1, z))) { surface = new Point3(x, y, z); break; }
+                        bool bank = x is 58 or 70 || z is 55 or 66;
+                        for (int y = 1; y <= 3; y++)
+                            lake.SetGeneratedBlock(x, y, z, bank ? BlockType.Sand : BlockType.WaterSource);
                     }
-                    var lakeSave = new WorldSave(lake, "Natural lake runtime", new Vector3(surface.X + 0.5f, surface.Y + 5, surface.Z + 8.5f), 0, -0.6f);
+                    var lakeSave = new WorldSave(lake, "Lake graphics fixture", new Vector3(64.5f, 8f, 70.5f), 0, -0.6f);
                     Call("BeginWorld", _store.Create(lakeSave), lakeSave); WarmRenderer(); break;
                 case 12:
                     var reloaded = _store.Load(Session.Id); Require(reloaded.World.GetBlock((int)Session.Player.Position.X, 0, (int)Session.Player.Position.Z) == BlockType.Bedrock,
-                        "Natural lake new-world save changed bedrock.");
+                        "Lake fixture save changed bedrock.");
                     Verified = true; Exit(); break;
             }
             if (capture) Press(Keys.F2);
@@ -132,7 +132,7 @@ internal static class WaterGraphicsChecks
             {
                 var shot = _shots[^1]; using var stream = File.OpenRead(shot.File); using var png = Texture2D.FromStream(GraphicsDevice, stream);
                 var data = new Color[shot.Width * shot.Height]; png.GetData(data);
-                Require(data.AsSpan().SequenceEqual(shot.Pixels), "Natural lake screenshot differs from composed frame.");
+                Require(data.AsSpan().SequenceEqual(shot.Pixels), "Lake screenshot differs from composed frame.");
             }
         }
 
@@ -148,7 +148,11 @@ internal static class WaterGraphicsChecks
             Color[] Draw(Color background, bool opaque, bool water)
             {
                 GraphicsDevice.SetRenderTarget(target); GraphicsDevice.Clear(background);
-                if (opaque) terrain.Draw(camera, null);
+                if (opaque)
+                {
+                    RenderingPerformanceChecks.Warm(terrain, camera);
+                    terrain.Draw(camera, null);
+                }
                 GraphicsDevice.BlendState = BlendState.AlphaBlend; GraphicsDevice.DepthStencilState = DepthStencilState.Default;
                 GraphicsDevice.RasterizerState = RasterizerState.CullCounterClockwise; GraphicsDevice.SamplerStates[0] = SamplerState.LinearClamp;
                 GraphicsDevice.Textures[0] = atlas.Texture;
@@ -167,7 +171,10 @@ internal static class WaterGraphicsChecks
             Require(black[middle].B > black[middle].R && alphaDifference > 90 && alphaDifference < 130,
                 "Water is not blue and translucent with the expected alpha.");
             Color[] ground = Draw(Color.CornflowerBlue, true, false), composed = Draw(Color.CornflowerBlue, true, true);
-            Require(ground[middle] != composed[middle] && composed[middle].B > ground[middle].B, "Water did not blend over its visible lake bed.");
+            Color source = black[middle], bed = ground[middle], pixel = composed[middle];
+            Vector3 expected = source.ToVector3() + bed.ToVector3() * (alphaDifference / 255f);
+            Require(pixel != bed && Vector3.Distance(pixel.ToVector3(), expected) < 4f / 255f,
+                $"Water did not blend over its visible lake bed: {bed} became {pixel} instead of {new Color(expected)}.");
             for (int x = 10; x <= 20; x++) for (int y = 1; y <= 5; y++) world.SetBlock(x, y, 21, BlockType.Stone);
             camera.Position = new Vector3(15.5f, 4, 24); // Keep the foreground face beyond the camera's near plane.
             Color[] wall = Draw(Color.CornflowerBlue, true, false), behind = Draw(Color.CornflowerBlue, true, true);

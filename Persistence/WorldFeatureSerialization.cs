@@ -13,7 +13,7 @@ public static partial class WorldSerializer
         using var data=new MemoryStream();using var writer=new BinaryWriter(data,Utf8,true);
         int expectedSigns=0;foreach(var pair in save.World.Structures)if(save.World.GetBlock(pair.Key.X,pair.Key.Y,pair.Key.Z)==BlockType.Sign)expectedSigns++;
         if(expectedSigns!=save.World.Signs.Count)throw new InvalidDataException("Missing sign text.");
-        writer.Write(2);writer.Write(save.World.Signs.Count);
+        writer.Write(3);writer.Write(save.World.Signs.Count);
         foreach(var pair in save.World.Signs)
         {if(save.World.GetBlock(pair.Key.X,pair.Key.Y,pair.Key.Z)!=BlockType.Sign||!World.ValidSignText(pair.Value))throw new InvalidDataException("Invalid sign text.");WritePoint(writer,pair.Key);writer.Write(pair.Value);}
         var mobs=save.Mobs??Array.Empty<MDSM.Entities.MobState>();writer.Write(mobs.Length);
@@ -33,12 +33,16 @@ public static partial class WorldSerializer
         var fires=save.World.Fire.Capture();writer.Write(fires.Length);
         int expectedFires=0;foreach(var chunk in save.World.Chunks)expectedFires+=chunk.FireCount;if(expectedFires!=fires.Length)throw new InvalidDataException("Missing fire timers.");
         foreach(var f in fires){WritePoint(writer,f.Cell);writer.Write(f.Remaining);writer.Write(f.NextTick);writer.Write((byte)f.Attachment);}
+        writer.Write((byte)save.World.Seasons.Mode);
+        writer.Write(save.World.Climate.NoiseBiomes);
+        foreach(var pig in pigs)WriteLeash(writer,pig.Id,pig.Leash);
+        foreach(var mob in mobs)WriteLeash(writer,mob.Id,mob.Leash);
         return data.ToArray();
     }
     private static WorldSave ReadFeatures(WorldSave save,byte[] bytes)
     {
         using var data=new MemoryStream(bytes,false);using var reader=new BinaryReader(data,Utf8);
-        int schema=reader.ReadInt32();if(schema is <1 or >2)throw new InvalidDataException("Unsupported world feature schema.");
+        int schema=reader.ReadInt32();if(schema is <1 or >3)throw new InvalidDataException("Unsupported world feature schema.");
         int count=reader.ReadInt32();if(count<0||count>65536)throw new InvalidDataException("Invalid sign count.");
         for(int i=0;i<count;i++)
         {Point3 cell=ReadPoint(reader);string text=reader.ReadString();if(save.World.Signs.ContainsKey(cell)||!save.World.EditSign(cell,text))throw new InvalidDataException("Invalid/duplicate sign.");}
@@ -65,8 +69,35 @@ public static partial class WorldSerializer
         int fireCount=reader.ReadInt32();if(fireCount<0||fireCount>FireSimulation.Maximum)throw new InvalidDataException("Invalid fire count.");
         var fires=new FireState[fireCount];for(int i=0;i<fireCount;i++)fires[i]=new(ReadPoint(reader),reader.ReadDouble(),reader.ReadDouble(),schema>=2?(FireAttachment)reader.ReadByte():FireAttachment.Automatic);save.World.Fire.Restore(fires);
         int expectedFires=0;foreach(var chunk in save.World.Chunks)expectedFires+=chunk.FireCount;if(expectedFires!=fireCount)throw new InvalidDataException("Missing fire timers.");
+        if(schema>=3)
+        {
+            var seasons=(SeasonsMode)reader.ReadByte();byte noise=reader.ReadByte();
+            if(!Enum.IsDefined(seasons) || noise>1)throw new InvalidDataException("Invalid world seasons or biome metadata.");
+            save.World.RestoreSeasons(seasons);
+            save.World.Climate.NoiseBiomes=noise==1;
+            var ids=new System.Collections.Generic.HashSet<Guid>();
+            for(int i=0;i<pigs.Length;i++)
+            {var (id,leash)=ReadLeash(reader,save.World,ids);pigs[i]=pigs[i] with {Id=id,Leash=leash};}
+            for(int i=0;i<mobs.Length;i++)
+            {var (id,leash)=ReadLeash(reader,save.World,ids);mobs[i]=mobs[i] with {Id=id,Leash=leash};}
+        }
         if(data.Position!=data.Length)throw new InvalidDataException("Unexpected feature data.");
         return save with {Snowballs=balls,PlayerFire=playerFire};
+    }
+    private static void WriteLeash(BinaryWriter writer,Guid id,LeashState leash)
+    {
+        leash.Validate(id);
+        writer.Write(id.ToByteArray());writer.Write((byte)leash.Anchor);
+        if(leash.Anchor==LeashAnchor.Fence)WritePoint(writer,leash.Fence);
+    }
+    private static (Guid,LeashState) ReadLeash(BinaryReader reader,World world,System.Collections.Generic.HashSet<Guid> ids)
+    {
+        var id=new Guid(reader.ReadBytes(16));var anchor=(LeashAnchor)reader.ReadByte();
+        var leash=new LeashState(anchor,anchor==LeashAnchor.Fence?ReadPoint(reader):default);
+        leash.Validate(id);
+        if(id!=Guid.Empty && !ids.Add(id) || anchor==LeashAnchor.Fence && !world.Contains(leash.Fence.X,leash.Fence.Y,leash.Fence.Z))
+            throw new InvalidDataException("Duplicate mob identity or invalid fence anchor.");
+        return(id,leash);
     }
     private static BurningState ReadBurn(BinaryReader reader)
     {var s=new BurningState(reader.ReadDouble(),reader.ReadDouble());ValidateBurn(s);return s;}

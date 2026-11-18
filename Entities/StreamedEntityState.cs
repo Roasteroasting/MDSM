@@ -17,7 +17,7 @@ public sealed partial class PassiveMobPopulation
     }
     internal void DetachChunk(ChunkAddress a)
     {
-        for(int i=_mobs.Count-1;i>=0;i--){var m=_mobs[i];if(!ChunkGameplay.Owns(a,m.AbsolutePosition))continue;if(!m.Bred){_living[(int)m.Species]--;_targets[(int)m.Species]--;}_mobs.RemoveAt(i);}
+        for(int i=_mobs.Count-1;i>=0;i--){var m=_mobs[i];if(!ChunkGameplay.Owns(a,m.AbsolutePosition))continue;if(!m.Bred){_living[(int)m.Species]--;_targets[(int)m.Species]--;}_ids.Remove(m.Id);_mobs.RemoveAt(i);}
         for(int i=_pending.Count-1;i>=0;i--)if(_pending[i].Home is Point3 p&&ChunkGameplay.Owns(a,p)){_targets[(int)_pending[i].Species]--;_pending.RemoveAt(i);}
         _breedingCells.Clear();
     }

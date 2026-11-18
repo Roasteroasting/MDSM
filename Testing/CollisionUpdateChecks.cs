@@ -18,6 +18,7 @@ internal static class CollisionUpdateChecks
         ("Creative/Survival closed-Door penetration recovery, all facings/hinges and saved intersections", DoorRecovery),
         ("Flight walls/floor/ceiling, stable vectors/speeds, modes and fixed-step render rates", Flight),
         ("Overlapping solids, world edges and bounded recovery without inverted motion", SolidRecovery),
+        ("Underground overlap recovery cannot cross a solid ceiling", UndergroundRecovery),
         ("All passive/hostile bounds reject placement atomically in both modes", MobPlacement),
         ("Prospective Door/Gate/Pane/Fence shapes and neighboring connections protect mobs", SpecializedPlacement)
     };
@@ -29,6 +30,26 @@ internal static class CollisionUpdateChecks
         return world;
     }
     private static Player Flyer(Vector3 feet)=>new(feet){Settings=new(){GameMode=GameMode.Creative}};
+    private static void UndergroundRecovery()
+    {
+        var world=new World(173,WorldSize.Small,false);
+        for(int y=0;y<18;y++)for(int z=12;z<29;z++)for(int x=12;x<29;x++)
+            world.SetGeneratedBlock(x,y,z,BlockType.Stone);
+        var player=new Player(new(20.5f,12,20.5f));
+        player.Update(world,new(1,0,1),true,.1f);
+        Check(player.Position.Y==12,"Overlap recovery crossed solid terrain to a distant exit.");
+
+        // Open a locally reachable diagonal staircase under a low ceiling.
+        world.SetGeneratedBlock(20,12,20,BlockType.CobblestoneSlab);
+        for(int z=19;z<=23;z++)for(int x=19;x<=23;x++)for(int y=13;y<16;y++)
+            world.SetGeneratedBlock(x,y,z,BlockType.Air);
+        world.SetGeneratedBlock(21,13,21,BlockType.CobblestoneStairs);
+        for(int step=0;step<90;step++)
+        {
+            player.Update(world,new(1,0,1),true,1f/120);
+            Check(player.Position.Y is >=12 and <16 && !world.IntersectsSolid(player.Bounds),"Stair/ceiling contact escaped the passage.");
+        }
+    }
     public static int Run()
     {
         int failed=0;

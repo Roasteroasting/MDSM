@@ -11,6 +11,7 @@ public sealed class WorldDecorator
 
     internal void Decorate(World world)
     {
+        Season season=world.Seasons.Current;
         var heights = new int[world.Width * world.Depth];
         var roots = new bool[heights.Length];
         for (int z = 0; z < world.Depth; z++)
@@ -23,8 +24,9 @@ public sealed class WorldDecorator
             if (NearSpawn(world, x, z, SpawnClearRadius)) continue;
             float density = Density(x, z);
             float chance = density < 0.4f ? 0.0004f : 0.002f + (density - 0.4f) * 0.015f;
-            if(world.Climate.At(x,z)==Biome.SnowyForest)chance*=1.8f;
-            if (Unit(Hash(x, z, 1)) >= chance || HasNearbyRoot(world, roots, x, z)) continue;
+            float roll=Unit(Hash(x,z,1));
+            if (roll>=chance*1.8f || roll>=chance && world.Climate.At(x,z)!=Biome.SnowyForest
+                || HasNearbyRoot(world,roots,x,z)) continue;
             int ground = heights[z * world.Width + x];
             int minimum = ground, maximum = ground;
             for (int dz = -1; dz <= 1; dz++)
@@ -38,7 +40,10 @@ public sealed class WorldDecorator
             uint shape = Hash(x, z, 2);
             int trunkHeight = 4 + (int)(shape % 3);
             int radius = 2;
-            if (TryTree(world, x, ground, z, trunkHeight, radius, shape))
+            bool grew=season==Season.Winter
+                ?WinterTree.TryPlace(new(x,ground,z),Hash(x,z,4)|((ulong)shape<<32),world.GetBlock,world.SetGeneratedBlock)
+                :TryTree(world,x,ground,z,trunkHeight,radius,shape);
+            if (grew)
                 roots[z * world.Width + x] = true;
         }
 
@@ -52,6 +57,8 @@ public sealed class WorldDecorator
                 || world.GetBlock(x, ground + 1, z) != BlockType.Air) continue;
             float choice = Unit(Hash(x, z, 3));
             BlockType plant = choice < 0.003f ? BlockType.RedFlower : choice < 0.006f ? BlockType.YellowFlower
+                : season==Season.Spring && choice<.012f && world.Climate.At(x,z)==Biome.Temperate
+                    ?choice<.009f?BlockType.Peony:BlockType.Violet
                 : choice < 0.24f + Density(x, z) * 0.22f ? BlockType.TallGrass : BlockType.Air;
             if (plant == BlockType.TallGrass && Unit(Hash(x,z,7)) < .08f && ground+2<World.Height
                 && world.GetBlock(x,ground+2,z)==BlockType.Air)

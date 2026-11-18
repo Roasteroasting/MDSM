@@ -20,7 +20,9 @@ internal static class WorldExpansionChecks
 {
     // Retain the two supported legacy horizontal extents for existing per-mechanic fixtures.
     // Larger sizes get streamed integration checks, avoiding multiple huge byte-array copies.
-    public static readonly WorldSize[] RoutineSizes = { WorldSize.Small, WorldSize.Normal };
+    // Compatibility helpers and shared unit tests that need a contiguous save
+    // payload use one compact synthetic map without a size matrix.
+    public static readonly WorldSize[] RoutineSizes = { WorldSize.Small };
     private static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
     private static byte[] Hash(World world)
     {
@@ -118,10 +120,16 @@ internal static class WorldExpansionChecks
             if(world.GetBlock(x,ground+1,z)==BlockType.WoodLog)trees++;
             if(x%31==0 && z%31==0 && world.GetBlock(x,ground,z)==BlockType.Grass)
             {
-                for(int y=ground-terrain.DirtDepth(x,z);y<ground;y++)Require(world.GetBlock(x,y,z)==BlockType.Dirt,"Dirt layer changed.");
-                Require(world.GetBlock(x,ground-6,z)==BlockType.Stone,"Deep stone missing.");
+                for(int y=ground-terrain.DirtDepth(x,z);y<ground;y++)
+                    if(world.GetBlock(x,y,z)!=BlockType.Dirt && !InDungeon(x,y,z))
+                        throw new InvalidOperationException($"Dirt layer changed at {x},{y},{z} below grass at Y={ground}: {world.GetBlock(x,y,z)}.");
+                Require(world.GetBlock(x,ground-6,z)==BlockType.Stone || InDungeon(x,ground-6,z),"Deep stone missing.");
             }
         }
+        // The terrain-layer check excludes dungeon rooms that intentionally
+        // replace the shallow subsoil beneath an adjacent slope.
+        bool InDungeon(int x,int y,int z)=>world.GeneratedDungeons.Any(room=>
+            Math.Abs(room.X-x)<=3 && Math.Abs(room.Z-z)<=3 && y>=room.Y-1 && y<=room.Y+5);
         foreach(Chunk chunk in world.Chunks)for(int y=0;y<World.Height;y++)for(int z=0;z<16;z++)for(int x=0;x<16;x++)
         {
             BlockType block=chunk.GetBlock(x,y,z);
@@ -201,7 +209,7 @@ internal static class WorldExpansionChecks
         {
             int y=world.SurfaceY(x,z);
             while(y>0 && world.GetBlock(x,y,z) is not (BlockType.Grass or BlockType.Dirt or BlockType.Stone
-                or BlockType.Sand or BlockType.Gravel or BlockType.Bedrock))y--;
+                or BlockType.Sand or BlockType.Gravel or BlockType.Bedrock or BlockType.FarmlandDry or BlockType.FarmlandWet))y--;
             return y;
         }
         foreach(int cell in columns.Keys.Where(k=>k%17==0))

@@ -15,6 +15,7 @@ public sealed class LakeGenerator
     public IReadOnlyList<NaturalLake> Lakes => _major?.Lakes ?? (IReadOnlyList<NaturalLake>)Array.Empty<NaturalLake>();
     public WaterFeatureCounts Counts { get; private set; }
     public IReadOnlyList<Rectangle> Footprints { get; private set; }=Array.Empty<Rectangle>();
+    internal IReadOnlyList<Rectangle> PondFootprints {get;private set;}=Array.Empty<Rectangle>();
     public LakeGenerator(int seed) { _seed = seed; _terrain = new TerrainGenerator(seed); }
     public static int MaximumLakes(WorldSize size) => size.Width() * size.Width() / 16384; // Pond budget, retained API.
     public static int MaximumRadius(WorldSize size) => size >= WorldSize.Large ? 9 : 7;
@@ -30,6 +31,7 @@ public sealed class LakeGenerator
         _major = new MajorLakeGenerator(world); _major.Generate(); lakes = _major.Lakes.Count;
         for (int attempt = 0; attempt < RiverBudget(world.Size) * 500 && rivers < RiverBudget(world.Size); attempt++)
             if (TryRiver(world, random, occupied)) rivers++;
+        int pondStart=occupied.Count;
         for (int attempt = 0; attempt < MaximumLakes(world.Size) * 300 && ponds < MaximumLakes(world.Size); attempt++)
         {
             int radius = random.Next(3, MaximumRadius(world.Size) + 1);
@@ -37,6 +39,7 @@ public sealed class LakeGenerator
             if (TryPond(world, random, occupied, x, z, radius)) ponds++;
         }
         Counts = new WaterFeatureCounts(ponds, rivers, lakes);
+        PondFootprints=occupied.GetRange(pondStart,ponds);
         var protectedRegions=new List<Rectangle>(occupied);foreach(var lake in _major.Lakes)protectedRegions.Add(lake.Bounds);Footprints=protectedRegions;
         return ponds + rivers + lakes;
     }

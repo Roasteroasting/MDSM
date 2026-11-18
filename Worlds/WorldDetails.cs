@@ -42,6 +42,8 @@ public sealed partial class World
     {
         BlockType block=GetBlock(cell.X,cell.Y,cell.Z);if(block is not (BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper))return false;
         var state=Structure(cell);Structures[state.Cell]=state with {Open=!state.Open};
+        if(block!=BlockType.FenceGate && Seasons.Mode!=SeasonsMode.Off)
+            Shelters.Invalidate(Streaming.ChunkAddress.At(state.Cell.X,state.Cell.Z));
         Sounds?.At(block==BlockType.FenceGate?(state.Open?SoundKind.GateClose:SoundKind.GateOpen):(state.Open?SoundKind.DoorClose:SoundKind.DoorOpen),Center(state.Cell));
         DirtyDetail(state.Cell);return true;
     }

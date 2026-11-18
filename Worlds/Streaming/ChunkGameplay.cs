@@ -47,5 +47,12 @@ internal sealed record ChunkGameplay
             if(!Owns(a,p)||!double.IsFinite(p.X)||!double.IsFinite(p.Y)||!double.IsFinite(p.Z))throw new System.IO.InvalidDataException("Invalid entity owner/position.");
         foreach(var falling in state.Falling)if(ChunkAddress.At(falling.X,falling.Z)!=a)throw new System.IO.InvalidDataException("Falling block escapes its owner.");
         foreach(var pending in state.Respawns)if(pending.Home is not Point3 home||!Owns(a,home))throw new System.IO.InvalidDataException("Replacement escapes its owner.");
+        System.Collections.Generic.HashSet<Guid> ids=null;
+        foreach(var mob in state.Passive)
+        {
+            mob.State.Leash.Validate(mob.State.Id);
+            if(mob.State.Id!=Guid.Empty && !(ids??=new()).Add(mob.State.Id))
+                throw new System.IO.InvalidDataException("Duplicate passive mob identity in chunk.");
+        }
     }
 }

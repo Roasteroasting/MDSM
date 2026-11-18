@@ -152,7 +152,7 @@ internal static class InfiniteWaterChecks
                     BlockType block=(BlockType)first.Blocks[Coordinates.Index(x,y,z)];if(Water.IsWater(block))water++;if(block==BlockType.Sand)sand++;
                     if(Blocks.Falls(block))C(Blocks.IsSolid((BlockType)first.Blocks[Coordinates.Index(x,y-1,z)]),"Generated shoreline sediment lacks support.");
                 }
-                var restored=ChunkSnapshot.Decode(a,first.Encode());C(restored.GeneratorVersion==3&&restored.Blocks.SequenceEqual(first.Blocks),"New water snapshot changed on persistence.");
+                var restored=ChunkSnapshot.Decode(a,first.Encode());C(restored.GeneratorVersion==BetaDensityGenerator.Version&&restored.Blocks.SequenceEqual(first.Blocks),"New water snapshot changed on persistence.");
                 var legacy=prior.GenerateComplete(a);C(ChunkSnapshot.Decode(a,legacy.Encode()).GeneratorVersion==2,"Version-2 snapshots no longer load.");
             }
             C(water>0&&sand>0&&clock.Elapsed.TotalSeconds<45,"Natural water/sediments absent or generation work unbounded.");

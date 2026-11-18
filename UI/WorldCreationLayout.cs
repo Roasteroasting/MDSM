@@ -25,9 +25,11 @@ internal static class WorldCreationLayout
     }
     public static Rectangle Option(Viewport v,int index)
     {
-        Rectangle field=Field(v,2);int width=(field.Width-12)/3;
-        return new(field.Left+index*(width+6),field.Bottom+(v.Height<500?16:32),width,v.Height<500?20:36);
+        Rectangle field=Field(v,2);int width=(field.Width-18)/4;
+        return new(field.Left+index*(width+6),field.Bottom+(v.Height<500?10:32),width,v.Height<500?20:36);
     }
+    internal const string SeasonsWarning="This setting cannot be changed after world creation.";
+    internal static int SeasonsWarningTop(Viewport v)=>Option(v,3).Bottom+4;
     public static string[] Lines(Viewport v)
     {
         int characters = Math.Max(1, (Math.Min(760, v.Width - 32) - 16) / (6 * NoticeScale(v)));
@@ -41,7 +43,7 @@ internal static class WorldCreationLayout
         lines.Add(remaining); return lines.ToArray();
     }
     public static Rectangle Notice(Viewport v) => new((v.Width - Math.Min(760, v.Width - 32)) / 2,
-        Option(v, 2).Bottom + 6, Math.Min(760, v.Width - 32), LineCount(v) * 10 * NoticeScale(v) + 12);
+        Option(v, 3).Bottom + 17, Math.Min(760, v.Width - 32), LineCount(v) * 10 * NoticeScale(v) + 12);
     private static int LineCount(Viewport v)
     {
         int width = Math.Max(1, (Math.Min(760, v.Width - 32) - 16) / (6 * NoticeScale(v))), start = 0, count = 1;

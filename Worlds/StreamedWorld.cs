@@ -40,10 +40,12 @@ public sealed partial class World
     {var p=new Microsoft.Xna.Framework.Vector3(chunk.OriginX-OriginX,0,chunk.OriginZ-OriginZ);return new(p,p+new Microsoft.Xna.Framework.Vector3(16,128,16));}
     public Microsoft.Xna.Framework.BoundingBox LocalBounds(Point3 cell)
     {var p=LocalPosition(cell);return new(p,p+Microsoft.Xna.Framework.Vector3.One);}
-    internal static World OpenStreamed(int seed,string regions,int loaded=12,int render=10,int simulation=6,int generatorVersion=BetaDensityGenerator.Version)
+    internal static World OpenStreamed(int seed,string regions,int loaded=12,int render=10,int simulation=6,int generatorVersion=BetaDensityGenerator.Version,SeasonsMode seasons=SeasonsMode.Off)
     {
-        var world=new World(seed,WorldSize.Infinite,false);
-        world.ChunkLifecycle=new StreamingChunks(seed,regions,loaded,render,simulation,generatorVersion);
+        var world=new World(seed,WorldSize.Infinite,false,seasons);
+        world.Climate.VariedGeneration=true;
+        world.Climate.NoiseBiomes=generatorVersion>=5;
+        world.ChunkLifecycle=new StreamingChunks(seed,regions,loaded,render,simulation,generatorVersion){Seasons=world.Seasons};
         world._slots=new Chunk[world.ChunkSlotCapacity];
         world.ChunkLifecycle.Published=world.Publish;
         world.ChunkLifecycle.Retiring=world.Retire;
@@ -66,13 +68,14 @@ public sealed partial class World
         var chunk=new Chunk(resident.Address.X,resident.Address.Z,resident.Blocks);
         chunk.Slot=Array.FindIndex(_slots,c=>c==null);if(chunk.Slot<0)throw new InvalidOperationException("Chunk residency exceeded its bound.");_slots[chunk.Slot]=chunk;
         chunk.RestoreBlocks(resident.Blocks);_resident.Add(resident.Address,chunk);RefreshResidents();
+        Shelters.Invalidate(resident.Address);
         try{if(state!=null)RestoreGameplay(resident.Address,state,true);Fluids.InitializeChunk(chunk);LavaFlow.InitializeChunk(chunk);}
         catch{DetachGameplay(resident.Address,true);_resident.Remove(resident.Address);_slots[chunk.Slot]=null;RefreshResidents();throw;}
         Revision++;
         Lighting.Invalidate(new(chunk.OriginX,64,chunk.OriginZ));
     }
     private void Retire(StreamingChunks.Resident resident)
-    {if(_resident.Remove(resident.Address,out var chunk))_slots[chunk.Slot]=null;RefreshResidents();Revision++;Lighting.Invalidate(new(resident.Address.BlockX,64,resident.Address.BlockZ));}
+    {if(_resident.Remove(resident.Address,out var chunk))_slots[chunk.Slot]=null;RefreshResidents();Shelters.Invalidate(resident.Address);Revision++;Lighting.Invalidate(new(resident.Address.BlockX,64,resident.Address.BlockZ));}
     private void RefreshResidents()
     {_residentChunks=new Chunk[_resident.Count];_resident.Values.CopyTo(_residentChunks,0);}
     internal void UpdateStreaming(ChunkAddress center){ChunkLifecycle.Update(center);RefreshSimulationWindow();}

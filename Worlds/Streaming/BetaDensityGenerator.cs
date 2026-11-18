@@ -35,7 +35,7 @@ internal sealed class BetaDensityGenerator
             _featureTerrain.Add(address,blocks);_cacheOrder.Enqueue(address);return blocks;
         }
     }
-    internal const int Version=3,SeaLevel=63;
+    internal const int Version=5,SeaLevel=63;
     internal readonly WaterFeaturePlans WaterPlans=new();
     private readonly System.Collections.Generic.Dictionary<(long,long),double[]> _densityColumns=new();
     private readonly System.Collections.Generic.Queue<(long,long)> _densityOrder=new();
@@ -69,11 +69,14 @@ internal sealed class BetaDensityGenerator
         return 0;
     }
     internal int GenerationVersion {get;}
+    // The historical attenuation used by Shape belongs to the terrain density.
+    // The versioned biome map used for materials and decoration lives in InfiniteFeatures.
     private readonly Climate _climate;
     private readonly LegacyOctaves _low,_high,_selector,_elevation,_relief;
     internal BetaDensityGenerator(int seed,int version=Version)
     {if(version is <1 or >Version)throw new ArgumentOutOfRangeException(nameof(version));GenerationVersion=version;_seed=seed;_climate=new(seed){VariedGeneration=true};var random=new Random(seed);_low=new(random,16);_high=new(random,16);_selector=new(random,8);_elevation=new(random,10);_relief=new(random,8);}
-    internal ChunkSnapshot GenerateComplete(ChunkAddress address,CancellationToken cancellation=default)=>new InfiniteFeatures(this,_seed,address,cancellation).Generate();
+    internal ChunkSnapshot GenerateComplete(ChunkAddress address,CancellationToken cancellation=default,Season? season=null)
+        =>new InfiniteFeatures(this,_seed,address,cancellation,season).Generate();
     internal double Density(long x,int y,long z)=>Density(x,y,z,null);
     private double Density(long x,int y,long z,(double Center,double Stretch)? shape)
     {

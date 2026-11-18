@@ -13,14 +13,13 @@ internal static class PersistenceChecks
 {
     public static void RoundTrip()
     {
-        var world = new World(-8128);
+        var world = new World(-8128,WorldSize.Small,false);
         foreach (Chunk chunk in world.Chunks)
         for (int z = 0; z < Chunk.Size; z++)
         for (int x = 0; x < Chunk.Size; x++)
         {
             int worldX = checked((int)chunk.OriginX) + x, worldZ = checked((int)chunk.OriginZ) + z;
-            world.SetBlock(worldX, world.SurfaceY(worldX, worldZ), worldZ, BlockType.Air);
-            world.SetBlock(worldX, 60, worldZ, (x + z) % 2 == 0 ? BlockType.Dirt : BlockType.Stone);
+            world.SetGeneratedBlock(worldX,60,worldZ,(x+z)%2==0?BlockType.Dirt:BlockType.Stone);
         }
         world.GetChunk(0, 0).RestoreBlocks(new byte[Chunk.BlockCount]);
         var filled = new byte[Chunk.BlockCount];

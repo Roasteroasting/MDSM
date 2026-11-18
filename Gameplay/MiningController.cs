@@ -70,7 +70,7 @@ public sealed class MiningController
         if (Progress < 1) return false;
         if(block==BlockType.Leaves && !items.CanSpawn(3))return false;
         Span<ItemId> loot=stackalloc ItemId[5];
-        int lootCount=MiningRules.Drops(block,tool,_random,loot);
+        int lootCount=MiningRules.Drops(block,tool,_random,loot,Blocks.Crop(block) && world.WinterCrop(hit.Cell));
         BlockContainer container=world.Containers.Get(hit.Cell);
         int drops=lootCount;
         if(container!=null)for(int i=0;i<container.SlotCount;i++)if(!container[i].IsEmpty)drops++;

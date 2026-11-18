@@ -60,7 +60,7 @@ public sealed partial class World
             if(change.Drops)
             {
                 _supportLootRandom??=new Random(unchecked(Seed^0x53555050));
-                int count=MiningRules.Drops(change.Previous,default,_supportLootRandom,loot);
+                int count=MiningRules.Drops(change.Previous,default,_supportLootRandom,loot,Blocks.Crop(change.Previous) && WinterCrop(p));
                 for(int i=0;i<count;i++)(drops??=new()).Add(new(p,change.Previous,loot[i]));
             }
             // The second half is structural cleanup, never another logical harvest.

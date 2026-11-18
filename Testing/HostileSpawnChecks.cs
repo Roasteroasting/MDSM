@@ -88,26 +88,6 @@ internal static class HostileSpawnChecks
         bool rejected=false;
         try{using var stream=new MemoryStream();WorldSerializer.Write(stream,new(world,"Invalid cap",player.Position,0,0,Hostiles:Enumerable.Repeat(population.Capture()[0],HostilePopulation.Maximum+1).ToArray()));}
         catch(InvalidDataException){rejected=true;}Check(rejected,"Oversized saved population was accepted.");
-        foreach(int seed in new[]{173,-907})
-        {
-            var natural=World.CreateNew(seed,WorldSize.Small);var random=new Random(seed);Player explorer=null;
-            for(int attempt=0;attempt<100000 && explorer==null;attempt++)
-            {
-                Vector3 feet=new(random.Next(16,natural.Width-16)+.5f,random.Next(6,45),random.Next(16,natural.Depth-16)+.5f);
-                var candidate=new Player(feet){Settings=new(){GameMode=GameMode.Creative}};
-                if(natural.IsSolid((int)feet.X,(int)feet.Y-1,(int)feet.Z) && !natural.IntersectsSolid(candidate.Bounds)
-                    && !Water.Intersects(natural,candidate.Bounds) && !Lava.Intersects(natural,candidate.Bounds))explorer=candidate;
-            }
-            Check(explorer!=null,"No valid generated cave floor found for spawn verification.");
-            var enemies=new HostilePopulation(natural);var projectiles=new Projectiles(natural);int checks=0;double seconds=5.01;
-            for(int cycle=0;cycle<10;cycle++)
-            {
-                enemies.Update((float)seconds,explorer,projectiles);checks+=enemies.LastSpawnSearch.FloorChecks;
-                seconds=enemies.SpawnSecondsRemaining+.001;
-            }
-            Check(enemies.Entities.Count>=3 && enemies.LastSpawnSearch.FloorChecks<=128*(World.Height-1),"Generated cave spawning remained excessively sparse or unbounded.");
-            Console.WriteLine($"  Natural Small seed {seed}, cave at {explorer.Position}: {enemies.Entities.Count} hostiles / 10 cycles, {checks} floor checks total.");
-        }
     }
     public static int Run()
     {

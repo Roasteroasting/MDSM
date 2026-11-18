@@ -24,6 +24,9 @@ public sealed class TextureAtlas : IDisposable
     internal Effect CrackEffect { get; }
     internal InventoryIconAtlas Icons {get;}
     private bool _disposed;
+    private readonly Texture2D[] _seasonalTerrain=new Texture2D[4];
+    internal Texture2D Terrain(Season season)=>season==Season.Summer?Texture:
+        _seasonalTerrain[(int)season]??=SeasonalArtwork.Variant(Texture,season);
 
     public Texture2D ItemTexture(ItemId item) => Items.IsSprite(item)?ItemAtlas:Texture;
     public Rectangle ItemSource(ItemId item) => Items.IsSprite(item)?Source(Items.Get(item).Sprite)
@@ -44,11 +47,12 @@ public sealed class TextureAtlas : IDisposable
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");
         if (Texture.Width != AtlasSize || Texture.Height != AtlasSize)
             throw new ContentLoadException($"terrain.png must be {AtlasSize}x{AtlasSize} pixels with {TileSize}x{TileSize} tiles.");
+        SeasonalArtwork.Extend(Texture,ItemAtlas);
         Icons=new InventoryIconAtlas(this);
         Texture.Disposing+=DisposeIcons;
     }
     private void DisposeIcons(object sender,EventArgs args)=>Dispose();
-    public void Dispose(){if(_disposed)return;_disposed=true;Texture.Disposing-=DisposeIcons;Icons?.Dispose();}
+    public void Dispose(){if(_disposed)return;_disposed=true;Texture.Disposing-=DisposeIcons;Icons?.Dispose();foreach(var atlas in _seasonalTerrain)atlas?.Dispose();}
 
     public static Rectangle Source(int tile)
     {

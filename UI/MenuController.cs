@@ -46,6 +46,7 @@ internal sealed class MenuController : IDisposable
     public bool SelectedCheats { get; private set; }
     public Difficulty SelectedDifficulty { get; private set; } = Difficulty.Normal;
     public GameMode SelectedMode { get; private set; } = GameMode.Survival;
+    public SeasonsMode SelectedSeasons { get; private set; }
     private World _world;
     internal bool WorldOptionsEnabled => _world?.AllowCheats == true;
     public void SetWorld(World world) => _world = world;
@@ -92,7 +93,7 @@ internal sealed class MenuController : IDisposable
         GameState.WorldDeleteConfirmation => DeleteButtons,
         _ => MainButtons
     };
-    private int FocusOffset => _screen == GameState.WorldCreation ? 6
+    private int FocusOffset => _screen == GameState.WorldCreation ? 7
         : _screen == GameState.Settings ? 12 : _screen is GameState.WorldSelection or GameState.WorldRename ? 1 : 0;
     private static int VolumeFocus(int index)=>index==4?11:6+index;
 
@@ -121,7 +122,7 @@ internal sealed class MenuController : IDisposable
             NameText = "";
             SeedText = "";
             SelectedSize = WorldSizes.DefaultCreation;
-            SelectedCheats = false; SelectedDifficulty = Difficulty.Normal; SelectedMode = GameMode.Survival;
+            SelectedCheats = false; SelectedDifficulty = Difficulty.Normal; SelectedMode = GameMode.Survival; SelectedSeasons=SeasonsMode.Off;
         }
         if (screen == GameState.WorldRename) NameText = ManagedWorld.Name;
     }
@@ -293,10 +294,10 @@ internal sealed class MenuController : IDisposable
         }
         if (_screen == GameState.WorldCreation)
         {
-            for (int option=0;option<3;option++)
+            for (int option=0;option<4;option++)
                 if (click && WorldCreationLayout.Option(viewport,option).Contains(_mouse))
                 { _focus=option+3; CycleCreationOption(option,1); return MenuAction.None; }
-            if (_focus is >=3 and <6)
+            if (_focus is >=3 and <7)
             {
                 if (Pressed(Keys.Left)) CycleCreationOption(_focus-3,-1);
                 if (Pressed(Keys.Right)||Pressed(Keys.Space)||Pressed(Keys.Enter)) CycleCreationOption(_focus-3,1);
@@ -342,7 +343,8 @@ internal sealed class MenuController : IDisposable
     {
         if(option==0)SelectedCheats=!SelectedCheats;
         else if(option==1)SelectedDifficulty=(Difficulty)(((int)SelectedDifficulty+direction+4)%4);
-        else SelectedMode=(GameMode)(((int)SelectedMode+direction+2)%2);
+        else if(option==2)SelectedMode=(GameMode)(((int)SelectedMode+direction+2)%2);
+        else SelectedSeasons=(SeasonsMode)(((int)SelectedSeasons+direction+3)%3);
     }
     private bool CanActivate(MenuAction action) => action switch
     {
@@ -502,16 +504,30 @@ internal sealed class MenuController : IDisposable
             DrawField(viewport, 1, "SEED (OPTIONAL)", SeedText, "RANDOM", scale);
             DrawField(viewport, 2, "WORLD SIZE - CLICK OR LEFT/RIGHT",
                 SelectedSize.Dimensions(), "", scale);
-            for(int option=0;option<3;option++)
+            for(int option=0;option<4;option++)
             {
                 Rectangle bounds=WorldCreationLayout.Option(viewport,option);
-                string label=option==0?"ALLOW CHEATS":option==1?"DIFFICULTY":"GAMEMODE";
-                string value=option==0?(SelectedCheats?"ON":"OFF"):option==1?SelectedDifficulty.ToString():SelectedMode.ToString();
+                string label=option==0?"ALLOW CHEATS":option==1?"DIFFICULTY":option==2?"GAMEMODE":"SEASONS";
+                string value=option switch
+                {
+                    0=>SelectedCheats?"ON":"OFF",1=>SelectedDifficulty.ToString(),2=>SelectedMode.ToString(),
+                    _=>SelectedSeasons==SeasonsMode.NuclearWinter?"Nuclear Winter":SelectedSeasons.ToString()
+                };
                 int textScale=label.Length*6*scale<=bounds.Width?scale:1;
                 Text(label,bounds.Center.X-label.Length*3*textScale,bounds.Top-9*textScale,textScale,Color.LightGray);
                 MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),keyboardFocus:_keyboardNavigation&&_focus==option+3);
-                Text(value,bounds.Center.X-value.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
+                if(option==3 && SelectedSeasons==SeasonsMode.NuclearWinter && value.Length*6>bounds.Width)
+                {
+                    Text("Nuclear",bounds.Center.X-21,bounds.Center.Y-8,1,Color.White);
+                    Text("Winter",bounds.Center.X-18,bounds.Center.Y+1,1,Color.White);
+                }
+                else
+                {
+                    if(value.Length*6*textScale>bounds.Width)textScale=1;
+                    Text(value,bounds.Center.X-value.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
+                }
             }
+            Center(WorldCreationLayout.SeasonsWarning,viewport,WorldCreationLayout.SeasonsWarningTop(viewport),1,Color.LightGray);
             if (WorldCreationLayout.NoticeVisible(_screen, SelectedSize))
             {
                 var size = new Point(viewport.Width, viewport.Height);

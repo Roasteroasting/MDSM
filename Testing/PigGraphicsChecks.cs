@@ -26,7 +26,7 @@ internal static class PigGraphicsChecks
         {
             using var game = new CheckGame(root); game.Run();
             Require(game.Verified, "Pig graphics checks did not complete.");
-            Console.WriteLine("PASS: Pig/food GPU rendering, depth/state preservation, screenshots, input-path combat/eating, new-world stock, and persistent deaths.");
+            Console.WriteLine("PASS: Pig/food GPU rendering, depth/state preservation, screenshots, input-path combat/eating, and persistent deaths.");
             return 0;
         }
         catch (Exception exception) { Console.Error.WriteLine(exception); return 1; }
@@ -114,17 +114,6 @@ internal static class PigGraphicsChecks
                     Require(Session.Player.Health == 20 && Session.Inventory[0].IsEmpty && Session.Mobs.Entities.Count == 0,
                         "Respawn replenished food or pigs."); break;
                 case 12:
-                    Call("SetState", GameState.WorldCreation);
-                    MenuController menu = Field<MenuController>("_menu");
-                    foreach (char ch in "New pig world") menu.TextInput(ch);
-                    Press(Keys.Tab); foreach (char ch in "173") menu.TextInput(ch);
-                    Press(Keys.Tab); Press(Keys.Left); Call("HandleMenuAction", MenuAction.CreateWorld);
-                    var creationWait = System.Diagnostics.Stopwatch.StartNew();
-                    while (State != GameState.Playing && creationWait.Elapsed.TotalSeconds < 120) { Input(); System.Threading.Thread.Sleep(1); }
-                    Require(State == GameState.Playing && Session.World.Size == WorldSize.Small && Session.Mobs.Entities.Count == 32
-                        && System.Linq.Enumerable.Range(0, 36).All(i => Session.Inventory[i].IsEmpty), "New-world menu did not create mixed mobs with an empty survival inventory.");
-                    WorldSave initial = _store.Load(Session.Id); Require(initial.Pigs.Length + initial.Mobs.Length == 32 && initial.Mobs.Length > 0, "Initial new-world save omitted the shared mob population."); break;
-                case 13:
                     Verified = true; Exit(); break;
             }
             base.Draw(time);

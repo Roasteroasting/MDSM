@@ -10,6 +10,8 @@ public sealed class PassiveMob
 {
     private const float Gravity = 18, JumpSpeed = 6.5f;
     public MobSpecies Species { get; }
+    public Guid Id { get; internal set; }
+    public LeashState Leash {get;internal set;}
     public MobDefinition Definition { get; }
     private float HalfWidth => !Baby?Definition.HalfWidth:Species switch{MobSpecies.Cow=>.32f,MobSpecies.Chicken=>.2f,_=>.3f};
     private float Height => !Baby?Definition.Height:Species switch{MobSpecies.Pig=>.8f,MobSpecies.Cow=>1.2f,MobSpecies.Sheep=>.95f,_=>.65f};
@@ -62,6 +64,8 @@ public sealed class PassiveMob
     internal PassiveMob(MobState state, int aiSeed)
     {
         Species = state.Species;
+        Id=state.Id;
+        Leash=state.Leash;
         Definition = MobDefinitions.Get(Species);
         Position = state.Position; Yaw = state.Yaw; Health = state.Health;
         _soundSeed=unchecked((uint)aiSeed+(uint)Species*997+1);
@@ -74,7 +78,7 @@ public sealed class PassiveMob
         _decisionSeconds = 0.5f + _random.NextSingle() * 2;
     }
 
-    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds,BabySeconds,LoveSeconds,BreedCooldown,Bred,EggSeconds,Burning.Capture());
+    public MobState CaptureState() => new(Species, Position, Yaw, Health,Sheared,WoolSeconds,BabySeconds,LoveSeconds,BreedCooldown,Bred,EggSeconds,Burning.Capture(),Id,Leash);
     private void ResetIdleSound()
     {
         _soundSeed=unchecked(_soundSeed*1664525+1013904223);
@@ -95,6 +99,7 @@ public sealed class PassiveMob
         {EggSeconds=270+_random.NextDouble()*60;_eggReady=false;}
     }
     internal void Feed(){LoveSeconds=60;}
+    internal void RefuseFood(){BreedCooldown=6;}
     internal void Parent(){LoveSeconds=0;BreedCooldown=300;}
     internal void Lunge(Vector3 direction)
     {if(!Grounded)return;direction.Y=0;if(direction.LengthSquared()>.001f)direction.Normalize();_velocity=direction*2+Vector3.Up*5;}

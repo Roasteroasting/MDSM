@@ -9,10 +9,18 @@ namespace MDSM.Worlds;
 // a full-volume search, and rejected candidates leave all terrain untouched.
 public static class DungeonGenerator
 {
-    // About half of the 18%-per-chunk cave walks; actual targets use the
+    // About one eighth of the 18%-per-chunk cave walks; actual targets use the
     // generated cave count instead of an unrelated horizontal-area room cap.
-    public static int Budget(WorldSize size)=>size.Width()/16*(size.Width()/16)*9/100;
-    public static int Target(int caveSystems)=>(caveSystems+1)/2;
+    public static int Budget(WorldSize size)=>size.Width()/16*(size.Width()/16)*9/400;
+    public static int Target(int caveSystems)=>(caveSystems+7)/8;
+    internal static int LootSlot(Random random,ref uint occupied)
+    {
+        int slot;
+        do slot=random.Next(27);
+        while((occupied&(1u<<slot))!=0);
+        occupied|=1u<<slot;
+        return slot;
+    }
     internal const int AttemptsPerSystem=48,MinimumSpacing=18;
     internal static IReadOnlyList<Point3> Generate(World world)
     {
@@ -83,11 +91,11 @@ public static class DungeonGenerator
         for(int i=0;i<chests;i++)
         {
             Point3 cell=center+corners[(offset+i)%4];world.SetGeneratedBlock(cell.X,cell.Y,cell.Z,BlockType.Chest);
-            var chest=world.Containers.Get(cell);int rolls=random.Next(4,9);
+            var chest=world.Containers.Get(cell);int rolls=random.Next(4,9);uint occupied=0;
             for(int roll=0;roll<rolls;roll++)
             {
                 ItemId item=random.Next(10) switch{0=>Items.Armor(ArmorMaterial.Iron,(ArmorSlot)random.Next(4)),1=>Items.IronIngot,2=>Items.String,3=>Items.Bread,4=>Items.Potato,5=>Items.Carrot,6=>Items.Arrow,7=>Items.Coal,8=>Items.Apple,_=>Items.Stick};
-                chest.SetSlot(roll,new(item,Items.StackLimit(item)==1?1:random.Next(1,6)));
+                chest.SetSlot(LootSlot(random,ref occupied),new(item,Items.StackLimit(item)==1?1:random.Next(1,6)));
             }
         }
         return true;

@@ -49,7 +49,7 @@ public static class MiningRules
         };
     }
     public static bool Wears(ItemStack stack) => Items.Get(stack.Item).Tool is >=ToolKind.Pickaxe and <=ToolKind.Shovel;
-    public static int Drops(BlockType block,ItemStack held,Random random,Span<ItemId> output)
+    public static int Drops(BlockType block,ItemStack held,Random random,Span<ItemId> output,bool winterCrop=false)
     {
         if(block==BlockType.Fire)return 0;
         if(block==BlockType.DeadBush)
@@ -63,10 +63,16 @@ public static class MiningRules
             if(block>=BlockType.Carrot1)
             {
                 ItemId produce=block>=BlockType.Potato1?Items.Potato:Items.Carrot;
-                int quantity=Blocks.MatureCrop(block)?random.Next(2,5):1;for(int i=0;i<quantity;i++)output[i]=produce;return quantity;
+                int quantity=Blocks.MatureCrop(block)?random.Next(2,5):1;
+                if(winterCrop)quantity=SeasonManager.WinterYield(quantity);
+                for(int i=0;i<quantity;i++)output[i]=produce;return quantity;
             }
-            int count=0;if(block==BlockType.Wheat7)output[count++]=Items.Wheat;
-            int seeds=block==BlockType.Wheat7?random.Next(1,5):1;for(int i=0;i<seeds;i++)output[count++]=Items.WheatSeeds;return count;
+            int count=0;
+            if(block==BlockType.Wheat7 && (!winterCrop || random.NextDouble()<SeasonManager.WinterYieldRate))
+                output[count++]=Items.Wheat;
+            int seeds=block==BlockType.Wheat7?random.Next(1,5):1;
+            if(winterCrop)seeds=SeasonManager.WinterYield(seeds);
+            for(int i=0;i<seeds;i++)output[count++]=Items.WheatSeeds;return count;
         }
         if(block==BlockType.Leaves)
         {

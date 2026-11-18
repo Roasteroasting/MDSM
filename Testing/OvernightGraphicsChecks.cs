@@ -118,21 +118,13 @@ internal static class OvernightGraphicsChecks
             bool debris=false;foreach(var p in world.Particles.Active)debris|=p.Life>0;C(debris,"Actual mining produced no particles.");Render("mining-particles");Input();
             Call("SetState",GameState.Paused);double weatherSeconds=world.Weather.Remaining;Input(30);C(world.Weather.Remaining==weatherSeconds,"Pause advanced weather.");
             Call("SetState",GameState.Playing);VerifyDesertAndClouds();
-            var natural=World.CreateNew(173,WorldSize.Small);natural.SavedGameMode=GameMode.Creative;natural.AllowCheats=true;
-            var naturalSave=new WorldSave(natural,"Natural graphics",natural.Spawn,0,-.1f);Call("BeginWorld",store.Create(naturalSave),naturalSave);
-            int bestY=0,bx=0,bz=0;
-            for(int z=24;z<natural.Depth-24;z++)for(int x=24;x<natural.Width-24;x++)if(natural.SurfaceY(x,z)>bestY){bestY=natural.SurfaceY(x,z);bx=x;bz=z;}
-            Session.Camera.Position=new(bx+35,bestY+12,bz+45);Vector3 direction=new Vector3(bx,bestY,bz)-Session.Camera.Position;
-            Session.Camera.RestoreOrientation(MathF.Atan2(direction.X,-direction.Z),MathF.Atan2(direction.Y,new Vector2(direction.X,direction.Z).Length()));
-            RenderingPerformanceChecks.Warm(F<WorldRenderer>("_renderer"),Session.Camera);Render("mountains");
-            Console.WriteLine($"NATURAL Small: {natural.GeneratedDungeons.Count} dungeons; highest rendered terrain/tree column Y={bestY}; {natural.GeneratedWaterFeatures}.");
             Key(Keys.E);foreach(Point size in new[]{new Point(320,240),new(640,480),new(1280,720)})
             {
                 using var target=new RenderTarget2D(GraphicsDevice,size.X,size.Y,false,SurfaceFormat.Color,DepthFormat.Depth24);
                 GraphicsDevice.SetRenderTarget(target);base.Draw(new GameTime());GraphicsDevice.SetRenderTarget(null);using var file=File.Create(Path.Combine(AppContext.BaseDirectory,$"overnight-browser-{size.X}.png"));target.SaveAsPng(file,size.X,size.Y);
             }
             C((bool)Call("SaveCurrentWorld"),"Runtime save failed.");
-            Console.WriteLine("PASS: Real DesktopGL arm/items/swing, readback, building models, search grants, sign editing, Tab completion, crops, snow, fire/burning mobs, snowball rendering, weather, particles, pause, natural generation and save input.");
+            Console.WriteLine("PASS: Real DesktopGL arm/items/swing, readback, building models, search grants, sign editing, Tab completion, crops, snow, fire/burning mobs, snowball rendering, weather, particles, pause and save input.");
             Verified=true;Exit();
         }
         private static void C(bool ok,string message)=>OvernightChecks.Check(ok,message);

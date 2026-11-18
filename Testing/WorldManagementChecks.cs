@@ -163,7 +163,7 @@ internal static class WorldManagementChecks
         try
         {
             var store = new WorldSaveManager(root);
-            var world = new World(73, WorldSize.Small);
+            var world = new World(73, WorldSize.Small, false);
             world.SetBlock(15, 62, 16, BlockType.Cobblestone);
             var original = new WorldSave(world, "Original", new Vector3(60.5f, 50, 65.5f), 1.2f, 0.3f);
             string id = store.Create(original), sibling = store.Create(original with { Name = "Other" });

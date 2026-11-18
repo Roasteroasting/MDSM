@@ -167,47 +167,23 @@ temporary-file, `Flush(true)`, replacement/rename and failed-temp cleanup proced
 Compression completion and all checksums precede the flush/replacement. A failed
 write or replacement leaves the previous valid world file untouched.
 
-## Verification and benchmarks
+## Verification
 
 Run from the project directory:
 
 ```powershell
 dotnet build
-dotnet bin/Debug/net9.0/MDSM.dll --compression-test
-dotnet bin/Debug/net9.0/MDSM.dll --self-test
+dotnet run -- --infinite-integration-test
+dotnet run -- --compression-test
 ```
 
-The focused command includes all four sizes, both codecs/stored records,
-non-seekable input, independent header-only listing, complete v10-payload SHA-256
-equality, optional/required extensions, corruption/truncation, legacy migrations,
-and atomic failure handling. Existing byte-offset fixtures explicitly use the
-unchanged v10 writer, keeping their structural checks effective.
+Infinite integration covers streamed snapshots, interrupted checkpoints,
+corruption recovery, and reloading persistent state. Shared compression fixtures
+cover both codecs and stored records, non-seekable input, header-only listing,
+complete v10-payload SHA-256 equality, optional and required extensions,
+corruption and truncation, and atomic failure handling.
 
-Reproduce the representative benchmark (generated seed 173, edits, inventory,
-durability, items and area-scaled mobs; temporary data stays under build output):
-
-```powershell
-dotnet bin/Debug/net9.0/MDSM.dll --compression-fixture Massive
-dotnet bin/Debug/net9.0/MDSM.dll --compression-benchmark Massive raw
-dotnet bin/Debug/net9.0/MDSM.dll --compression-benchmark Massive zstd
-dotnet bin/Debug/net9.0/MDSM.dll --compression-benchmark Massive brotli
-```
-
-Replace Massive with Small/Normal/Large for other sizes. Each pipeline case should
-run in a fresh process. Save timing includes serialization, validation, checksums,
-compression, file flush and rename. Load timing includes decompression, semantic
-validation and world reconstruction. Source-fixture creation/loading and the
-post-load comparison hash are outside those timers. Working-set and managed peaks
-are sampled every 10 ms, not guaranteed instantaneous peaks or GPU measurements.
-
-The standalone [codec benchmark](../Tools/SaveCompressionBench/Program.cs) also
-compares Zstandard and Brotli using sequential bounded buffers and SHA-256 checks:
-
-```powershell
-dotnet run --project Tools/SaveCompressionBench -- bin/Debug/net9.0/compression-benchmark/Massive.raw zstd 1 3
-dotnet run --project Tools/SaveCompressionBench -- bin/Debug/net9.0/compression-benchmark/Massive.raw brotli 1 3
-```
-
-Its timings measure codec/file/hash work without allocating a game world. Full
-pipeline results and measurement limits are recorded in
-[CODEX-SUMMARY.md](../Summaries/CODEX-SUMMARY.md).
+Historical finite-world compression results and their measurement limits are
+recorded in [CODEX-SUMMARY.md](../Summaries/CODEX-SUMMARY.md). The standalone
+[codec benchmark](../Tools/SaveCompressionBench/Program.cs) can still compare
+Zstandard and Brotli on a caller-provided file without allocating a game world.

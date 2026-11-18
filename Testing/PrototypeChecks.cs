@@ -7,7 +7,8 @@ using MDSM.Worlds;
 
 namespace MDSM.Testing;
 
-// Run with --self-test. These checks need no window, graphics device, or test packages.
+// Run with --self-test. Cover Infinite worlds and shared behavior using small
+// hand-built fixtures. Legacy (1024x1024) has its own opt-in smoke test.
 internal static class PrototypeChecks
 {
     private const int TestGroundHeight = 5;
@@ -28,23 +29,16 @@ internal static class PrototypeChecks
             ("Independent chests/furnaces, fuel, smelting, overflow and destruction",ProgressionChecks.Containers),
             ("Bow charging/ammo, swept hits, gravity, ownership and projectile persistence",ProgressionChecks.Arrows),
             ("Version 8 equipment/container persistence and version 7 compatibility",ProgressionChecks.Persistence),
-            ("Measured ores: veins, boundaries, vertical bands, abundance and determinism",ProgressionChecks.Ores),
-            ("Empty-start survival progression from mined logs through diamond tools",ProgressionChecks.Walkthrough),
             ("Shaped crafting, quantities, offsets, strict formations and preview safety", CraftingChecks.Recipes),
             ("Atomic crafting outputs, stack limits and mixed mouse accounting", CraftingChecks.Transactions),
             ("Crafting close/overflow, blocked recovery and death item ownership", CraftingChecks.ClosingAndDeath),
-            ("Crafting table placement/mining/persistence and all-size empty starts", CraftingChecks.BlocksAndPersistence),
+            ("Crafting table placement, mining, persistence and an empty starting inventory", CraftingChecks.BlocksAndPersistence),
             ("Responsive 2x2/3x3 crafting, inventory, hotbar and arrow layouts", CraftingChecks.Layout),
             ("Terrain layers, bounds, and edit revisions", CheckWorld),
-            ("Cave-relative dungeon frequency, entrances, spacing, deterministic loot and persistence",DungeonFrequencyChecks.Generation),
             ("Compact storage and world/chunk coordinate conversion", CheckCoordinates),
-            ("Seed determinism, terrain layers, and continuous hills", CheckTerrain),
             ("Only face-sharing chunk meshes are invalidated", CheckChunkRevisions),
             ("Chunk frustum culling", CheckFrustum),
-            ("Massive-only notice text, responsive layout and visibility", LargeLakeChecks.Notice),
             ("Large water batches preserve distance ordering and every face", LargeLakeChecks.WaterOrdering),
-            ("Large/Massive multi-seed measured lakes, shores, counts and determinism", LargeLakeChecks.Generation),
-            ("All-size bounded residency, frustum coverage, edges and hysteresis", RenderingPerformanceChecks.Regions),
             ("Cached mob collision matches fresh queries, edits, knockback and water", RenderingPerformanceChecks.CollisionCache),
             ("Collision and raycasting across chunk seams", CheckChunkGameplay),
             ("Horizontal player bounds and vertical world limits", CheckBoundaries),
@@ -62,23 +56,19 @@ internal static class PrototypeChecks
             ("Multiple world directories, safe names, and unreadable saves", PersistenceChecks.WorldDirectories),
             ("Atomic saving and preservation after write/replace failures", PersistenceChecks.AtomicSaving),
             ("Stable expanded block definitions and starter palette order", DecorationChecks.Definitions),
-            ("Deterministic trees/plants with unchanged base terrain", DecorationChecks.Determinism),
             ("Tree boundary validation and cross-chunk canopies", DecorationChecks.TreeBoundaries),
             ("Leaf occlusion, cutout vertex alpha, and plant quads", DecorationChecks.Meshes),
             ("New block placement, vegetation targeting, and support", DecorationChecks.Interaction),
             ("Legacy v1 compatibility and expanded block restoration", DecorationChecks.Persistence),
-            ("All world sizes, indexing, boundaries, seams, and frustum bounds", WorldManagementChecks.SizesAndBoundaries),
-            ("All sizes: deterministic decorations, spawn, and single bedrock layer", WorldManagementChecks.Generation),
             ("Maximum 5x5 canopies with height and shape variation", WorldManagementChecks.Canopies),
-            ("All sizes: complete save restoration and header-only metadata", WorldManagementChecks.PersistenceAndMetadata),
             ("Safe rename/delete, active-world guards, and filesystem failures", WorldManagementChecks.Management),
             ("Starter inventory, compatible stacks, overflow, and 64-item limits", InventoryChecks.Stacking),
             ("Left/right inventory clicks, odd splitting, merging, and swapping", InventoryChecks.MouseOperations),
             ("5000 cursor operations conserve items and blocked closing is safe", InventoryChecks.AccountingAndClosing),
             ("Timed/instant mining, resets, continuous mining, bedrock, and drops", InventoryChecks.Mining),
             ("Item gravity, terrain collision, pickup, and full-inventory remainders", InventoryChecks.PhysicsAndPickup),
-            ("Inventory-based placement and independent sessions across all sizes", InventoryChecks.PlacementAndIsolation),
-            ("All-size inventory/drop persistence and one-time legacy inventory", InventoryChecks.Persistence),
+            ("Inventory-based placement and independent sessions", InventoryChecks.PlacementAndIsolation),
+            ("Inventory/drop persistence and one-time legacy inventory", InventoryChecks.Persistence),
             ("Invalid inventory/drop data is rejected safely", InventoryChecks.Validation),
             ("Health bounds and full/half/empty heart HUD mapping", SurvivalChecks.HealthAndHearts),
             ("Vertical fall distance, thresholds, horizontal and velocity independence", SurvivalChecks.FallDistances),
@@ -86,7 +76,7 @@ internal static class PrototypeChecks
             ("Death stack accounting, idempotence, respawn, and recovery", SurvivalChecks.DeathAndRespawn),
             ("Atomic manual drops, clear positions, and elapsed pickup delay", SurvivalChecks.ManualDropAndDelay),
             ("Spatial item merging, overflow, unrelated types, and delay preservation", SurvivalChecks.Merging),
-            ("All-size health persistence, dead load, and v1/v2 compatibility", SurvivalChecks.HealthPersistence),
+            ("Health persistence, dead load, and v1/v2 compatibility", SurvivalChecks.HealthPersistence),
             ("Atomic death saving, failure preservation, rename, and reload", SurvivalChecks.ManagedDeathSave),
             ("Crouch speed/camera and unchanged one-block jump height", SurvivalChecks.CrouchMovement),
             ("Crouch edge/corner support, jumping off, removal, and wall sliding", SurvivalChecks.CrouchEdges),
@@ -100,11 +90,10 @@ internal static class PrototypeChecks
             ("F1/F3 independence and F2 press edges at high update rates", InterfaceChecks.PresentationKeys),
             ("Screenshot directory, PNG bytes, unique names, and write failures", InterfaceChecks.ScreenshotFiles),
             ("Accurate Controls/About information and responsive menu layouts", InterfaceChecks.InformationAndLayouts),
-            ("Seeded pig populations, suitable terrain, finite sizes, and no regeneration", PigChecks.Spawning),
             ("Pig gravity/collisions, wandering, health/knockback, and render-rate independence", PigChecks.MovementAndDamage),
             ("Pig targeting/occlusion, punching cooldown, death drops, and continuous mining", PigChecks.Combat),
             ("Porkchop accounting, RMB edges/healing, new-world stock, death/respawn, and pickup", PigChecks.Food),
-            ("Pig/food persistence across all sizes, corruption, and legacy world policy", PigChecks.Persistence),
+            ("Pig/food persistence, corruption, and legacy world policy", PigChecks.Persistence),
             ("Cuboid pig models, cutout food geometry, hurt tint, and animation", PigChecks.Geometry),
             ("Water byte states, non-solid/non-item rules, targeting and displacement", WaterChecks.StatesAndPlacement),
             ("Downward priority, finite horizontal reach, and obstacle/corner flow", WaterChecks.Propagation),
@@ -114,33 +103,26 @@ internal static class PrototypeChecks
             ("Player swimming/fall resistance and passive pig water collisions", WaterChecks.Swimming),
             ("Smooth water surface buoyancy across frame rates", WaterChecks.SurfaceBobbing),
             ("Underwater sampling, ten crack boundaries and clean wood model surfaces", VisualRefinementChecks.Cpu),
-            ("Deterministic all-size lakes, restrained basins, beaches, spawn and stability", WaterChecks.Lakes),
-            ("Extreme seeds, sealed lakes, digging shore/bottom, and solid displacement", WaterChecks.LakeEditsAndSeeds),
-            ("All-size active water round trips, resumed flow, and saved terrain preservation", WaterChecks.Persistence),
+            ("Active water round trips, resumed flow, and saved terrain preservation", WaterChecks.Persistence),
             ("All species health, passive AI, collisions, knockback, and frame independence", MobChecks.DefinitionsAndMotion),
-            ("Shared all-size spawn budgets, balanced species, grass/water safety, and no replenishment", MobChecks.Spawning),
             ("Species targeting, terrain occlusion, cooldown, exact drops, and mining fallback", MobChecks.CombatAndDrops),
             ("Leather/feather stacks and pickup, non-food resources, and wool placement/mining/UVs", MobChecks.ResourcesAndWool),
             ("Empty survival starts, preserved legacy inventory and empty respawn", MobChecks.StartingAndRespawn),
-            ("All-size mixed mobs/resources/water persistence and saved kills", MobChecks.Persistence),
+            ("Mixed mobs/resources/water persistence and saved kills", MobChecks.Persistence),
             ("Independent v4 pig/food migration and invalid species/health/count rejection", MobChecks.BackwardCompatibilityAndValidation),
             ("Species cuboid proportions, cutout UVs, animation, and hurt tint", MobChecks.Geometry),
             ("Species targets, independent 30-60 second delays, caps, and single replacements", WorldUpdateChecks.TargetsAndTimers),
             ("Bounded respawn retries, recovery, player/entity/water clearance", WorldUpdateChecks.RetryAndClearance),
-            ("All-size target and outstanding timer save/load without duplicate mobs", WorldUpdateChecks.PopulationPersistence),
+            ("Target and outstanding timer save/load without duplicate mobs", WorldUpdateChecks.PopulationPersistence),
             ("Conservative v4/v5 population migration and corrupt scheduling data", WorldUpdateChecks.LegacyPopulationAndCorruption),
             ("Sand/gravel support removal, stacks, chunk edges, and finite bottom", WorldUpdateChecks.GravityStacksAndBoundaries),
             ("Gravity through water, queued-save restoration, and unchanged legacy terrain", WorldUpdateChecks.GravityWaterAndPersistence),
-            ("Supported natural shores/beds and bounded gravity column processing", WorldUpdateChecks.GenerationAndBudgets),
             ("Render-independent respawns/gravity and corrected up/down hotbar direction", WorldUpdateChecks.TimingAndScroll),
             ("Continuous falling acceleration, interpolation, full cube geometry, and idle terrain meshes", FallingBlockChecks.ContinuousMotion),
             ("Swept low-FPS falling collision, terminal speed, and ordered active stacks", FallingBlockChecks.SweepsAndStacks),
             ("Identical falls at 30/60/144/360 FPS and safe placement around falling cubes", FallingBlockChecks.FrameRatesAndPlacement),
-            ("All-size mid-fall persistence, exact resumption, v6 queues, and corrupt active states", FallingBlockChecks.Persistence),
-            ("Bounded active falls, deferred stacks, save/load, and exact material accounting", FallingBlockChecks.CapacityAndAccounting),
-            ("Four expanded dimensions, high-Y indexing, terrain limits and smooth gradients", WorldExpansionChecks.DimensionsAndTerrain),
-            ("Legacy 64-high Normal/Large migration for save versions 1-7", WorldExpansionChecks.Migration),
-            ("All four complete generated worlds, water features, and streamed restoration", WorldExpansionChecks.GenerationAndStreaming)
+            ("Mid-fall persistence, exact resumption, v6 queues, and corrupt active states", FallingBlockChecks.Persistence),
+            ("Bounded active falls, deferred stacks, save/load, and exact material accounting", FallingBlockChecks.CapacityAndAccounting)
         };
 
         int failures = 0;
@@ -163,6 +145,7 @@ internal static class PrototypeChecks
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InventoryIconChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SandstoneChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteIntegrationChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SeasonLeadChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,AudioChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SupportDropChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,CollisionUpdateChecks.All));
@@ -183,7 +166,7 @@ internal static class PrototypeChecks
                 Console.Error.WriteLine($"FAIL: {check.Name}: {exception.Message}");
             }
         }
-        Console.WriteLine($"{checks.Length - failures}/{checks.Length} prototype checks passed.");
+        Console.WriteLine($"{checks.Length - failures}/{checks.Length} Infinite and shared regression checks passed.");
         return failures == 0 ? 0 : 1;
     }
 

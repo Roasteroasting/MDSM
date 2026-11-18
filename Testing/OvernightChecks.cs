@@ -42,13 +42,13 @@ internal static class OvernightChecks
     }
     public static int LightingEdits()
     {
-        var world=new World(173,WorldSize.Small);
+        var world=PigChecks.Flat();
+        for(int z=96;z<=112;z++)for(int x=96;x<=112;x++)world.SetGeneratedBlock(x,60,z,BlockType.Stone);
         for(int z=5;z<=7;z++)for(int x=5;x<=7;x++)world.Lighting.GetPage(x,z);
         long start=Stopwatch.GetTimestamp();int before=world.Lighting.BuiltPages;
         for(int i=0;i<12;i++)
         {
-            int y=world.SurfaceY(104,104);
-            world.SetBlock(104,y,104,i%2==0?BlockType.Air:BlockType.Stone);
+            world.SetBlock(104,60,104,i%2==0?BlockType.Air:BlockType.Stone);
             for(int z=5;z<=7;z++)for(int x=5;x<=7;x++)world.Lighting.GetPage(x,z);
         }
         Console.WriteLine($"Lighting edits: {Stopwatch.GetElapsedTime(start).TotalMilliseconds/12:F2} ms/edit; {world.Lighting.BuiltPages-before} neighborhood builds.");
@@ -122,8 +122,9 @@ internal static class OvernightChecks
         string root=AppContext.BaseDirectory;while(!File.Exists(Path.Combine(root,"MDSM.csproj")))root=Directory.GetParent(root)?.FullName??throw new Exception("Missing source assets.");
         var atlas=ItemAtlasChecks.Read(Path.Combine(root,"Content/UI/text.png"));
         var terrain=ItemAtlasChecks.Read(Path.Combine(root,"Content/Blocks/terrain.png"));
-        // Terrain tile 80 is now the new Dead Bush; font tiles remain isolated.
-        for(int tile=81;tile<=174;tile++)
+        // Stone surface textures and the seasonal sprites have since claimed
+        // part of the old glyph strip. The remaining tile range stays blank.
+        for(int tile=87;tile<=174;tile++)
         {var source=MDSM.Rendering.TextureAtlas.Source(tile);for(int y=0;y<16;y++)for(int x=0;x<16;x++)Check(terrain.Pixels[((source.Y+y)*256+source.X+x)*4+3]==0,"A sign glyph remains in terrain.png.");}
         foreach(char c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@[]<>+?!-.,'")
         {

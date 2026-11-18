@@ -55,11 +55,15 @@ internal static class WorldRuleGraphicsChecks
                 Press(Keys.Left);Check(!Menu.SelectedCheats,"Cheats keyboard toggle did not turn off.");
                 Click(WorldCreationLayout.Option(GraphicsDevice.Viewport,1));Click(WorldCreationLayout.Option(GraphicsDevice.Viewport,2));
                 Check(Menu.SelectedDifficulty==Difficulty.Hard && Menu.SelectedMode==GameMode.Creative,"New creation options did not cycle.");
+                Check(Menu.SelectedSeasons==SeasonsMode.Off,"New world did not default to seasons off.");
+                Click(WorldCreationLayout.Option(GraphicsDevice.Viewport,3));Press(Keys.Right);
+                Check(Menu.SelectedSeasons==SeasonsMode.NuclearWinter,"Seasons did not cycle by mouse and keyboard.");
                 Check(Menu.SelectedSize==WorldSize.Infinite,"Creation did not default to Infinite.");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Large,"Legacy size fixture failed.");
                 foreach(Point size in new[]{new Point(320,240),new(640,480),new(1280,720)})Snapshot(size,"world-rules-creation");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Infinite,"Infinite world selection failed.");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Large,"Legacy selection wrap failed.");
+                Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Infinite,"Feature verification must create an Infinite world.");
                 Click(WorldCreationLayout.Button(GraphicsDevice.Viewport,0));Check(Field<object>("_creation")!=null,"Create button failed to start generation.");_creationWait.Restart();_stage=1;
             }
             else if(_stage==1)
@@ -68,8 +72,9 @@ internal static class WorldRuleGraphicsChecks
                 if(State!=GameState.Playing)System.Threading.Thread.Sleep(1);
                 if(State==GameState.Playing)
                 {
-                    Check(!Session.World.AllowCheats && Session.World.SavedDifficulty==Difficulty.Hard && Session.World.SavedGameMode==GameMode.Creative
-                        && Session.Player.Creative && Session.Player.Settings.Difficulty==Difficulty.Hard && Session.Inventory.Selected.IsEmpty,"Actual new-world task lost selected rules or gave starter items.");
+                    Check(Session.World.IsInfinite && !Session.World.AllowCheats && Session.World.SavedDifficulty==Difficulty.Hard && Session.World.SavedGameMode==GameMode.Creative
+                        && Session.Player.Creative && Session.Player.Settings.Difficulty==Difficulty.Hard && Session.Inventory.Selected.IsEmpty
+                        && Session.World.Seasons.Mode==SeasonsMode.NuclearWinter,"Actual new-world task lost selected rules or gave starter items.");
                     var store=Field<WorldSaveManager>("_saves");string lockedId=Session.Id;
                     Call("SetState",GameState.Paused);Call("HandleMenuAction",MenuAction.OpenSettings);
                     Check(!Menu.WorldOptionsEnabled,"Locked world's options enabled.");
@@ -82,7 +87,8 @@ internal static class WorldRuleGraphicsChecks
                     Click(SettingsLayout.Toggle(GraphicsDevice.Viewport));Check(Settings.UncappedFps && Settings.GameMode==GameMode.Creative,"World lock disabled unrelated graphics controls.");
                     Call("HandleMenuAction",MenuAction.Back);Call("HandleMenuAction",MenuAction.Resume);Press(Keys.T);
                     Check(State==GameState.Playing && Field<string>("_notice").Contains("DISABLED"),"T opened commands in a locked world.");
-                    Call("SaveCurrentWorld");var locked=store.Load(lockedId);Check(!locked.World.AllowCheats && locked.World.SavedDifficulty==Difficulty.Hard && locked.World.SavedGameMode==GameMode.Creative,"Locked settings failed save/load.");
+                    store.Save(lockedId,Session.Capture());var locked=store.Load(lockedId);Check(!locked.World.AllowCheats && locked.World.SavedDifficulty==Difficulty.Hard && locked.World.SavedGameMode==GameMode.Creative
+                        && locked.World.Seasons.Mode==SeasonsMode.NuclearWinter,"Locked settings failed save/load.");
                     var allowed=CommandChecks.Session().Capture();allowed.World.AllowCheats=true;allowed.World.SavedDifficulty=Difficulty.Peaceful;allowed.World.SavedGameMode=GameMode.Survival;
                     string allowedId=store.Create(allowed);Call("BeginWorld",allowedId,allowed);Check(Settings.Difficulty==Difficulty.Peaceful && !Session.Player.Creative,"World switch inherited previous rules.");
                     Call("SetState",GameState.Paused);Call("HandleMenuAction",MenuAction.OpenSettings);Check(Menu.WorldOptionsEnabled,"Allowed world's options remained disabled.");
@@ -90,7 +96,9 @@ internal static class WorldRuleGraphicsChecks
                     Check(Session.World.SavedDifficulty==Difficulty.Easy && Session.Player.Creative && Session.World.SavedGameMode==GameMode.Creative,"Enabled choices failed to apply immediately.");
                     Call("SaveCurrentWorld");var changed=store.Load(allowedId);Check(changed.World.SavedDifficulty==Difficulty.Easy && changed.World.SavedGameMode==GameMode.Creative,"Enabled world rule changes failed to persist.");
                     Call("BeginWorld",lockedId,locked);Check(Settings.Difficulty==Difficulty.Hard && Settings.GameMode==GameMode.Creative && !Session.World.AllowCheats,"Returning to locked world lost its own rules.");
-                    Call("HandleMenuAction",MenuAction.SaveAndReturn);Call("HandleMenuAction",MenuAction.OpenSettings);
+                    Call("HandleMenuAction",MenuAction.SaveAndReturn);
+                    Field<System.Threading.Tasks.Task>("_infiniteSave")?.GetAwaiter().GetResult();
+                    Call("CompleteInfiniteSave");Call("HandleMenuAction",MenuAction.OpenSettings);
                     Check(!Menu.WorldOptionsEnabled && Settings.GameMode==GameMode.Survival && Settings.Difficulty==Difficulty.Normal,"Main-menu settings expose/change world rules.");
                     string json=File.ReadAllText(Path.Combine(_root,"settings.json"));Check(!json.Contains("GameMode") && !json.Contains("Difficulty"),"World rules leaked into global JSON.");
                     Call("HandleMenuAction",MenuAction.Back);Verified=true;Exit();

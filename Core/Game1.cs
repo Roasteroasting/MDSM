@@ -135,6 +135,7 @@ public class Game1 : Game
         MouseState mouse = Mouse.GetState();
         bool back = GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed;
         Point lookDelta = _mouseLook.ReadDelta();
+        _session?.World.Seasons.Tick(gameTime.ElapsedGameTime.TotalSeconds);
         ProcessInput(keyboard, mouse, back, gameTime, lookDelta);
         double elapsed = gameTime.ElapsedGameTime.TotalSeconds;
         bool playing = State == GameState.Playing;
@@ -414,11 +415,12 @@ public class Game1 : Game
                     bool allowCheats = _menu.SelectedCheats;
                     Difficulty difficulty = _menu.SelectedDifficulty;
                     GameMode mode = _menu.SelectedMode;
+                    SeasonsMode seasons = _menu.SelectedSeasons;
                     _creationProgress = "ALLOCATING WORLD";
                     _creation = Task.Run(() =>
                     {
-                        if(selectedSize==WorldSize.Infinite)return _saves.CreateInfinite(seed,name,allowCheats,difficulty,mode);
-                        var world = World.CreateNew(seed, selectedSize, text => _creationProgress = text);
+                        if(selectedSize==WorldSize.Infinite)return _saves.CreateInfinite(seed,name,allowCheats,difficulty,mode,seasons);
+                        var world = World.CreateNew(seed, selectedSize, text => _creationProgress = text,seasons);
                         world.AllowCheats = allowCheats; world.SavedDifficulty = difficulty; world.SavedGameMode = mode;
                         _creationProgress = "POPULATING PASSIVE MOBS";
                         var camera = new Camera();
@@ -794,7 +796,8 @@ public class Game1 : Game
             _renderer.SmoothLighting=_settings.SmoothLighting;
             float progress = State == GameState.Playing ? _session.Mining.Progress : 0;
             _renderer.Draw(_session.Camera, State == GameState.Playing && _presentation.HudVisible ? _selection : null, _session.Items, progress, _fallingInterpolation, State==GameState.Playing&&_session.Mining.Target==_selection?.Cell?_session.Mining.Target:null);
-            _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles,_session.World,_settings.Brightness);
+            _mobRenderer.Draw(_session.Camera, _session.Mobs,_session.Hostiles,_session.World,_settings.Brightness,
+                _session.Player.Position+new Vector3(0,1.28f,0)+_session.Camera.Right*.22f);
             _projectileRenderer.Draw(_session.Camera,_session.Projectiles,_session.World,_settings.Brightness);
             _renderer.DrawWater(_session.Camera);
             _diagnostics.Mobs = _session.Mobs.Entities.Count+_session.Hostiles.Entities.Count; _diagnostics.Items = _session.Items.Entities.Count;

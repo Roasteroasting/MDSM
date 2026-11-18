@@ -27,6 +27,29 @@ internal static class VisualRefinementChecks
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];
         for(byte facing=0;facing<4;facing++)foreach(bool open in new[]{false,true})
         {world.SetGeneratedBlock(15,5,15,BlockType.FenceGate);world.Structures[cell]=new(cell,facing,open,new(0,-1,0));mesh.BuildBlock(world,cell);NoCoplanarOverlap(mesh);Check(world.BlockBoxes(cell,boxes,true)==(open?0:1),"Gate collision changed.");}
+        for(byte facing=0;facing<4;facing++)foreach(bool open in new[]{false,true})
+        {
+            world.Structures[cell]=new(cell,facing,open,new(0,-1,0));
+            bool alongX=(facing+(open?1:0))%2==0;
+            float EndArea()
+            {
+                float area=0;
+                for(int i=0;i<mesh.VertexCount;i+=3)
+                {
+                    var a=mesh.Vertices[i].Position;var b=mesh.Vertices[i+1].Position;var c=mesh.Vertices[i+2].Position;
+                    if(alongX?a.X==16&&b.X==16&&c.X==16:a.Z==16&&b.Z==16&&c.Z==16)
+                        area+=Vector3.Cross(b-a,c-a).Length()*.5f;
+                }
+                return area;
+            }
+            mesh.BuildBlock(world,cell);float covered=EndArea();
+            var neighbor=cell+(alongX?new Point3(1,0,0):new Point3(0,0,1));
+            world.SetGeneratedBlock(neighbor.X,neighbor.Y,neighbor.Z,BlockType.Air);
+            mesh.BuildBlock(world,cell);float full=EndArea();
+            Check(covered>0 && (open?Math.Abs(covered-full)<.00001f:covered<full),
+                $"Gate end failed to preserve its exposed face (facing {facing}, open {open}, area {covered} of {full}).");
+            world.SetGeneratedBlock(neighbor.X,neighbor.Y,neighbor.Z,BlockType.Fence);
+        }
         var camera=new Camera{Position=new(20.5f,5.8f,20.5f)};
         for(int z=19;z<=22;z++)for(int x=19;x<=22;x++)for(int y=1;y<=5;y++)world.SetGeneratedBlock(x,y,z,BlockType.WaterSource);
         Check(UnderwaterView.Submerged(world,camera),"Eye below rendered water missed.");camera.Position=new(20.5f,5.95f,20.5f);Check(!UnderwaterView.Submerged(world,camera),"Feet/torso water triggered eye effect.");

@@ -275,9 +275,9 @@ public sealed class Player
             BoundingBox obstacle=boxes[box];if(!World.Overlaps(bounds,obstacle))continue;
             collided = true;
             // Clamp the moving axis to the nearest blocking face; retain motion on other axes.
-            if (axis == 0) next.X = amount > 0 ? Math.Clamp(obstacle.Min.X - HalfWidth, Position.X, next.X) : Math.Clamp(obstacle.Max.X + HalfWidth, next.X, Position.X);
-            else if (axis == 1) next.Y = amount > 0 ? Math.Clamp(obstacle.Min.Y - BodyHeight, Position.Y, next.Y) : Math.Clamp(obstacle.Max.Y, next.Y, Position.Y);
-            else next.Z = amount > 0 ? Math.Clamp(obstacle.Min.Z - HalfWidth, Position.Z, next.Z) : Math.Clamp(obstacle.Max.Z + HalfWidth, next.Z, Position.Z);
+            if (axis == 0) next.X = amount > 0 ? Math.Clamp(BeforeFace(obstacle.Min.X, HalfWidth), Position.X, next.X) : Math.Clamp(AfterFace(obstacle.Max.X, HalfWidth), next.X, Position.X);
+            else if (axis == 1) next.Y = amount > 0 ? Math.Clamp(BeforeFace(obstacle.Min.Y, BodyHeight), Position.Y, next.Y) : Math.Clamp(obstacle.Max.Y, next.Y, Position.Y);
+            else next.Z = amount > 0 ? Math.Clamp(BeforeFace(obstacle.Min.Z, HalfWidth), Position.Z, next.Z) : Math.Clamp(AfterFace(obstacle.Max.Z, HalfWidth), next.Z, Position.Z);
             bounds = BoundsAt(next);
             }
         }
@@ -285,6 +285,19 @@ public sealed class Player
         if (collided && axis != 1 && _canStep && TryStep(world, amount, axis)) return false;
         Position = next;
         return collided;
+    }
+
+    // Undoing the body offset can round the reconstructed bound back into the
+    // block (especially at the negative edge of a rebased coordinate frame).
+    private static float BeforeFace(float face,float offset)
+    {
+        float position=face-offset;
+        return position+offset>face?MathF.BitDecrement(position):position;
+    }
+    private static float AfterFace(float face,float offset)
+    {
+        float position=face+offset;
+        return position-offset<face?MathF.BitIncrement(position):position;
     }
 
     private bool ResolvePenetration(World world)
@@ -298,7 +311,8 @@ public sealed class Player
         if (bounded != Position) { Position = bounded; StopMovement(); }
         if (!world.IntersectsSolid(Bounds)) return true;
         Vector3 best = Position;
-        float shortest = float.PositiveInfinity;
+        const float maximumPush = 1.25f;
+        float shortest = maximumPush * maximumPush;
         Span<BoundingBox> boxes = stackalloc BoundingBox[9];
         // Search the six collision-face exits, refreshing the bounds after each
         // displacement. This handles intersecting obstacles without stale bounds or
@@ -328,9 +342,9 @@ public sealed class Player
                         BoundingBox obstacle = boxes[i];
                         if (!World.Overlaps(bounds, obstacle)) continue;
                         overlap = true;
-                        if (axis == 0) next.X = positive ? Math.Max(next.X, obstacle.Max.X + HalfWidth) : Math.Min(next.X, obstacle.Min.X - HalfWidth);
-                        else if (axis == 1) next.Y = positive ? Math.Max(next.Y, obstacle.Max.Y) : Math.Min(next.Y, obstacle.Min.Y - BodyHeight);
-                        else next.Z = positive ? Math.Max(next.Z, obstacle.Max.Z + HalfWidth) : Math.Min(next.Z, obstacle.Min.Z - HalfWidth);
+                        if (axis == 0) next.X = positive ? Math.Max(next.X, AfterFace(obstacle.Max.X, HalfWidth)) : Math.Min(next.X, BeforeFace(obstacle.Min.X, HalfWidth));
+                        else if (axis == 1) next.Y = positive ? Math.Max(next.Y, obstacle.Max.Y) : Math.Min(next.Y, BeforeFace(obstacle.Min.Y, BodyHeight));
+                        else next.Z = positive ? Math.Max(next.Z, AfterFace(obstacle.Max.Z, HalfWidth)) : Math.Min(next.Z, BeforeFace(obstacle.Min.Z, HalfWidth));
                     }
                 }
                 if (!overlap) { best = candidate; shortest = distance; break; }
@@ -340,7 +354,7 @@ public sealed class Player
         }
         // If no bounded exit exists in an unusually deep solid volume, stay put
         // rather than letting directional collision corrections become noclip.
-        if (!float.IsFinite(shortest)) return false;
+        if (best == Position) return false;
         Position = best;
         _verticalSpeed = 0; _horizontalSpeed = Vector3.Zero; Grounded = false; _canStep = false;
         _fall.Reset(Position.Y);

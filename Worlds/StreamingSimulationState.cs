@@ -40,12 +40,13 @@ namespace MDSM.Worlds
     }
     public sealed partial class FarmingSimulation
     {
-        internal CropState[] CaptureChunk(ChunkAddress a)=>_crops.Where(p=>ChunkGameplay.Owns(a,p.Key)).Select(p=>new CropState(p.Key,p.Value.Wet?Math.Max(0,p.Value.Due-_time):p.Value.Remaining,p.Value.Interval)).ToArray();
+        internal CropState[] CaptureChunk(ChunkAddress a)=>_crops.Where(p=>ChunkGameplay.Owns(a,p.Key)).Select(p=>new CropState(p.Key,RemainingAt(p.Value,_time),p.Value.Interval)).ToArray();
         internal Point3[] CaptureHydration(ChunkAddress a)=>_hydration.Where(p=>ChunkGameplay.Owns(a,p)&&Blocks.Soil(world.GetBlock(p.X,p.Y,p.Z))).ToArray();
         internal void DetachChunk(ChunkAddress a)
         {
             foreach(var p in _crops.Keys.Where(p=>ChunkGameplay.Owns(a,p)).ToArray())_crops.Remove(p);
-            _growth.Clear();foreach(var p in _crops)if(p.Value.Wet)_growth.Enqueue((p.Key,p.Value.Version),p.Value.Due);
+            _growth.Clear();foreach(var p in _crops)
+                if(p.Value.Wet && !Blocks.MatureCrop(world.GetBlock(p.Key.X,p.Key.Y,p.Key.Z)))_growth.Enqueue((p.Key,p.Value.Version),p.Value.Due);
             var keep=_hydration.Where(p=>!ChunkGameplay.Owns(a,p)).ToArray();_hydration.Clear();_queued.Clear();foreach(var p in keep)Queue(p);
         }
     }

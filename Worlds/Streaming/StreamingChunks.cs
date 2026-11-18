@@ -73,6 +73,7 @@ internal sealed class StreamingChunks : IAsyncDisposable
     internal Func<Resident,byte[]> Capturing;
     internal Func<Resident,byte[]> PreparingRetirement;
     internal Action<Resident> Resuming;
+    internal SeasonManager Seasons { get; set; }
     internal ChunkAddress? Center=>_center;
     internal void Dirty(ChunkAddress address){Owner();if(_loaded.TryGetValue(address,out var chunk))chunk.Revision++;}
     internal int GeneratorVersion=>_generator.GenerationVersion;
@@ -158,6 +159,7 @@ internal sealed class StreamingChunks : IAsyncDisposable
             if(_loading.Count>=MaximumWorkers || _loaded.Count+_loading.Count>=MaximumResident)break;
             if(_loaded.ContainsKey(address)||IsLoading(address)||_failed.Contains(address))continue;
             var cancellation=new CancellationTokenSource();var token=cancellation.Token;
+            Season? season=Seasons!=null && Seasons.Mode!=SeasonsMode.Off?Seasons.Current:null;
             async Task<ChunkSnapshot> Load()
             {
                 byte[] stored=await _store.ReadAsync(address,token).ConfigureAwait(false);
@@ -167,7 +169,7 @@ internal sealed class StreamingChunks : IAsyncDisposable
                     if(snapshot.GeneratorVersion!=GeneratorVersion)throw new InvalidDataException("Chunk generator does not match world manifest.");
                     return snapshot;
                 }
-                return await Task.Run(()=>_generator.GenerateComplete(address,token),token).ConfigureAwait(false);
+                return await Task.Run(()=>_generator.GenerateComplete(address,token,season),token).ConfigureAwait(false);
             }
             _loading.Add(new(address,Load(),cancellation));
         }

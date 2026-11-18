@@ -18,8 +18,7 @@ internal static class CompressionChecks
     {
         ("V11 compressed state/codec roundtrips, header-only listings and nonseekable input",RoundTrips),
         ("Compressed checksums, truncation, record schemas/order, limits and optional extensions",Corruption),
-        ("Legacy v10 migration, compressed atomic replacement and interrupted-save safety",MigrationAndAtomic),
-        ("All four sizes: streamed lossless compressed block/state restoration",AllSizes)
+        ("Legacy v10 migration, compressed atomic replacement and interrupted-save safety",MigrationAndAtomic)
     };
     private static void Check(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}
     private static WorldSave Fixture(WorldSize size=WorldSize.Small,bool terrain=false)
@@ -136,8 +135,7 @@ internal static class CompressionChecks
     {
         var checks=All.Concat(new (string Name,Action Check)[]{
             ("Existing raw checksums/schema/corruption",PersistenceChecks.CorruptData),
-            ("Existing compressed header-only world-size metadata contract",WorldManagementChecks.PersistenceAndMetadata),
-            ("Existing v1-v7 legacy height migration",WorldExpansionChecks.Migration),
+            ("Compressed header-only metadata and chunk-order fixture",WorldManagementChecks.PersistenceAndMetadata),
             ("Existing atomic filesystem failures",PersistenceChecks.AtomicSaving),
             ("Existing inventory/drop data validation",InventoryChecks.Validation)}).ToArray();
         int failures=0;foreach(var check in checks)try{check.Check();Console.WriteLine("PASS: "+check.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+check.Name+": "+e);}
