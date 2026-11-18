@@ -80,11 +80,6 @@ internal static class SeasonLeadChecks
             Require(SeasonManager.Resolve(SeasonsMode.Off,date)==Season.Summer &&
                 SeasonManager.Resolve(SeasonsMode.NuclearWinter,date)==Season.Winter,"Fixed season resolved incorrectly.");
         }
-        var viewport=new Viewport(0,0,320,240);
-        var option=WorldCreationLayout.Option(viewport,3);
-        Require(option.Right<=320 && option.Bottom<WorldCreationLayout.SeasonsWarningTop(viewport)
-            && WorldCreationLayout.SeasonsWarningTop(viewport)+7<WorldCreationLayout.Button(viewport,0).Top,"Season option or warning overlaps creation buttons.");
-
         var world=Flat(SeasonsMode.On);
         world.Climate.VariedGeneration=true;world.Climate.NoiseBiomes=true;
         world.Seasons.Refresh(new(2024,12,19));

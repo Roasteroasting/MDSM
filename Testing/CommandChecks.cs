@@ -20,6 +20,7 @@ internal static class CommandChecks
         ("Command validation, help pages and complete registry name/ID resolution", Parsing),
         ("Atomic command grants, stack limits and fresh equipment metadata", Giving),
         ("Numeric and named world-time commands with no simulation catch-up", Time),
+        ("Season command, immutable world rules, calendar overrides and completion", Seasons),
         ("Safe species summons, shared limits and unchanged natural respawn targets", Spawning),
         ("Blocked summon search, fluids, headroom, edges and Peaceful", SpawnSafety),
         ("Command mode, time, inventory and summoned entity save/load", Persistence),
@@ -72,6 +73,52 @@ internal static class CommandChecks
         { Good(commands,session,"/time set "+preset.Item1); Check(Math.Abs(session.World.Time.Seconds-preset.Item2*.05)<.000001,"Preset is inconsistent with numeric time."); }
         Check(session.World.Time.SunlightLevel==0,"Midnight retained daylight."); Good(commands,session,"/time set day");Check(session.World.Time.SunlightLevel==14,"Day did not restore effective sunlight.");
     }
+    public static void Seasons()
+    {
+        var commands = new WorldCommands();
+        var session = Session();
+        var world = session.World;
+        foreach (var mode in new[] { SeasonsMode.Off, SeasonsMode.NuclearWinter })
+        {
+            world.RestoreSeasons(mode);
+            Season initial = world.Seasons.Current;
+            Check(!Run(commands, session, "/season spring").Success && world.Seasons.Current == initial,
+                "An ineligible world accepted a season override.");
+        }
+
+        world.RestoreSeasons(SeasonsMode.On);
+        world.Seasons.Refresh(new DateTime(2026, 7, 1));
+        world.AllowCheats = false;
+        Check(!Run(commands, session, "/season winter").Success && world.Seasons.Current == Season.Summer,
+            "Season override bypassed the cheat gate.");
+        world.AllowCheats = true;
+        foreach (Season season in Enum.GetValues<Season>())
+        {
+            Good(commands, session, "/SEASON " + season);
+            Check(world.Seasons.Current == season, "The chosen season did not apply immediately.");
+            world.Seasons.Tick(2);
+            world.Seasons.Refresh(season == Season.Summer ? new DateTime(2026, 1, 1) : new DateTime(2026, 7, 1));
+            Check(world.Seasons.Current == season && world.Seasons.Mode == SeasonsMode.On,
+                "Calendar refresh discarded the override or changed the creation mode.");
+        }
+        foreach (string invalid in new[] { "/season", "/season 0", "/season fall", "/season summer extra" })
+            Check(!Run(commands, session, invalid).Success && world.Seasons.Current == Season.Winter,
+                "Invalid season syntax changed the current season.");
+
+        Good(commands, session, "/help season");
+        Check(CommandCompletion.Candidates("/se",3,out _,out _).SequenceEqual(new[] { "/season" }) &&
+            CommandCompletion.Candidates("/season ",8,out _,out _).SequenceEqual(new[] { "autumn","spring","summer","winter" }),
+            "Season completion candidates are missing or incorrect.");
+
+        using var stream = new MemoryStream();
+        WorldSerializer.Write(stream, session.Capture());
+        stream.Position = 0;
+        var loaded = WorldSerializer.Read(stream).World;
+        loaded.Seasons.Refresh(new DateTime(2026, 7, 1));
+        Check(loaded.Seasons.Mode == SeasonsMode.On && loaded.Seasons.Current == Season.Summer,
+            "Reload did not restore calendar-driven seasons.");
+    }
+
     public static void Spawning()
     {
         var commands=new WorldCommands();var session=Session();var targets=session.Mobs.CapturePopulation().Targets;

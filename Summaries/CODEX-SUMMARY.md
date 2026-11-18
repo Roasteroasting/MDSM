@@ -2913,3 +2913,20 @@ Verification: dotnet build completed without warnings or errors. The CPU suite
 passed 263/263 checks, the compression suite passed 7/7, and the graphics
 suite and opt-in Legacy smoke test passed. Infinite panorama capture produced
 six 1024x1024 PNGs in a scratch directory.
+
+### World creation layout
+
+World rules now use an equal-width two-by-two grid with consistent label sizes.
+A warning triangle immediately to the left of Seasons shows its permanence
+message on hover. Verified with dotnet build, world-rule checks, and rendered
+hover checks at 320x240 and 1280x720.
+
+Moved the Seasons warning triangle to the right of the button. The options
+remain centered, with enough room for the icon at 320x240.
+
+### Season command
+
+With Seasons: On and cheats enabled, /season winter, /season summer,
+/season spring, or /season autumn overrides the calendar for the current world
+session. Reloading resumes the local calendar. The creation mode and save
+format stay the same. /help season and Tab completion list the choices.

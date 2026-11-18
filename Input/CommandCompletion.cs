@@ -16,7 +16,7 @@ internal static class CommandCompletion
         while(end<text.Length && !char.IsWhiteSpace(text[end]))end++;
         string prefix=text[start..caret];string[] before=text[..start].Split(' ',StringSplitOptions.RemoveEmptyEntries);
         var options=new List<string>();
-        if(before.Length==0)options.AddRange(new[]{"/give","/spawn","/kill","/time","/gamemode","/help","/locate","/tp","/precision"});
+        if(before.Length==0)options.AddRange(new[]{"/give","/spawn","/kill","/time","/season","/gamemode","/help","/locate","/tp","/precision"});
         else switch(before[0].ToLowerInvariant())
         {
             case "/precision":if(before.Length==1)options.AddRange(new[]{"modern","legacy"});break;
@@ -35,8 +35,9 @@ internal static class CommandCompletion
             case "/time":
                 if(before.Length==1)options.AddRange(new[]{"set","query"});
                 else if(before.Length==2 && before[1].Equals("set",StringComparison.OrdinalIgnoreCase))options.AddRange(new[]{"sunrise","day","noon","sunset","night","midnight"});break;
+            case "/season":if(before.Length==1)options.AddRange(new[]{"spring","summer","autumn","winter"});break;
             case "/gamemode":if(before.Length==1)options.AddRange(new[]{"survival","creative"});break;
-            case "/help":if(before.Length==1)options.AddRange(new[]{"give","spawn","kill","time","gamemode","locate","tp","precision","items","mobs"});break;
+            case "/help":if(before.Length==1)options.AddRange(new[]{"give","spawn","kill","time","season","gamemode","locate","tp","precision","items","mobs"});break;
         }
         options.RemoveAll(s=>!s.StartsWith(prefix,StringComparison.OrdinalIgnoreCase));options.Sort(StringComparer.Ordinal);return options.ToArray();
     }

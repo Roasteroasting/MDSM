@@ -102,17 +102,24 @@ internal static class WorldRuleChecks
     }
     public static void LayoutAndPreferences()
     {
-        foreach(Point size in new[]{new Point(320,240),new(640,360),new(800,480),new(1280,720),new(1920,1080)})
+        foreach(Point size in new[]{new Point(320,240),new(640,360),new(800,480),new(800,500),new(900,600),new(1280,720),new(1920,1080)})
         {
             var viewport=new Viewport(0,0,size.X,size.Y);
+            Rectangle first=WorldCreationLayout.Option(viewport,0), seasons=WorldCreationLayout.Option(viewport,3);
+            Rectangle icon=WorldCreationLayout.SeasonsWarningIcon(viewport), tooltip=WorldCreationLayout.SeasonsTooltip(viewport);
+            Check(icon.Left==seasons.Right+4 && icon.Right<=size.X && icon.Center.Y==seasons.Center.Y
+                && tooltip.Top>seasons.Bottom, "The Seasons warning must fit immediately to the right of its option.");
+            Check(tooltip.Left>=0 && tooltip.Right<=size.X,"The Seasons tooltip leaves the viewport.");
             for(int i=0;i<4;i++)
             {
                 Rectangle option=WorldCreationLayout.Option(viewport,i);
-                Check(option.Left>=0 && option.Right<=size.X && option.Bottom<WorldCreationLayout.SeasonsWarningTop(viewport),"Rule option leaves window or overlaps the season warning.");
+                Check(option.Left>=0 && option.Right<=size.X && option.Size==first.Size && !option.Intersects(icon),
+                    "Rule buttons differ in size, leave the viewport, or overlap the warning icon.");
+                Check(option.Width>=14*6*WorldCreationLayout.Scale(viewport)+12,"The rule grid lacks room for full-size labels.");
                 for(int j=0;j<i;j++)Check(!option.Intersects(WorldCreationLayout.Option(viewport,j)),"Rule options overlap.");
             }
             Rectangle create=WorldCreationLayout.Button(viewport,0);
-            Check(create.Top>WorldCreationLayout.SeasonsWarningTop(viewport)+7 && create.Bottom<=size.Y,"Create button overlaps the season warning or leaves the viewport.");
+            Check(create.Top>=tooltip.Bottom && create.Bottom<=size.Y,"Create button overlaps the Seasons tooltip or leaves the viewport.");
         }
         string parent=Path.GetFullPath(AppContext.BaseDirectory),root=Path.Combine(parent,".world-rule-prefs-"+Guid.NewGuid().ToString("N"));
         try

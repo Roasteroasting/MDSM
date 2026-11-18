@@ -513,21 +513,11 @@ internal sealed class MenuController : IDisposable
                     0=>SelectedCheats?"ON":"OFF",1=>SelectedDifficulty.ToString(),2=>SelectedMode.ToString(),
                     _=>SelectedSeasons==SeasonsMode.NuclearWinter?"Nuclear Winter":SelectedSeasons.ToString()
                 };
-                int textScale=label.Length*6*scale<=bounds.Width?scale:1;
-                Text(label,bounds.Center.X-label.Length*3*textScale,bounds.Top-9*textScale,textScale,Color.LightGray);
                 MenuChrome.Control(_sprites,_pixel,bounds,bounds.Contains(_mouse),keyboardFocus:_keyboardNavigation&&_focus==option+3);
-                if(option==3 && SelectedSeasons==SeasonsMode.NuclearWinter && value.Length*6>bounds.Width)
-                {
-                    Text("Nuclear",bounds.Center.X-21,bounds.Center.Y-8,1,Color.White);
-                    Text("Winter",bounds.Center.X-18,bounds.Center.Y+1,1,Color.White);
-                }
-                else
-                {
-                    if(value.Length*6*textScale>bounds.Width)textScale=1;
-                    Text(value,bounds.Center.X-value.Length*3*textScale,bounds.Center.Y-3*textScale,textScale,Color.White);
-                }
+                Text(label,bounds.Center.X-label.Length*3*scale,bounds.Center.Y-8*scale,scale,Color.LightGray);
+                Text(value,bounds.Center.X-value.Length*3*scale,bounds.Center.Y+2*scale,scale,Color.White);
             }
-            Center(WorldCreationLayout.SeasonsWarning,viewport,WorldCreationLayout.SeasonsWarningTop(viewport),1,Color.LightGray);
+            DrawSeasonsWarning(viewport, scale);
             if (WorldCreationLayout.NoticeVisible(_screen, SelectedSize))
             {
                 var size = new Point(viewport.Width, viewport.Height);
@@ -577,6 +567,26 @@ internal sealed class MenuController : IDisposable
             Text(_message, x, y, scale, _messageIsError ? new Color(255, 170, 140) : new Color(190, 232, 181));
         }
         _sprites.End();
+    }
+
+    private void DrawSeasonsWarning(Viewport viewport, int scale)
+    {
+        Rectangle icon = WorldCreationLayout.SeasonsWarningIcon(viewport);
+        bool hovered = icon.Contains(_mouse);
+        Color gold = hovered ? Color.LightGoldenrodYellow : MdsmUiStyle.Accent;
+        int triangleHeight = icon.Height - 3;
+        for (int row = 0; row < triangleHeight; row++)
+        {
+            int halfWidth = row * (icon.Width / 2 - 1) / (triangleHeight - 1);
+            Fill(new(icon.Center.X - halfWidth, icon.Top + 1 + row, 2 * halfWidth + 1, 1), gold);
+        }
+        Fill(new(icon.Center.X - 1, icon.Top + 5, 2, icon.Height - 13), MdsmUiStyle.Edge);
+        Fill(new(icon.Center.X - 1, icon.Bottom - 6, 2, 2), MdsmUiStyle.Edge);
+
+        if (!hovered) return;
+        Rectangle tooltip = WorldCreationLayout.SeasonsTooltip(viewport);
+        MenuChrome.Control(_sprites, _pixel, tooltip, inset: true);
+        Text(WorldCreationLayout.SeasonsWarning, tooltip.X + 6, tooltip.Y + 4, scale, Color.White);
     }
 
     private void DrawButtons(Viewport viewport,int scale)

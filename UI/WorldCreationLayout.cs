@@ -25,11 +25,26 @@ internal static class WorldCreationLayout
     }
     public static Rectangle Option(Viewport v,int index)
     {
-        Rectangle field=Field(v,2);int width=(field.Width-18)/4;
-        return new(field.Left+index*(width+6),field.Bottom+(v.Height<500?10:32),width,v.Height<500?20:36);
+        Rectangle field = Field(v, 2);
+        bool compact = v.Height < 500;
+        int gap = 24 + 4 * Scale(v);
+        int width = (Math.Min(field.Width, v.Width - 48) - gap) / 2, height = compact ? 32 : 48;
+        return new(field.Center.X - width - gap / 2 + index % 2 * (width + gap),
+            field.Bottom + (compact ? 9 : 14) + index / 2 * (height + (compact ? 6 : 8)), width, height);
     }
-    internal const string SeasonsWarning="This setting cannot be changed after world creation.";
-    internal static int SeasonsWarningTop(Viewport v)=>Option(v,3).Bottom+4;
+    internal const string SeasonsWarning = "This setting cannot be changed\nafter world creation.";
+    internal static Rectangle SeasonsWarningIcon(Viewport v)
+    {
+        Rectangle seasons = Option(v, 3);
+        int size = Scale(v) == 2 ? 20 : 16;
+        return new(seasons.Right + 4, seasons.Center.Y - size / 2, size, size);
+    }
+    internal static Rectangle SeasonsTooltip(Viewport v)
+    {
+        int scale = Scale(v), width = 30 * 6 * scale + 12;
+        return new(Math.Clamp(SeasonsWarningIcon(v).Left, 4, v.Width - width - 4),
+            Option(v, 3).Bottom + 4, width, 20 * scale + 6);
+    }
     public static string[] Lines(Viewport v)
     {
         int characters = Math.Max(1, (Math.Min(760, v.Width - 32) - 16) / (6 * NoticeScale(v)));
@@ -58,7 +73,7 @@ internal static class WorldCreationLayout
     {
         int width = Math.Min(250, (v.Width - 48) / 2);
         return new Rectangle(v.Width / 2 - width - 8 + index * (width + 16),
-            v.Height < 500 ? Math.Max(Notice(v).Bottom + 6, v.Height - 30) : Math.Max(Notice(v).Bottom + 12, v.Height / 2 + 170),
+            v.Height < 500 ? v.Height - 30 : Math.Max(SeasonsTooltip(v).Bottom + 8, v.Height / 2 + 170),
             width, v.Height < 500 ? 24 : 46);
     }
 }

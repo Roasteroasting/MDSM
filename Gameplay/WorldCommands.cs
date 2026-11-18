@@ -16,7 +16,9 @@ internal sealed class WorldCommands
 {
     public const int MaximumGive = Inventory.SlotCount * ItemStack.Maximum, MaximumSpawn = 32;
     private readonly Random _random = new();
-    private const string Overview = "/help [give|spawn|kill|time|gamemode|locate|tp|precision|items [page]|mobs]\n/give @p <item> [quantity]\n/spawn <mob> [quantity]\n/kill @p OR /kill @e [type=<entity>]\n/time set <0-23999|day|noon|sunset|night|midnight|sunrise>\n/time query\n/gamemode <survival|creative>\n/locate dungeon\n/tp [@p] <x> <y> <z>\n/precision <modern|legacy>";
+    private const string HelpUsage = "/help [give|spawn|kill|time|season|gamemode|locate|tp|precision|items [page]|mobs]";
+    private const string SeasonUsage = "/season <winter|summer|spring|autumn>";
+    private const string Overview = HelpUsage + "\n/give @p <item> [quantity]\n/spawn <mob> [quantity]\n/kill @p OR /kill @e [type=<entity>]\n/time set <0-23999|day|noon|sunset|night|midnight|sunrise>\n/time query\n" + SeasonUsage + "\n/gamemode <survival|creative>\n/locate dungeon\n/tp [@p] <x> <y> <z>\n/precision <modern|legacy>";
     private static CommandResult Error(string text) => new(false, text);
     public CommandResult Execute(string text, GameSession session, GameSettings settings)
     {
@@ -80,6 +82,18 @@ internal sealed class WorldCommands
                 if (ticks < 0 && (!int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out ticks) || ticks is < 0 or > 23999)) return Error("Time must be a whole number 0-23999 or a named preset. Use /help time.");
                 session.World.Time.Restore(ticks * (WorldTime.DaySeconds / 24000));
                 return new(true, $"Time set to {ticks} / 24000.");
+            case "/season":
+                if (args.Length != 2) return Error("Usage: " + SeasonUsage);
+                Season? season = args[1].ToLowerInvariant() switch
+                {
+                    "winter" => Season.Winter, "summer" => Season.Summer,
+                    "spring" => Season.Spring, "autumn" => Season.Autumn,
+                    _ => null
+                };
+                if (!season.HasValue) return Error("Usage: " + SeasonUsage);
+                if (!session.World.Seasons.TryOverride(season.Value))
+                    return Error("Season override requires a world created with Seasons: On.");
+                return new(true, $"Season set to {season.Value} until the world is reloaded.");
             case "/gamemode":
                 if (args.Length != 2 || !(args[1].Equals("survival", StringComparison.OrdinalIgnoreCase) || args[1].Equals("creative", StringComparison.OrdinalIgnoreCase))) return Error("Usage: /gamemode <survival|creative>");
                 settings.GameMode = args[1].Equals("creative", StringComparison.OrdinalIgnoreCase) ? GameMode.Creative : GameMode.Survival;
@@ -172,7 +186,7 @@ internal sealed class WorldCommands
             foreach (ItemId item in Items.Obtainable.Slice((page - 1) * perPage, Math.Min(perPage, Items.Obtainable.Length - (page - 1) * perPage))) listing += $"\n{item.Value}: {Key(Items.Name(item))}";
             return new(true, listing);
         }
-        if (args.Length != 2) return Error("Usage: /help [give|spawn|kill|time|gamemode|locate|tp|precision|items [page]|mobs]");
+        if (args.Length != 2) return Error("Usage: " + HelpUsage);
         return topic switch
         {
             "give" => new(true, "/give @p <item name_or_ID> [quantity 1-2304]\nExample: /give @p stone 64\nUse underscores in names, e.g. diamond_pickaxe.\nAll items must fit. Equipment arrives at full durability."),
@@ -183,6 +197,7 @@ internal sealed class WorldCommands
             "kill" => new(true, "/kill @p - Kill yourself, including in Creative.\n/kill @e - Remove ALL entities, including death loot.\n/kill @e type=<entity> - Filter targets.\nTypes: mob, passive, hostile, player, item, arrow,\nsnowball, falling_block, or a mob species name/ID.\nExample: /kill @e type=pig\nFiltered mob kills keep normal drops and respawn rules.\nItem/falling-block removal permanently deletes those entities."),
             "mobs" => new(true, string.Join("\n", Enum.GetValues<MobSpecies>().Select(s => $"{(byte)s}: {s.ToString().ToLowerInvariant()}"))),
             "time" => new(true, "/time set <0-23999|sunrise|day|noon|sunset|night|midnight>\n/time query\n0 sunrise, 1000 day, 6000 noon, 12000 sunset,\n14000 night, 18000 midnight. 20 ticks = 1 gameplay second."),
+            "season" => new(true, SeasonUsage + "\nRequires Seasons: On and Allow Cheats: On.\nReload the world to resume using the local calendar."),
             "gamemode" => new(true, "/gamemode <survival|creative>\nChanges the same mode setting used by Settings.\nPreserves inventory and equipment."),
             _ => Error("Unknown help topic. Use /help.")
         };

@@ -58,6 +58,8 @@ internal static class WorldRuleGraphicsChecks
                 Check(Menu.SelectedSeasons==SeasonsMode.Off,"New world did not default to seasons off.");
                 Click(WorldCreationLayout.Option(GraphicsDevice.Viewport,3));Press(Keys.Right);
                 Check(Menu.SelectedSeasons==SeasonsMode.NuclearWinter,"Seasons did not cycle by mouse and keyboard.");
+                VerifySeasonsTooltip(new(320,240));
+                VerifySeasonsTooltip(new(1280,720));
                 Check(Menu.SelectedSize==WorldSize.Infinite,"Creation did not default to Infinite.");
                 Click(WorldCreationLayout.Field(GraphicsDevice.Viewport,2));Check(Menu.SelectedSize==WorldSize.Large,"Legacy size fixture failed.");
                 foreach(Point size in new[]{new Point(320,240),new(640,480),new(1280,720)})Snapshot(size,"world-rules-creation");
@@ -106,6 +108,28 @@ internal static class WorldRuleGraphicsChecks
                 }
             }
             base.Draw(time);
+        }
+        private void VerifySeasonsTooltip(Point size)
+        {
+            using var target = new RenderTarget2D(GraphicsDevice,size.X,size.Y,false,SurfaceFormat.Color,DepthFormat.Depth24);
+            var viewport = new Viewport(0,0,size.X,size.Y);
+            Rectangle icon = WorldCreationLayout.SeasonsWarningIcon(viewport);
+            Rectangle tooltip = WorldCreationLayout.SeasonsTooltip(viewport);
+            int WarningInk(Point mouse)
+            {
+                GraphicsDevice.SetRenderTarget(target);
+                Input(mouse);
+                GraphicsDevice.Clear(Color.CornflowerBlue);
+                Menu.Draw(viewport);
+                GraphicsDevice.SetRenderTarget(null);
+                var pixels = new Color[tooltip.Width*tooltip.Height];
+                target.GetData(0,tooltip,pixels,0,pixels.Length);
+                return pixels.Count(color=>color==Color.White);
+            }
+            int outside = WarningInk(Point.Zero);
+            Check(WarningInk(icon.Center)>outside+40,"Hovering over the warning icon did not draw the tooltip.");
+            Check(WarningInk(WorldCreationLayout.Option(viewport,3).Center)==outside,
+                "The warning tooltip was still drawn after moving off the icon.");
         }
         private void Snapshot(Point size,string name,bool locked=false)
         {

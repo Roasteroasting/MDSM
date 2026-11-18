@@ -12,6 +12,7 @@ public sealed class SeasonManager
     internal const double WinterFeedChance = .65;
     internal const double WinterBreedingChance = .5;
     private double _untilRefresh;
+    private Season? _override;
     public SeasonsMode Mode { get; }
     public Season Current { get; private set; }
     internal bool Winter => Current == Season.Winter;
@@ -25,12 +26,19 @@ public sealed class SeasonManager
 
     internal void Tick(double elapsed)
     {
-        if (Mode != SeasonsMode.On || (_untilRefresh -= elapsed) > 0) return;
+        if (Mode != SeasonsMode.On || _override.HasValue || (_untilRefresh -= elapsed) > 0) return;
         _untilRefresh = 1;
         Refresh(DateTime.Today);
     }
 
-    internal void Refresh(DateTime localDate) => Current = Resolve(Mode, localDate);
+    internal void Refresh(DateTime localDate) => Current = _override ?? Resolve(Mode, localDate);
+
+    internal bool TryOverride(Season season)
+    {
+        if (Mode != SeasonsMode.On) return false;
+        _override = Current = season;
+        return true;
+    }
 
     internal static Season Resolve(SeasonsMode mode, DateTime localDate)
     {
