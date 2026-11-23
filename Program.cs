@@ -124,7 +124,7 @@ else if(System.Array.Exists(args,a=>a=="--lighting-edit-benchmark"))
 }
 else if(System.Array.Exists(args,a=>a=="--mob-movement-graphics-test"))
 {
-    System.Environment.ExitCode=System.Math.Max(MDSM.Testing.MobGraphicsChecks.Run(),MDSM.Testing.PigGraphicsChecks.Run());
+    System.Environment.ExitCode=MDSM.Testing.GraphicsTestSuite.Run("mobs","pigs");
 }
 else if(System.Array.Exists(args,a=>a=="--mob-movement-test"))
 {
@@ -268,15 +268,11 @@ else if (System.Array.Exists(args, argument => argument == "--self-test"))
 }
 else if (System.Array.Exists(args, argument => argument == "--graphics-test"))
 {
-    int[] results =
-    {
-        MDSM.Testing.StreamingGraphicsChecks.Run(), MDSM.Testing.SeasonLeadChecks.RunGraphics(),
-        MDSM.Testing.WorldRuleGraphicsChecks.Run(), MDSM.Testing.InterfaceGraphicsChecks.Run(), MDSM.Testing.AudioGraphicsChecks.Run(),
-        MDSM.Testing.CollisionGraphicsChecks.Run(), MDSM.Testing.DoorChecks.RunGraphics(),
-        MDSM.Testing.PigGraphicsChecks.Run(), MDSM.Testing.WaterGraphicsChecks.Run(),
-        MDSM.Testing.MobGraphicsChecks.Run()
-    };
-    System.Environment.ExitCode = System.Linq.Enumerable.Max(results);
+    System.Environment.ExitCode = MDSM.Testing.GraphicsTestSuite.Run();
+}
+else if (args.Length == 2 && args[0] == "--graphics-test-case")
+{
+    System.Environment.ExitCode = MDSM.Testing.GraphicsTestSuite.RunCase(args[1]);
 }
 else if (args.Length == 1 && args[0] == "--water-graphics-test")
 {

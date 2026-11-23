@@ -52,6 +52,8 @@ internal static class InterfaceGraphicsChecks
         private bool _capture;
         private Color[] _withHud, _hidden;
         private Color[] _regressionHidden, _regressionVisible;
+        private Color[] _resizeBaseline;
+        private int _resizeDraws;
         private readonly List<(string Path, Color[] Pixels, int Width, int Height)> _regressionShots = new();
         public bool Verified { get; private set; }
         private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -310,7 +312,7 @@ internal static class InterfaceGraphicsChecks
                 if (Presentation.HudVisible) Press(Keys.F1);
             }
             if (_frame is 23 or 27 or 30) Press(Keys.F1);
-            if (_frame == 31) { Resize(801, 603); Press(Keys.F1); }
+            if (_frame == 31 && _resizeDraws++ == 0) { Resize(801, 603); Press(Keys.F1); }
             if (_frame == 36) { Directory.Move(Shots, Shots + ".saved"); File.WriteAllText(Shots, "blocked"); }
             bool capture = _frame is 19 or 21 or 25 or 28 or 30 or 32 or 34 or 38;
             if (capture || _frame == 36) Press(Keys.F2);
@@ -320,7 +322,23 @@ internal static class InterfaceGraphicsChecks
             int width = GraphicsDevice.PresentationParameters.BackBufferWidth, height = GraphicsDevice.PresentationParameters.BackBufferHeight;
             var pixels = new Color[width * height];
             GraphicsDevice.GetBackBufferData(pixels);
-            if (_frame is 18 or 31) _regressionHidden = pixels;
+            if (_frame == 31)
+            {
+                // X11 can apply the drawable resize after the first draw. Establish the
+                // reference before the first screenshot, with matching size and pixels.
+                bool resized = width == 801 && height == 603
+                    && Window.ClientBounds.Width == width && Window.ClientBounds.Height == height;
+                if (resized && _resizeBaseline != null && pixels.AsSpan().SequenceEqual(_resizeBaseline))
+                    _regressionHidden = pixels;
+                else
+                {
+                    Require(_resizeDraws < 120, "Resized backbuffer did not stabilize before screenshot capture.");
+                    _resizeBaseline = resized ? pixels : null;
+                    _frame--;
+                }
+                return;
+            }
+            if (_frame == 18) _regressionHidden = pixels;
             if (_frame == 24) _regressionVisible = pixels;
             // Allow one frame when showing the HUD to obtain a clean visible baseline.
             if (_frame != 23 && _frame != 40)

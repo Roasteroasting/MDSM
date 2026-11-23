@@ -43,7 +43,7 @@ internal static class MobGraphicsChecks
         private readonly WorldSaveManager _store;
         private readonly string _root;
         private readonly List<(string Path, Color[] Pixels)> _shots = new();
-        private int _frame;
+        private int _frame = -1;
         private Color[] _visible, _hidden;
         public bool Verified { get; private set; }
         private T Field<T>(string name) => (T)typeof(Game1).GetField(name, Private).GetValue(this);
@@ -65,6 +65,8 @@ internal static class MobGraphicsChecks
         protected override void Draw(GameTime time)
         {
             Require(IsActive, "Mixed-mob graphics window lost focus."); _frame++;
+            // Present before reading back pixels so the initial SDL resize can reach the drawable.
+            if (_frame == 0) { base.Draw(time); return; }
             bool capture = _frame is 1 or 2 or 4 or 6 or 7 or 8;
             switch (_frame)
             {

@@ -9,8 +9,8 @@ if [[ $# -gt 1 || ! $suite =~ ^--[a-z0-9-]+-test$ ]] ||
     exit 2
 fi
 
-assembly="$project_dir/bin/Debug/net9.0/MDSM.dll"
-if [[ ! -f $assembly || ! -f ${assembly%/*}/Content/Effects/BlockLighting.xnb ]]; then
+build_dir="$project_dir/bin/Debug/net9.0"
+if [[ ! -f $build_dir/MDSM.dll || ! -f $build_dir/Content/Effects/BlockLighting.xnb ]]; then
     printf 'Run dotnet build in the Windows checkout before starting the graphics suite.\n' >&2
     exit 2
 fi
@@ -22,8 +22,15 @@ for tool in dotnet Xvfb xvfb-run xauth xprop openbox glxinfo; do
     fi
 done
 
+# Give all test processes the same build and keep .NET from mapping DLLs on DrvFS.
+run_dir=$(mktemp -d /tmp/mdsm-graphics.XXXXXXXX)
+trap 'rm -r -- "$run_dir"' EXIT
+cp -R -- "$build_dir"/*.dll "$build_dir"/MDSM.{deps,runtimeconfig}.json \
+    "$build_dir"/Content "$build_dir"/runtimes "$run_dir/"
+
 # Force a private X11 display, Mesa software OpenGL, and a silent OpenAL device.
 export SDL_VIDEODRIVER=x11 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
+status=0
 # Expand the variables inside the Bash process that inherits the private display.
 # shellcheck disable=SC2016
 xvfb-run --auto-servernum --server-args='-screen 0 3840x2160x24 -nolisten tcp' bash -eu -o pipefail -c '
@@ -47,4 +54,13 @@ xvfb-run --auto-servernum --server-args='-screen 0 3840x2160x24 -nolisten tcp' b
 
         glxinfo -B
         dotnet "$1" "$2"
-    ' mdsm-graphics "$assembly" "$suite"
+    ' mdsm-graphics "$run_dir/MDSM.dll" "$suite" || status=$?
+
+shopt -s nullglob
+screenshots=("$run_dir"/*.png)
+if (( ${#screenshots[@]} )); then
+    artifacts="$project_dir/bin/headless-graphics-artifacts"
+    mkdir -p -- "$artifacts"
+    cp -- "${screenshots[@]}" "$artifacts/"
+fi
+exit "$status"

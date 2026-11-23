@@ -41,7 +41,8 @@ internal static class WaterGraphicsChecks
         private const BindingFlags Private = BindingFlags.NonPublic | BindingFlags.Instance;
         private readonly string _root;
         private readonly List<(string File, Color[] Pixels, int Width, int Height)> _shots = new();
-        private int _frame;
+        private int _frame = -1;
+        private bool _resizeRequested;
         private Color[] _visible, _hidden, _resized;
         private readonly WorldSaveManager _store;
         public bool Verified { get; private set; }
@@ -64,6 +65,8 @@ internal static class WaterGraphicsChecks
         {
             Require(IsActive, "Water graphics window lost focus.");
             _frame++;
+            // Present before reading back pixels so the initial SDL resize can reach the drawable.
+            if (_frame == 0) { base.Draw(time); return; }
             bool capture = _frame is 1 or 2 or 4 or 6 or 7 or 8 or 11;
             switch (_frame)
             {
@@ -79,9 +82,13 @@ internal static class WaterGraphicsChecks
                 case 5: Press(Keys.F1); break;
                 case 6: Press(Keys.F3); break;
                 case 7: Press(Keys.F1); break;
-                case 8:
+                case 8 when !_resizeRequested:
                     var graphics = Field<GraphicsDeviceManager>("_graphics");
-                    graphics.PreferredBackBufferWidth = 801; graphics.PreferredBackBufferHeight = 603; graphics.ApplyChanges(); break;
+                    graphics.PreferredBackBufferWidth = 801; graphics.PreferredBackBufferHeight = 603; graphics.ApplyChanges();
+                    _resizeRequested = true;
+                    _frame--;
+                    base.Draw(time);
+                    return;
                 case 10:
                     foreach (var shot in _shots)
                     {
