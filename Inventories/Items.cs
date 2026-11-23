@@ -31,6 +31,9 @@ public static class Items
     public static readonly ItemId Egg=new(328),Carrot=new(329),Potato=new(330),BakedPotato=new(331),FlintAndSteel=new(332),Snowball=new(333);
     public static readonly ItemId Lead=new(334);
     public static readonly ItemId RunningBoots=new(335);
+    public static readonly ItemId CopperIngot=new(336), ClayBall=new(337), Brick=new(338), CopperWire=new(339),
+        MortarAndPestle=new(341), UnfiredPot=new(342), CeramicPot=new(343);
+    public static ItemId Dye(DyeColor color)=>new((ushort)(344+(int)color));
     private static readonly ItemDefinition[] Definitions = CreateDefinitions();
     private static readonly ItemId[] SpriteItems = CreateSprites();
     private static readonly ItemId[] Catalog = CreateCatalog();
@@ -44,7 +47,7 @@ public static class Items
     }
     private static ItemDefinition[] CreateDefinitions()
     {
-        var definitions = new ItemDefinition[80];
+        var definitions = new ItemDefinition[88+DyePalette.Count];
         string[] names = { "RAW PORKCHOP", "LEATHER", "FEATHER", "IRON INGOT", "COAL", "FLINT", "DIAMOND", "STICK", "ARROW", "STRING", "CHARCOAL" };
         for (int i=0;i<names.Length;i++) definitions[i] = new(names[i], i==0?1:64, Sprite: i);
         int[] uses = {59,131,250,1561};
@@ -68,9 +71,28 @@ public static class Items
         definitions[77]=new("SNOWBALL",16,Sprite:79);
         definitions[78]=new("LEAD",Sprite:80);
         definitions[79]=definitions[Armor(ArmorMaterial.Iron,ArmorSlot.Boots).Value-256] with {Name="RUNNING BOOTS",Sprite=81};
+        definitions[80]=new("COPPER INGOT",Sprite:82);
+        definitions[81]=new("CLAY BALL",Sprite:83);
+        definitions[82]=new("BRICK",Sprite:84);
+        definitions[83]=new("COPPER WIRE",Sprite:85);
+        // Item ID 340 is retired. Atlas tile 86 is unused and available for new artwork.
+        definitions[85]=new("MORTAR AND PESTLE",1,Sprite:87);
+        definitions[86]=new("UNFIRED CLAY POT",Sprite:88);
+        definitions[87]=new("CERAMIC POT",Sprite:89);
+        for(int i=0;i<DyePalette.Count;i++)definitions[88+i]=new(DyePalette.Name((DyeColor)i)+" DYE",Sprite:90+i);
         return definitions;
     }
-    private static ItemId[] CreateSprites() { var all=new ItemId[Definitions.Length+2];for(int i=0;i<72;i++)all[i]=new((ushort)(256+i));all[72]=Sapling;all[73]=new((byte)BlockType.Bed);for(int i=74;i<all.Length;i++)all[i]=new((ushort)(328+i-74));return all; }
+    private static ItemId[] CreateSprites()
+    {
+        var all=new System.Collections.Generic.List<ItemId>(Definitions.Length+2);
+        for(int i=0;i<Definitions.Length;i++)
+        {
+            if(i==72){all.Add(Sapling);all.Add(new((byte)BlockType.Bed));}
+            var item=new ItemId((ushort)(256+i));
+            if(IsSprite(item))all.Add(item);
+        }
+        return all.ToArray();
+    }
     public static ItemId Armor(ArmorMaterial material,ArmorSlot slot)=>material is >=ArmorMaterial.Leather and <=ArmorMaterial.Obsidian && slot is >=ArmorSlot.Helmet and <=ArmorSlot.Boots
         ?new((ushort)(304+(int)material*4+(int)slot)):throw new ArgumentException("Invalid armor.");
     public static bool LavaResistant(ItemId item)=>item.Value==(byte)BlockType.Obsidian || Get(item).Tier==ToolTier.Obsidian || item.Value is >=324 and <=327;
@@ -83,7 +105,11 @@ public static class Items
         : TryGetBlock(item,out BlockType block) ? new(Blocks.Get(block).Name,StackLimit:block==BlockType.Bed?1:64,Sprite:block==BlockType.Sapling?28:block==BlockType.Bed?73:-1) : default;
     public static int StackLimit(ItemId item) => Get(item).StackLimit;
     public static ReadOnlySpan<ItemId> Sprites => SpriteItems;
-    public static bool IsSprite(ItemId item) => item.Value >=256 && item.Value <256+Definitions.Length || item==Sapling || item.Value==(byte)BlockType.Bed;
+    public static bool IsSprite(ItemId item)
+    {
+        var definition=Get(item);
+        return definition.Name!=null && definition.Sprite>=0;
+    }
     public static bool IsDefined(ItemId item) => IsSprite(item) || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
         ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));

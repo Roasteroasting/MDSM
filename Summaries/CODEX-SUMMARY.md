@@ -2991,3 +2991,76 @@ including the Running Boots, kept their pixels. The runtime Lead writer was remo
 Creative catalog dragging now uses the scrollbar thumb's travel and retains
 its grab offset until release, including beyond the item grid. Dragging and
 the wheel share the same last-row limit.
+
+## Industrialization milestone 1
+
+Copper veins and clay deposits appear in newly generated Infinite chunks.
+Copper requires a stone-tier pickaxe or better and smelts in the Furnace or
+Blast Furnace. Nine ingots make a Copper Block and the block unpacks to nine
+ingots. Clay yields four clay balls. The Furnace can fire the first bricks, and
+four bricks make a brick block. Eight brick blocks around an empty center create
+the fuel-fired Brick Kiln. It fires bricks and ceramic pots in five gameplay
+seconds per item with fuel. Three clay balls in a V make an unfired pot.
+
+Craft the Metalworking Bench with an iron ingot, crafting table, and iron ingot
+over a row of planks. Right-click the placed bench to use it. Three copper
+ingots in a horizontal row make six Copper Wire.
+
+Three bricks in a V make a reusable Mortar and Pestle. Hold it and right-click
+to open the grinder. Use its input slots, then click the result. Red and yellow
+flowers, violets, peonies, cornflowers, daisies, marigolds, and cactus give red,
+yellow, purple, pink, blue, white, orange, and green dye respectively. Charcoal
+gives black. Mix two different dyes to get two of the resulting color.
+
+| Ingredients | Dye |
+| --- | --- |
+| Blue + green | Cyan |
+| Green + white | Lime |
+| Blue + white | Light blue |
+| Purple + pink | Magenta |
+| Black + white | Gray |
+| Gray + white | Light gray |
+| Red + green | Brown |
+
+Surround a dye with eight clear glass blocks or eight clear panes on a crafting
+table to stain all eight. Six matching stained blocks in two rows also make
+sixteen stained panes. The 16 colors use a shared cutout texture and palette in
+the world, held models, item drops, and inventory icons. All new artwork is in
+terrain tiles 87-99 and item tiles 82-105 in the editable PNG atlases.
+
+Clay placement follows the Beta water-seeded, tapering clump approach and also
+allows wet riverbed gravel and dirt. Flower patches group several flowers around
+local deterministic anchors, while spring peonies and violets retain their
+previous wide distribution. Existing saved terrain loads as stored. The new
+features are generated when unexplored Infinite chunks are created. Block and
+item identifiers were appended, and kiln inventory and work progress use the
+existing compressed container state.
+
+Run `dotnet run --no-build -- --industrial-test` for focused checks. The
+scripted right-click checks and stained-glass draw checks are included in
+`dotnet run --no-build -- --collision-graphics-test`.
+
+Verification: Build passed with zero warnings and errors. All 272 Infinite and
+shared CPU regressions passed. The focused industrial checks sampled 18 chunks
+across three seeds and found 1,021 copper ore blocks, 765 clay blocks, and all
+three new flowers. The scripted graphics checks passed for right-click station
+access, both lighting modes, cached inventory icons, crafting, and screenshots.
+
+The generic Mechanical Parts item and its recipe were retired. Its persisted
+item ID 340 remains reserved. Older inventories, containers, and dropped
+stacks recover one Iron Ingot per part. Item atlas tile 86 is unused and can
+be assigned to future artwork.
+
+
+## HTML wiki
+
+Open Wiki/index.html directly in a browser. It works offline and includes
+searchable crafting and smelting recipes, individual block and item entries,
+world generation, farming, mobs, seasons, and commands. Expand technical
+states in the catalog to browse all registered block IDs.
+
+Regenerate Wiki/data.js and its copied game artwork from the project root with
+dotnet run --project Tools/WikiExport -- .
+The exporter reads current game registries. Wiki/notes.js and the HTML guide
+pages contain the accompanying hand-maintained explanations. The site is
+kept local for manual publication.

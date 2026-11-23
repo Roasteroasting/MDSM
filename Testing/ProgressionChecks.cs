@@ -50,7 +50,7 @@ internal static class ProgressionChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length==92,"Recipe registration count wrong.");
+        Require(CraftingRecipes.All.Length==164,"Recipe registration count wrong.");
         ItemId P=Block(BlockType.WoodenPlanks),C=Block(BlockType.Cobblestone),S=Items.Stick,T=Items.String;
         void Check(int w,int h,ItemId result,int quantity,params ItemId[] cells)
         {
@@ -160,7 +160,7 @@ internal static class ProgressionChecks
         session.Mining.Update(world,session.Items,new BlockHit(a,default,3),true,100,session.Inventory);
         Require(world.GetBlock(a.X,a.Y,a.Z)==BlockType.Air && session.Items.Entities.Sum(i=>i.Count)==52 && session.Items.Entities.Any(i=>i.Stack==tool),"Chest break lost contents or block.");
         var furnaceCell=new Point3(255,1,255);world.SetBlock(furnaceCell.X,furnaceCell.Y,furnaceCell.Z,BlockType.Furnace);var furnace=world.Containers.Get(furnaceCell);
-        foreach(var recipe in Smelting.Recipes.Where(r=>Items.StackLimit(r.Input)>1))foreach(ItemId fuel in new[]{Items.Coal,Items.Charcoal})
+        foreach(var recipe in Smelting.Recipes.Where(r=>Items.StackLimit(r.Input)>1 && Smelting.Result(r.Input,BlockType.Furnace)==r.Output))foreach(ItemId fuel in new[]{Items.Coal,Items.Charcoal})
         {
             var f=new BlockContainer(default,BlockType.Furnace,null);f.SetSlot(0,Stack(recipe.Input,64));f.SetSlot(1,Stack(fuel));
             f.Update(79.999);Require(f[2].Count==7 && f[0].Count==57,"Input/output consumed early.");f.Update(.001);

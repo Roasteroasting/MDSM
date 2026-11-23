@@ -148,6 +148,7 @@ internal static class PrototypeChecks
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SandstoneChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteIntegrationChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SeasonLeadChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,IndustrialChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,AudioChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SupportDropChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,CollisionUpdateChecks.All));
@@ -185,7 +186,7 @@ internal static class PrototypeChecks
         }
         Require(world.GetBlock(-1, 4, 0) == BlockType.Air, "Outside the world must be empty.");
         Require(!world.SetBlock(world.Width, 5, 0, BlockType.Stone), "Out-of-bounds edit accepted.");
-        Require(!world.SetBlock(0, 5, 0, (BlockType)99), "Invalid block accepted.");
+        Require(!world.SetBlock(0, 5, 0, (BlockType)byte.MaxValue), "Invalid block accepted.");
         Require(world.SetBlock(0, 5, 0, BlockType.Stone) && world.Revision == 1, "Edit revision not updated.");
         Require(!world.SetBlock(0, 5, 0, BlockType.Stone) && world.Revision == 1, "Unchanged edit modified revision.");
     }

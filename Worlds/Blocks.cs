@@ -37,7 +37,17 @@ public enum BlockType : byte
     WaterFalling1=92, WaterFalling2=93, WaterFalling3=94, WaterFalling4=95,
     WaterFalling5=96, WaterFalling6=97, WaterFalling7=98,
     LavaFalling1=99, LavaFalling2=100, LavaFalling3=101, LavaFalling4=102,
-    LavaFalling5=103, LavaFalling6=104, LavaFalling7=105
+    LavaFalling5=103, LavaFalling6=104, LavaFalling7=105,
+    CopperOre=106, CopperBlock=107, Clay=108, BrickBlock=109, BrickKiln=110, MetalworkingBench=111,
+    Cornflower=112, Daisy=113, Marigold=114,
+    StainedGlassWhite=115, StainedGlassOrange=116, StainedGlassMagenta=117, StainedGlassLightBlue=118,
+    StainedGlassYellow=119, StainedGlassLime=120, StainedGlassPink=121, StainedGlassGray=122,
+    StainedGlassLightGray=123, StainedGlassCyan=124, StainedGlassPurple=125, StainedGlassBlue=126,
+    StainedGlassBrown=127, StainedGlassGreen=128, StainedGlassRed=129, StainedGlassBlack=130,
+    StainedPaneWhite=131, StainedPaneOrange=132, StainedPaneMagenta=133, StainedPaneLightBlue=134,
+    StainedPaneYellow=135, StainedPaneLime=136, StainedPanePink=137, StainedPaneGray=138,
+    StainedPaneLightGray=139, StainedPaneCyan=140, StainedPanePurple=141, StainedPaneBlue=142,
+    StainedPaneBrown=143, StainedPaneGreen=144, StainedPaneRed=145, StainedPaneBlack=146
 }
 
 public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus }
@@ -56,8 +66,11 @@ public static class Blocks
     internal const int SnowyGrassTile=84;
     private static readonly BlockDefinition WaterDefinition = new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1);
     private static readonly BlockDefinition LavaDefinition = new("LAVA", false, false, BlockShape.Fluid, 50, Placeable: false, MiningSeconds: -1);
-    private static readonly BlockDefinition[] Definitions =
+    private static readonly BlockDefinition[] Definitions = CreateDefinitions();
+    private static BlockDefinition[] CreateDefinitions()
     {
+        BlockDefinition[] original =
+        {
         new("AIR", false, false, BlockShape.None, 0, Placeable: false, MiningSeconds: -1),
         new("GRASS", true, true, BlockShape.Cube, 1, 0, 2, MiningSeconds: 1.25f),
         new("DIRT", true, true, BlockShape.Cube, 2, MiningSeconds: 1.25f),
@@ -151,8 +164,27 @@ public static class Blocks
         new("PEONY",false,false,BlockShape.Cross,85,MiningSeconds:0),
         new("VIOLET",false,false,BlockShape.Cross,86,MiningSeconds:0),
         WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition,
-        LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition
-    };
+        LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition,
+        new("COPPER ORE",true,true,BlockShape.Cube,87,MiningSeconds:4.5f),
+        new("COPPER BLOCK",true,true,BlockShape.Cube,88,MiningSeconds:3),
+        new("CLAY",true,true,BlockShape.Cube,89,MiningSeconds:.9f),
+        new("BRICKS",true,true,BlockShape.Cube,90,MiningSeconds:2.5f),
+        new("BRICK KILN",true,true,BlockShape.Cube,91,92,90,MiningSeconds:3.75f,FrontTile:93),
+        new("METALWORKING BENCH",true,true,BlockShape.Cube,94,95,7,MiningSeconds:2.5f),
+        new("CORNFLOWER",false,false,BlockShape.Cross,96,MiningSeconds:0),
+        new("DAISY",false,false,BlockShape.Cross,97,MiningSeconds:0),
+        new("MARIGOLD",false,false,BlockShape.Cross,98,MiningSeconds:0)
+        };
+        Array.Resize(ref original,original.Length+2*DyePalette.Count);
+        for(int i=0;i<DyePalette.Count;i++)
+        {
+            var color=(DyeColor)i;
+            string name=DyePalette.Name(color);
+            original[(int)DyePalette.Glass(color)]=new(name+" STAINED GLASS",true,false,BlockShape.Cube,DyePalette.GlassTile,MiningSeconds:.45f);
+            original[(int)DyePalette.Glass(color,true)]=new(name+" STAINED GLASS PANE",true,false,BlockShape.Pane,DyePalette.GlassTile,MiningSeconds:.45f);
+        }
+        return original;
+    }
     private static readonly BlockType[] Palette =
     {
         BlockType.Grass, BlockType.Dirt, BlockType.Stone, BlockType.WoodLog, BlockType.Leaves,
@@ -186,7 +218,10 @@ public static class Blocks
         :block==BlockType.Sapling?.8f:Flower(block) || block==BlockType.DeadBush?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;
     public static bool Bed(BlockType block)=>block is BlockType.Bed or BlockType.BedHead;
-    internal static bool Flower(BlockType block)=>block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.Peony or BlockType.Violet;
+    internal static bool Flower(BlockType block)=>block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.Peony or BlockType.Violet
+        or BlockType.Cornflower or BlockType.Daisy or BlockType.Marigold;
     public static bool RejectsUnderside(BlockType block)=>block is BlockType.Torch or BlockType.TallGrass || Flower(block);
-    public static bool ConnectsPane(BlockType block)=>block==BlockType.GlassPane || IsSolid(block) && Get(block).Shape==BlockShape.Cube;
+    internal static bool GlassCube(BlockType block)=>block==BlockType.Glass || block is >=BlockType.StainedGlassWhite and <=BlockType.StainedGlassBlack;
+    internal static bool GlassPane(BlockType block)=>Get(block).Shape==BlockShape.Pane;
+    public static bool ConnectsPane(BlockType block)=>GlassPane(block) || IsSolid(block) && Get(block).Shape==BlockShape.Cube;
 }

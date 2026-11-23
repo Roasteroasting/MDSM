@@ -151,7 +151,9 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
     internal ChunkSnapshot Generate()
     {
         GenerateTerrain();
-        DepositsAndOres();Dungeons();TreesAndPlants();
+        DepositsAndOres();
+        IndustrialDeposits();
+        Dungeons();TreesAndPlants();
         var crops=terrain.GenerationVersion>=4?ShoreCrops():Array.Empty<CropState>();
         Animals();
         // Exact support safeguard after every feature pass. Fill only cavities
@@ -318,11 +320,84 @@ internal sealed class InfiniteFeatures(BetaDensityGenerator terrain,int seed,Chu
             if(At(wx,ground,wz)!=BlockType.Grass)continue;
             if(biome==Biome.SnowyForest)Write(wx,ground+1,wz,BlockType.Snow);
             else if(season==Season.Spring && h%139==0)Write(wx,ground+1,wz,(h>>16&1)==0?BlockType.Peony:BlockType.Violet);
+            else if(ForestFlower(wx,wz,h) is BlockType flower)Write(wx,ground+1,wz,flower);
             else if(h%100<36)
             {
                 bool doublePlant=h%13==0&&ground+2<128&&At(wx,ground+2,wz)==BlockType.Air;
-                Write(wx,ground+1,wz,doublePlant?BlockType.DoubleTallGrassLower:h%23==0?BlockType.RedFlower:h%29==0?BlockType.YellowFlower:BlockType.TallGrass);
+                Write(wx,ground+1,wz,doublePlant?BlockType.DoubleTallGrassLower:BlockType.TallGrass);
                 if(doublePlant)Write(wx,ground+2,wz,BlockType.DoubleTallGrassUpper);
+            }
+        }
+    }
+    private static readonly BlockType[] PatchFlowers={BlockType.RedFlower,BlockType.YellowFlower,BlockType.Cornflower,
+        BlockType.Daisy,BlockType.Marigold};
+    private BlockType? ForestFlower(long x,long z,ulong variation)
+    {
+        if(variation%100>=48)return null;
+        const int spacing=12;
+        long gx=Coordinates.FloorDiv(x,spacing),gz=Coordinates.FloorDiv(z,spacing);
+        for(long cz=gz-1;cz<=gz+1;cz++)for(long cx=gx-1;cx<=gx+1;cx++)
+        {
+            ulong patch=Hash(seed^0x464c4f57,cx,0,cz);
+            if(patch%4!=0)continue;
+            long dx=x-(cx*spacing+(long)((patch>>8)%12)),dz=z-(cz*spacing+(long)((patch>>16)%12));
+            int rx=3+(int)((patch>>24)%4),rz=2+(int)((patch>>32)%4);
+            if(dx*dx*rz*rz+dz*dz*rx*rx>rx*rx*rz*rz)continue;
+            ulong species=variation%5==0 ? patch>>48 : patch>>40;
+            return PatchFlowers[species%(ulong)PatchFlowers.Length];
+        }
+        return null;
+    }
+
+    private void IndustrialDeposits()
+    {
+        // Feature owners and their PRNGs are independent from the original ore
+        // sequence. Both sides of a chunk border evaluate the same footprints.
+        for(long cz=address.Z-1;cz<=address.Z+1;cz++)for(long cx=address.X-1;cx<=address.X+1;cx++)
+        {
+            var copper=new Random(unchecked((int)Hash(seed^0x434f5050,cx,0,cz)));
+            for(int attempt=0;attempt<4;attempt++)
+            {
+                long x=cx*16+copper.Next(16),z=cz*16+copper.Next(16);
+                int y=copper.Next(20,63);
+                int lean=copper.Next(2)==0 ? -1 : 1;
+                if(x+3<address.BlockX || x-3>address.BlockX+15 || z+3<address.BlockZ || z-3>address.BlockZ+15)continue;
+                for(int step=-3;step<=3;step++)for(int offset=-1;offset<=1;offset++)
+                {
+                    var p=new Point3(x+step,y+offset,z+step*lean/2);
+                    if((offset==0 || Hash(seed^0x43505253,p.X,p.Y,p.Z)%3!=0)
+                        && ChunkGameplay.Owns(address,p) && At(p.X,p.Y,p.Z)==BlockType.Stone)
+                        Write(p.X,p.Y,p.Z,BlockType.CopperOre);
+                }
+            }
+
+            var clay=new Random(unchecked((int)Hash(seed^0x434c4159,cx,0,cz)));
+            for(int attempt=0;attempt<4;attempt++)
+            {
+                long x=cx*16+clay.Next(16),z=cz*16+clay.Next(16);
+                double angle=clay.NextDouble()*Math.PI;
+                if(x+6<address.BlockX || x-6>address.BlockX+15 || z+6<address.BlockZ || z-6>address.BlockZ+15)continue;
+                Column profile=Profile(x,z);
+                var water=terrain.GenerationVersion>=3 ? WaterProfile(x,z) : new WaterColumn(profile.Surface,profile.Bed,profile.Water,NaturalWater.None);
+                if(!water.Wet || water.Level-water.Floor>5 || !Water.IsWater(TerrainAt(x,water.Floor+1,z,profile)))continue;
+                bool river=water.Kind==NaturalWater.River;
+                int y=water.Floor;
+                // A tapered cluster of overlapping ellipsoids, as in Beta's
+                // water-seeded clay blobs. Shore sand can be part of the same blob.
+                for(int step=-4;step<=4;step++)
+                {
+                    long bx=x+(long)Math.Round(Math.Cos(angle)*step),bz=z+(long)Math.Round(Math.Sin(angle)*step);
+                    int radius=Math.Abs(step)<3 ? 2 : 1;
+                    for(int dz=-radius;dz<=radius;dz++)for(int dx=-radius;dx<=radius;dx++)
+                    for(int dy=-1;dy<=1;dy++)
+                    {
+                        var p=new Point3(bx+dx,y+dy,bz+dz);
+                        if(dx*dx+dz*dz+dy*dy*2>radius*radius || !ChunkGameplay.Owns(address,p))continue;
+                        BlockType b=At(p.X,p.Y,p.Z);
+                        if(b==BlockType.Sand || river && b is (BlockType.Gravel or BlockType.Dirt) && Water.IsWater(At(p.X,p.Y+1,p.Z)))
+                            Write(p.X,p.Y,p.Z,BlockType.Clay);
+                    }
+                }
             }
         }
     }

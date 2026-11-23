@@ -12,12 +12,20 @@ public static class Smelting
     public const double Seconds=10;
     public const double MaximumBurnSeconds=1000;
     public static readonly SmeltingRecipe[] Recipes={new(Items.FromBlock(BlockType.Sand),Items.FromBlock(BlockType.Glass)),
-        new(Items.FromBlock(BlockType.IronOre),Items.IronIngot),new(Items.FromBlock(BlockType.WoodLog),Items.Charcoal),new(Items.RawPorkchop,Items.CookedPorkchop),new(Items.Potato,Items.BakedPotato)};
+        new(Items.FromBlock(BlockType.IronOre),Items.IronIngot),new(Items.FromBlock(BlockType.WoodLog),Items.Charcoal),new(Items.RawPorkchop,Items.CookedPorkchop),new(Items.Potato,Items.BakedPotato),
+        new(Items.FromBlock(BlockType.CopperOre),Items.CopperIngot),new(Items.ClayBall,Items.Brick),new(Items.UnfiredPot,Items.CeramicPot)};
     public static ItemId Result(ItemId input){foreach(var recipe in Recipes)if(recipe.Input==input)return recipe.Output;return default;}
     public static bool CoalLike(ItemId item)=>item==Items.Coal || item==Items.Charcoal;
-    public static bool Machine(BlockType block)=>block is BlockType.Furnace or BlockType.Smoker or BlockType.BlastFurnace;
-    public static double Speed(BlockType block)=>block==BlockType.Furnace?1:2;
-    public static ItemId Result(ItemId input,BlockType block) => block==BlockType.Smoker && input!=Items.RawPorkchop && input!=Items.Potato || block==BlockType.BlastFurnace && input!=Items.FromBlock(BlockType.IronOre)?default:Result(input);
+    public static bool Machine(BlockType block)=>block is BlockType.Furnace or BlockType.Smoker or BlockType.BlastFurnace or BlockType.BrickKiln;
+    public static double Speed(BlockType block)=>block is BlockType.Smoker or BlockType.BlastFurnace or BlockType.BrickKiln ? 2 : 1;
+    public static ItemId Result(ItemId input,BlockType block) => block switch
+    {
+        BlockType.BrickKiln when input!=Items.ClayBall && input!=Items.UnfiredPot => default,
+        BlockType.Smoker when input!=Items.RawPorkchop && input!=Items.Potato => default,
+        BlockType.BlastFurnace when input!=Items.FromBlock(BlockType.IronOre) && input!=Items.FromBlock(BlockType.CopperOre) => default,
+        _ when block!=BlockType.BrickKiln && input==Items.UnfiredPot => default,
+        _ => Result(input)
+    };
     public static bool Output(ItemId item,BlockType block){foreach(var recipe in Recipes)if(recipe.Output==item && Result(recipe.Input,block)==item)return true;return false;}
     public static double Fuel(ItemId item)=>item==Items.LavaBucket?1000:CoalLike(item)?80:Items.TryGetBlock(item,out var block)&&block is BlockType.WoodLog or BlockType.WoodenPlanks?15:0;
 }

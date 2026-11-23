@@ -1,13 +1,16 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using MDSM.Core;
 using MDSM.Entities;
 using MDSM.Gameplay;
 using MDSM.Inventories;
 using MDSM.Persistence;
+using MDSM.Rendering;
 using MDSM.Worlds;
 
 namespace MDSM.Testing;
@@ -91,6 +94,7 @@ internal static class CollisionGraphicsChecks
                         VerifyMobPlacement(MobSpecies.Zombie);
                         VerifyHeldJump();
                         VerifyArmorEquip();
+                        VerifyIndustrialStations();
                     }
                 }
                 base.Draw(time);
@@ -116,6 +120,67 @@ internal static class CollisionGraphicsChecks
             if (inventory.Equipped((int)ArmorSlot.Boots)!=running || inventory.Selected!=iron)
                 throw new InvalidOperationException("Right-click did not swap distinct armor stacks exactly once.");
             Console.WriteLine("PASS: Actual right-click equips or swaps armor and preserves both item identities and durability.");
+        }
+
+        private void VerifyIndustrialStations()
+        {
+            var world = PigChecks.Flat();
+            world.SetBlock(20, 2, 17, BlockType.MetalworkingBench);
+            world.SetBlock(20, 2, 23, BlockType.BrickKiln);
+            world.SetBlock(18, 2, 18, DyePalette.Glass(DyeColor.Red));
+            world.SetBlock(22, 2, 18, DyePalette.Glass(DyeColor.Blue, true));
+            var inventory = new Inventory();
+            inventory.SetSlot(0, new(Items.MortarAndPestle, 1));
+            inventory.SetSlot(1, new(Items.CopperIngot, 3));
+            var save = new WorldSave(world, "Industrial interaction", new(20.5f, 1, 20.5f), 0, 0, inventory);
+            string id = Field<WorldSaveManager>("_saves").Create(save);
+            Call("BeginWorld", id, save);
+            var session = Field<GameSession>("_session");
+            void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
+            Input(); Input(true);
+            Require(State == GameState.Inventory && session.Crafting.Station == CraftingStation.Mortar
+                && session.Inventory.Selected.Item == Items.MortarAndPestle, "Actual RMB did not open and preserve the held mortar.");
+            session.Crafting.SetSlot(0, new(Items.FromBlock(BlockType.Cornflower), 1));
+            Require(session.Crafting.TryCraft(session.InventoryInteraction), "Open mortar could not grind a flower.");
+            Input(false, Keys.Escape); Input();
+            Require(State == GameState.Playing && session.InventoryInteraction.Cursor.IsEmpty
+                && Enumerable.Range(0, Inventory.SlotCount).Any(i => session.Inventory[i].Item == Items.Dye(DyeColor.Blue)),
+                "Closing the mortar failed to return its result to the player.");
+            session.Inventory.SelectedSlot = 1;
+            Input(true);
+            Require(State == GameState.Inventory && session.Crafting.Width == 3 && session.Crafting.Station == CraftingStation.Metalworking,
+                "Actual RMB did not open the metalworking bench.");
+            Input(false, Keys.Escape); Input();
+            session.Camera.RestoreOrientation(MathHelper.Pi, 0);
+            Input(true);
+            Require(State == GameState.Inventory && session.ActiveContainer?.Block == BlockType.BrickKiln,
+                "Actual RMB did not open the brick kiln.");
+            Input(false, Keys.Escape); Input();
+
+            var atlas = Field<TextureAtlas>("_atlas");
+            using var renderer = new WorldRenderer(GraphicsDevice, atlas, world);
+            using var surface = new RenderTarget2D(GraphicsDevice, 640, 360, false, SurfaceFormat.Color, DepthFormat.Depth24);
+            var camera = new Camera {Position = new(20.5f, 2.7f, 22.5f)};
+            var pixels = new Color[surface.Width * surface.Height];
+            try
+            {
+                foreach (bool smooth in new[]{false,true})
+                {
+                    GraphicsDevice.SetRenderTarget(surface);
+                    renderer.SmoothLighting = smooth;
+                    RenderingPerformanceChecks.Warm(renderer, camera);
+                    GraphicsDevice.Clear(WorldRenderer.SkyColor);
+                    renderer.Draw(camera, null);
+                    GraphicsDevice.SetRenderTarget(null);
+                    surface.GetData(pixels);
+                    GraphicsDevice.Textures[0] = null; GraphicsDevice.Textures[0] = atlas.Texture;
+                    Require(pixels.Count(p => p.R > 45 && p.R > 1.55f * p.G && p.R > 1.55f * p.B) > 100
+                        && pixels.Count(p => p.B > 45 && p.B > 1.60f * p.G && p.B > 1.70f * p.R) > 100,
+                        "Lit terrain shader lost stained cube/pane colors with smooth lighting " + smooth);
+                }
+            }
+            finally { GraphicsDevice.SetRenderTarget(null); }
+            Console.WriteLine("PASS: Actual RMB station interactions, mortar reuse and stained cube/pane color in both world lighting modes.");
         }
 
         private void VerifyHeldJump()

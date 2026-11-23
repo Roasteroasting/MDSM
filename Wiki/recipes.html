@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crafting and Smelting · MDSM Wiki</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="data.js"></script>
+<script defer src="notes.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body data-page="recipes">
+<a class="skip" href="#content">Skip to content</a>
+<header class="top"><div class="wrap top-inner">
+  <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>MDSM Wiki</a>
+  <nav class="nav" aria-label="Main navigation"><a href="recipes.html" aria-current="page">Recipes</a><a href="catalog.html">Blocks & Items</a><a href="world.html">Terrain</a><a href="guide.html">Gameplay</a></nav>
+  <div class="global-search"><input id="site-search" type="search" aria-label="Search the wiki" placeholder="Search the wiki" autocomplete="off"><div id="quick-results" class="search-results" role="region" aria-label="Search results" hidden></div></div>
+</div></header>
+<main class="wrap" id="content" tabindex="-1">
+<h1>Crafting and smelting</h1><p class="intro">Search by ingredient or output, or pick a station. Shaped recipes may be shifted within a larger grid. Use the exact arrangement and leave other slots empty. The number in a slot is the amount required in that slot.</p>
+<div class="toolbar"><input type="search" id="recipe-query" placeholder="Try copper, glass, or bread" aria-label="Find ingredients and results"><label>Station <select id="recipe-station"><option value="all">All stations</option><option value="inventory">Inventory grid</option><option value="table">Crafting table</option><option value="bench">Metalworking bench</option><option value="mortar">Mortar and pestle</option><option value="smelting">Smelting and cooking</option></select></label></div>
+<p id="recipe-count" class="results" aria-live="polite"></p><div id="smelt-results" class="section"></div><div id="craft-results" class="section"></div><p id="no-recipes" hidden>No recipes match these filters.</p>
+<noscript><p>The catalog, recipe patterns and item pages use JavaScript to read the offline game registry. Enable JavaScript to use those sections.</p></noscript>
+</main>
+<footer><div class="wrap">MDSM Wiki · <a href="world.html">Infinite worlds</a> · <a href="recipes.html">Recipe index</a></div></footer>
+</body>
+</html>

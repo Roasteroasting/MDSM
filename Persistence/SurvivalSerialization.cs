@@ -11,13 +11,17 @@ namespace MDSM.Persistence;
 
 public static partial class WorldSerializer
 {
+    // The former bench recipe used one iron ingot per retired part. Keep the
+    // stack count and refund that iron without granting a new component item.
+    internal static ItemId MigrateSavedItem(ItemId item) => item.Value==340 ? Items.IronIngot : item;
+
     private static void WriteGuid(BinaryWriter writer,Guid id){Span<byte> bytes=stackalloc byte[16];id.TryWriteBytes(bytes);writer.Write(bytes);}
     private static Guid ReadGuid(BinaryReader reader){Span<byte> bytes=stackalloc byte[16];reader.BaseStream.ReadExactly(bytes);return new Guid(bytes);}
     internal static void WriteStack(BinaryWriter writer,ItemStack stack)
     {writer.Write(stack.Item.Value);writer.Write((byte)stack.Count);writer.Write(stack.Durability);WriteGuid(writer,stack.InstanceId);}
     internal static ItemStack ReadStack(BinaryReader reader,bool legacyFood=false)
     {
-        ItemId item=new(reader.ReadUInt16());int count=reader.ReadByte(),durability=reader.ReadInt32();Guid id=ReadGuid(reader);
+        ItemId item=MigrateSavedItem(new(reader.ReadUInt16()));int count=reader.ReadByte(),durability=reader.ReadInt32();Guid id=ReadGuid(reader);
         if(item.Value==0 && count==0 && durability==0 && id==Guid.Empty)return default;
         int maximum=Items.Get(item).Durability;
         if(maximum>0 ? id==Guid.Empty || durability<1 || durability>maximum : durability!=0 || id!=Guid.Empty)

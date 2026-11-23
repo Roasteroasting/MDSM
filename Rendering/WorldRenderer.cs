@@ -255,7 +255,7 @@ public sealed partial class WorldRenderer : IDisposable
         Span<BoundingBox> boxes=stackalloc BoundingBox[9];int count=_world.BlockBoxes(hit.Cell,boxes);
         _selectionEffect.View = camera.View;
         _selectionEffect.Projection = camera.Projection(_device.Viewport.AspectRatio);
-        if(_world.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)==BlockType.GlassPane)
+        if(Blocks.GlassPane(_world.GetBlock(hit.Cell.X,hit.Cell.Y,hit.Cell.Z)))
         {
             for(int i=0;i<count;i++)DrawSelectionBox(boxes[i],miningProgress);
             return;

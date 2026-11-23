@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gameplay Guide · MDSM Wiki</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="data.js"></script>
+<script defer src="notes.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body data-page="guide">
+<a class="skip" href="#content">Skip to content</a>
+<header class="top"><div class="wrap top-inner">
+  <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>MDSM Wiki</a>
+  <nav class="nav" aria-label="Main navigation"><a href="recipes.html">Recipes</a><a href="catalog.html">Blocks & Items</a><a href="world.html">Terrain</a><a href="guide.html" aria-current="page">Gameplay</a></nav>
+  <div class="global-search"><input id="site-search" type="search" aria-label="Search the wiki" placeholder="Search the wiki" autocomplete="off"><div id="quick-results" class="search-results" role="region" aria-label="Search results" hidden></div></div>
+</div></header>
+<main class="wrap guide" id="content" tabindex="-1">
+<p class="kicker">Player reference</p><h1>Gameplay guide</h1>
+<nav class="toc" aria-label="On this page"><a href="#survival">Getting started</a><a href="#creative">Creative mode</a><a href="#farming">Farming</a><a href="#mobs">Mobs</a><a href="#seasons">Seasons</a><a href="#commands">Commands</a></nav>
+<section id="survival"><h2>Getting started</h2><p>New Survival worlds start with an empty inventory. Break a wood log, press <kbd>E</kbd>, and make planks in the 2 × 2 inventory grid. Four planks make a crafting table. Place it and right-click to open a 3 × 3 grid.</p><p>Craft a wooden pickaxe to mine stone for cobblestone. Use cobblestone for upgraded tools and a furnace. Torches give level 14 block light and stop hostile spawns wherever light is above zero. Carry food to recover health. <kbd>Q</kbd> drops one item and <kbd>Shift</kbd> + <kbd>Q</kbd> drops a stack.</p><p>An underwater breath meter appears only when the player’s head is submerged. Air lasts 15 seconds before drowning begins. A full day and night takes about 20 minutes of active play. A bed skips to morning once sunlight is low enough and there are no nearby hostile mobs.</p></section>
+<section id="creative"><h2>Creative mode</h2><p>Creative players can fly, break blocks instantly, and place inventory blocks without using them up. Double-tap <kbd>Space</kbd> to toggle flight. While flying, hold <kbd>Space</kbd> to ascend, <kbd>Shift</kbd> to descend, or tap either <kbd>Ctrl</kbd> to toggle faster flight.</p><p>The Creative Items tab lets you find items by name. Click for one item or use <kbd>Shift</kbd> + click for a full stack. Items can be kept when switching to Survival. In either mode, <kbd>F1</kbd> hides the HUD, <kbd>F2</kbd> takes a screenshot, and <kbd>F3</kbd> shows debug information.</p></section>
+<section id="farming"><h2>Farming and breeding</h2><p>Right-click grass or dirt with a hoe and plant wheat seeds, carrots or potatoes. Water within two blocks horizontally and one block vertically hydrates farmland. Harvest a fully grown crop for its mature yield. Ordinary tall grass has a 10% seed drop chance and double tall grass has a 20% chance.</p><p>Breed cows and sheep with wheat, pigs with carrots or potatoes, and chickens with wheat seeds. Leads can hold passive mobs to the player or tie them to a fence. Suitable enclosed fence pens protect passive mobs from despawning.</p></section>
+<section id="mobs"><h2>Mobs</h2><p>Hostile mobs need effective light level 0 to spawn in suitable space. Peaceful removes hostiles and prevents new hostile spawns. Hostiles do not target a Creative player. The table lists each species’ normal drop type and maximum quantity.</p><div class="table-scroll"><table class="table"><thead><tr><th>Mob</th><th>ID</th><th>Behavior</th><th>Health</th><th>Normal drop</th></tr></thead><tbody id="mob-rows"></tbody></table></div><p>Shearing a sheep gives wool without killing it. A recently sheared sheep needs time to regrow its wool. Adult chickens can also lay eggs.</p></section>
+<section id="seasons"><h2>Seasons and weather</h2><p>Seasons is set on creation. Off keeps summer behavior and Nuclear Winter keeps winter behavior. On follows the computer’s local calendar. Spring starts March 20, summer June 20, autumn September 20 and winter December 20.</p><p>Winter slows outdoor crop growth and reduces yields. A properly enclosed greenhouse with a glass roof and artificial light allows normal growth and yields. Sheltered animals avoid the winter outdoor breeding penalty. Seasonal appearance can change existing vegetation without regenerating chunks.</p></section>
+<section id="commands"><h2>Commands</h2><p>Press <kbd>T</kbd> to open the command line and <kbd>Tab</kbd> for completion. Commands require a living player and a cheats-enabled world. Use underscores in multiword item names, or use the item ID shown in the catalog.</p><div class="table-scroll"><table class="table"><thead><tr><th>Syntax</th><th>Use</th></tr></thead><tbody>
+<tr><td><code>/help [topic]</code></td><td>Browse syntax or use <code>/help items [page]</code> and <code>/help mobs</code>.</td></tr>
+<tr><td><code>/give @p &lt;item&gt; [quantity]</code></td><td>Give an item by name or ID, up to 2304 if there is room.</td></tr>
+<tr><td><code>/spawn &lt;mob&gt; [quantity]</code></td><td>Try to summon up to 32 mobs near the player.</td></tr>
+<tr><td><code>/kill @p</code><br><code>/kill @e [type=&lt;entity&gt;]</code></td><td>Kill the player or remove entities, optionally filtered by type or species.</td></tr>
+<tr><td><code>/time query</code><br><code>/time set &lt;time&gt;</code></td><td>Use 0–23999 or a preset such as day, noon, sunset, night, midnight or sunrise.</td></tr>
+<tr><td><code>/season &lt;winter|summer|spring|autumn&gt;</code></td><td>Temporarily override the calendar in a world with Seasons On.</td></tr>
+<tr><td><code>/gamemode &lt;survival|creative&gt;</code></td><td>Change between Survival and Creative.</td></tr>
+<tr><td><code>/tp [@p] &lt;x&gt; &lt;y&gt; &lt;z&gt;</code></td><td>Teleport to a safe destination. Use <code>~</code> or <code>~5</code> for relative positions.</td></tr>
+<tr><td><code>/locate dungeon</code></td><td>Find coordinates for a nearby intact dungeon with a chest.</td></tr>
+<tr><td><code>/precision &lt;modern|legacy&gt;</code></td><td>Switch visual precision behavior.</td></tr>
+</tbody></table></div></section>
+<noscript><p>The catalog, recipe patterns and item pages use JavaScript to read the offline game registry. Enable JavaScript to use those sections.</p></noscript>
+</main>
+<footer><div class="wrap">MDSM Wiki · <a href="world.html">Infinite worlds</a> · <a href="recipes.html">Recipe index</a></div></footer>
+</body>
+</html>

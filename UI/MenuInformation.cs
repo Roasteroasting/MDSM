@@ -15,6 +15,8 @@ internal static class MenuInformation
         "Mouse movement - Look around",
         "Left mouse (hold) - Mine / break blocks or punch passive mobs",
         "Right mouse - Use table/chest/furnace, place block or eat",
+        "Right mouse a Metalworking Bench or Brick Kiln - Open station",
+        "Right mouse while holding a Mortar and Pestle - Grind / mix dyes",
         "Shears: Right mouse a Sheep to collect wool; hold Left mouse on Leaves",
         "Right mouse an adult to breed. Cows and sheep take Wheat.",
         "Pigs take Carrots or Potatoes. Chickens take Wheat Seeds.",

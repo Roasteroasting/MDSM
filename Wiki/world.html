@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terrain Generation · MDSM Wiki</title>
+<link rel="stylesheet" href="style.css">
+<script defer src="data.js"></script>
+<script defer src="notes.js"></script>
+<script defer src="app.js"></script>
+</head>
+<body data-page="world">
+<a class="skip" href="#content">Skip to content</a>
+<header class="top"><div class="wrap top-inner">
+  <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"></span>MDSM Wiki</a>
+  <nav class="nav" aria-label="Main navigation"><a href="recipes.html">Recipes</a><a href="catalog.html">Blocks & Items</a><a href="world.html" aria-current="page">Terrain</a><a href="guide.html">Gameplay</a></nav>
+  <div class="global-search"><input id="site-search" type="search" aria-label="Search the wiki" placeholder="Search the wiki" autocomplete="off"><div id="quick-results" class="search-results" role="region" aria-label="Search results" hidden></div></div>
+</div></header>
+<main class="wrap guide" id="content" tabindex="-1">
+<p class="kicker">World reference</p><h1>Terrain generation</h1>
+<p class="intro">Infinite terrain is generated from the world seed and absolute coordinates as you explore. Wet shores, winding caves and the occasional jagged mountain come from different stages of the same generator.</p>
+<nav class="toc" aria-label="On this page"><a href="#worlds">World types</a><a href="#biomes">Biomes</a><a href="#surface">Surface and water</a><a href="#underground">Caves and ore</a><a href="#features">Structures and plants</a><a href="#far-lands">Far Lands</a></nav>
+<section id="worlds"><h2>World types and seeds</h2><p>Infinite is the default. It streams 16 × 128 × 16 chunks, including terrain at negative X and Z. Legacy is the finite 1024 × 128 × 1024 option and uses its own generator. Older finite saves can still be loaded.</p><p>In Infinite worlds, generated chunks and player changes are saved in compressed region records. Seeded terrain features are computed in world coordinates so their geometry lines up across chunk edges. Seasonal decorations can depend on the season when an area first generates.</p></section>
+<section id="biomes"><h2>Biomes</h2><p>Current Infinite generation samples separate multi-octave temperature and humidity fields. Cold regions become snowy forest, hot dry regions become desert, and the rest is temperate.</p>
+  <div class="table-scroll"><table class="table"><thead><tr><th>Biome</th><th>What to look for</th></tr></thead><tbody>
+  <tr><td>Temperate</td><td>Grass, trees, tall grass and mixed flower patches. Rare small-water shores can have crops.</td></tr>
+  <tr><td>Desert</td><td>Sand, sandstone layers, cacti 2–4 blocks tall and dead bushes. Less surface water and no rain.</td></tr>
+  <tr><td>Snowy forest</td><td>Trees and thin snow layers. Regional precipitation falls as snow.</td></tr></tbody></table></div>
+</section>
+<section id="surface"><h2>Land, rivers and shores</h2><p>A three-dimensional noise density field builds rock and air. Broad elevation and relief fields give the world gentler regions, taller mountains, and occasional overhangs. Exposed land receives grass and dirt in temperate terrain and sand in suitable desert terrain.</p><p>Sea water fills low terrain near Y 63. Separate pond, lake and river features shape local beds and shores. Beach sand follows flatter shorelines, and natural sand can grade through a thin layer of sandstone before underlying stone. Clay appears as tapering clumps near shallow sandy water or in wet riverbed sediment.</p></section>
+<section id="underground"><h2>Caves, deposits and ores</h2><p>Seeded, branching tunnel walks carve through the solid terrain. Cave sections that would breach neighboring water are rejected. Deep cavities below Y 10 may contain lava. Underground sand and gravel form separate deposits, and ordinary ore veins have priority over those deposits.</p>
+<div class="table-scroll"><table class="table"><thead><tr><th>Ore</th><th>Placement Y in current Infinite generation</th><th>Minimum harvest tier</th></tr></thead><tbody>
+<tr><td><a href="entry.html?block=27">Coal</a></td><td>4–60</td><td>Wooden pickaxe</td></tr>
+<tr><td><a href="entry.html?block=26">Iron</a></td><td>4–60</td><td>Stone pickaxe</td></tr>
+<tr><td><a href="entry.html?block=106">Copper</a></td><td>19–63</td><td>Stone pickaxe</td></tr>
+<tr><td><a href="entry.html?block=28">Diamond</a></td><td>4–20</td><td>Iron pickaxe</td></tr></tbody></table></div></section>
+<section id="features"><h2>Dungeons, vegetation and animals</h2><p>Dungeons form where a room can connect to a cave. Look for cobblestone and mossy cobblestone walls and one to three chests. Loot can include iron equipment, iron ingots, food and farming supplies. Worlds with cheats enabled can use <code>/locate dungeon</code>.</p><p>Flower patches use nearby seeded anchors to mix several species. Spring adds peonies and violets across eligible temperate terrain. Rare patches of crops near small bodies of water in temperate terrain provide another route to carrots and potatoes. Passive animal generation also uses seed-based local placement.</p></section>
+<section id="far-lands"><h2>The Far Lands</h2><p>Around X or Z ±12,550,824, the terrain noise’s historical saturating lattice conversion begins extrapolating outside its normal range. The distorted terrain appears along an edge when one coordinate crosses the range and at a corner when both do. Generation continues beyond it.</p><p>Far Lands terrain generation is independent of the optional legacy visual precision setting. In a cheats-enabled Infinite world, use <code>/tp 12550824 128 0</code> to test the eastern transition and <kbd>F3</kbd> to read coordinates. Teleportation checks whether the destination is safe.</p></section>
+<noscript><p>The catalog, recipe patterns and item pages use JavaScript to read the offline game registry. Enable JavaScript to use those sections.</p></noscript>
+</main>
+<footer><div class="wrap">MDSM Wiki · <a href="world.html">Infinite worlds</a> · <a href="recipes.html">Recipe index</a></div></footer>
+</body>
+</html>

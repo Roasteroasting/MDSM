@@ -122,9 +122,9 @@ internal static class OvernightChecks
         string root=AppContext.BaseDirectory;while(!File.Exists(Path.Combine(root,"MDSM.csproj")))root=Directory.GetParent(root)?.FullName??throw new Exception("Missing source assets.");
         var atlas=ItemAtlasChecks.Read(Path.Combine(root,"Content/UI/text.png"));
         var terrain=ItemAtlasChecks.Read(Path.Combine(root,"Content/Blocks/terrain.png"));
-        // Stone surface textures and the seasonal sprites have since claimed
-        // part of the old glyph strip. The remaining tile range stays blank.
-        for(int tile=87;tile<=174;tile++)
+        // Terrain, seasonal and industrial art now occupy the start of the old
+        // glyph strip. Its unused portion must still be transparent.
+        for(int tile=DyePalette.GlassTile+1;tile<=174;tile++)
         {var source=MDSM.Rendering.TextureAtlas.Source(tile);for(int y=0;y<16;y++)for(int x=0;x<16;x++)Check(terrain.Pixels[((source.Y+y)*256+source.X+x)*4+3]==0,"A sign glyph remains in terrain.png.");}
         foreach(char c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@[]<>+?!-.,'")
         {

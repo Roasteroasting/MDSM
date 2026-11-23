@@ -194,7 +194,7 @@ public static partial class WorldSerializer
                 inventory = new Inventory { SelectedSlot = selected };
                 for (int slot = 0; slot < Inventory.SlotCount; slot++)
                 {
-                    ItemId item = new(extras.ReadUInt16());
+                    ItemId item = MigrateSavedItem(new(extras.ReadUInt16()));
                     int quantity = extras.ReadByte();
                     if (item.Value == 0 && quantity == 0) continue;
                     if (!Items.IsDefined(item) || quantity < 1 || quantity > (metadata.Version<9 && item==Items.RawPorkchop?64:Items.StackLimit(item)))
@@ -204,7 +204,7 @@ public static partial class WorldSerializer
                 drops = new DroppedItemState[extras.ReadInt32()];
                 for (int i = 0; i < drops.Length; i++)
                 {
-                    var drop = new DroppedItemState(new ItemId(extras.ReadUInt16()), extras.ReadByte(),
+                    var drop = new DroppedItemState(MigrateSavedItem(new(extras.ReadUInt16())), extras.ReadByte(),
                         new Vector3(extras.ReadSingle(), extras.ReadSingle(), extras.ReadSingle()), extras.ReadSingle(), extras.ReadSingle());
                     if(metadata.Version<8 || Items.Get(drop.Item).Durability==0)ValidateLoadedDrop(drop,metadata.Size,metadata.Version<9);
                     drops[i] = drop;

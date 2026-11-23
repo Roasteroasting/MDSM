@@ -153,7 +153,7 @@ internal sealed class InventoryScreen : IDisposable
         InventoryInteraction interaction = session.InventoryInteraction;
         bool left = mouse.LeftButton == ButtonState.Pressed && previous.LeftButton == ButtonState.Released;
         bool right = mouse.RightButton == ButtonState.Pressed && previous.RightButton == ButtonState.Released;
-        bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2;
+        bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2 && session.Crafting.Station==CraftingStation.Standard;
         if (!creative || !_creativeItems || mouse.LeftButton==ButtonState.Released) _scrollGrabOffset=null;
         if (creative && _creativeItems)
         {
@@ -208,7 +208,7 @@ internal sealed class InventoryScreen : IDisposable
                 return;
             }
         CraftingGrid crafting = session.Crafting;BlockContainer container=session.ActiveContainer;
-        if(container==null && crafting.Width==2 && (!creative||!_creativeItems))for(int slot=0;slot<4;slot++)if(InventoryLayout.Equipment(viewport,slot,creative).Contains(mouse.Position))
+        if(container==null && crafting.Width==2 && crafting.Station==CraftingStation.Standard && (!creative||!_creativeItems))for(int slot=0;slot<4;slot++)if(InventoryLayout.Equipment(viewport,slot,creative).Contains(mouse.Position))
         {var before=interaction.Inventory.Equipped(slot);var cursor=interaction.Cursor;interaction.Inventory.ClickEquipment(slot,interaction,right && !left);
         if(before!=interaction.Inventory.Equipped(slot) || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.Equip);Message="";return;}
         if(container!=null)
@@ -234,7 +234,7 @@ internal sealed class InventoryScreen : IDisposable
     internal static bool? TryDropHovered(GameSession session, Point mouse, Viewport viewport, bool wholeStack,bool creativeItems=false)
     {
         if (!session.InventoryInteraction.Cursor.IsEmpty) return session.DropCursor(wholeStack,thrown:true);
-        bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2;
+        bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2 && session.Crafting.Station==CraftingStation.Standard;
         int rows=session.ActiveContainer?.Block==BlockType.Chest?session.ActiveContainer.SlotCount/9:0;
         bool? Drop(ItemStack stack, out ItemStack remaining)
         {
@@ -249,7 +249,7 @@ internal sealed class InventoryScreen : IDisposable
                 return result;
             }
         BlockContainer container = session.ActiveContainer;
-        if (container == null && session.Crafting.Width == 2&&(!creative||!creativeItems))
+        if (container == null && session.Crafting.Width == 2 && session.Crafting.Station==CraftingStation.Standard &&(!creative||!creativeItems))
             for (int slot = 0; slot < 4; slot++)
                 if (InventoryLayout.Equipment(viewport, slot, creative).Contains(mouse))
                 {
@@ -280,7 +280,7 @@ internal sealed class InventoryScreen : IDisposable
     public void Draw(GameSession session, MouseState mouse, Viewport viewport)
     {
         _hovered=default;
-        bool creative=session.Player.Creative&&session.ActiveContainer==null&&session.Crafting.Width==2;
+        bool creative=session.Player.Creative&&session.ActiveContainer==null&&session.Crafting.Width==2 && session.Crafting.Station==CraftingStation.Standard;
         int rows=session.ActiveContainer?.Block==BlockType.Chest?session.ActiveContainer.SlotCount/9:0;
         InventoryInteraction interaction = session.InventoryInteraction;
         CraftingGrid crafting = session.Crafting;
@@ -304,9 +304,9 @@ internal sealed class InventoryScreen : IDisposable
         else
         {
             MdsmUiStyle.Frame(_sprites,_pixel,panel,_menuScale);
-            string title=container!=null?(container.Block==BlockType.Chest?(rows==6?"LARGE CHEST":"CHEST"):Blocks.Get(container.Block).Name):crafting.Width==3?"WORKBENCH":"PACK";
-            var heading=InventoryLayout.At(viewport,false,container==null&&crafting.Width==2?31:7,6,140,9,rows);Text(title,heading.X,heading.Y,_menuScale,MdsmUiStyle.Ink);
-            if(container==null){var caption=InventoryLayout.At(viewport,false,crafting.Width==2?90:29,crafting.Width==2?17:6,80,8);if(crafting.Width==2)Text("ASSEMBLE",caption.X,caption.Y,_menuScale,MdsmUiStyle.Accent);MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.Arrow(viewport,crafting.Width),MdsmUiStyle.Accent);}
+            string title=container!=null?(container.Block==BlockType.Chest?(rows==6?"LARGE CHEST":"CHEST"):Blocks.Get(container.Block).Name):crafting.Station switch { CraftingStation.Mortar=>"MORTAR AND PESTLE", CraftingStation.Metalworking=>"METALWORKING BENCH", _=>crafting.Width==3?"WORKBENCH":"PACK" };
+            var heading=InventoryLayout.At(viewport,false,container==null&&crafting.Width==2&&crafting.Station==CraftingStation.Standard?31:7,6,140,9,rows);Text(title,heading.X,heading.Y,_menuScale,MdsmUiStyle.Ink);
+            if(container==null){var caption=InventoryLayout.At(viewport,false,crafting.Width==2?90:29,crafting.Width==2?17:6,80,8);if(crafting.Width==2)Text(crafting.Station==CraftingStation.Mortar?"GRIND / MIX":"ASSEMBLE",caption.X,caption.Y,_menuScale,MdsmUiStyle.Accent);MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.Arrow(viewport,crafting.Width),MdsmUiStyle.Accent);}
             else if(Smelting.Machine(container.Block))MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.At(viewport,false,79,35,24,17),MdsmUiStyle.Light);
             if(container!=null||crafting.Width==3){var captionPack=InventoryLayout.At(viewport,false,7,(rows>0?74+(rows-3)*18:73),100,8,rows);Text("INVENTORY",captionPack.X,captionPack.Y,_menuScale,MdsmUiStyle.Light);}
         }
@@ -315,7 +315,7 @@ internal sealed class InventoryScreen : IDisposable
             for(int slot=0;slot<crafting.SlotCount;slot++)DrawSlot(crafting[slot],InventoryLayout.CraftingSlot(viewport,crafting.Width,slot),mouse,false);
             DrawSlot(crafting.Preview,InventoryLayout.Output(viewport,crafting.Width),mouse,false);
         }
-        if(container==null&&(!creative||!_creativeItems)&&crafting.Width==2)
+        if(container==null&&(!creative||!_creativeItems)&&crafting.Width==2&&crafting.Station==CraftingStation.Standard)
             for(int slot=0;slot<4;slot++)
             {
                 var bounds=InventoryLayout.Equipment(viewport,slot,creative);var stack=interaction.Inventory.Equipped(slot);

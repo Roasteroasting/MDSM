@@ -37,14 +37,14 @@ internal static class CompletionChecks
     public static int Run(){int failures=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}Console.WriteLine($"{All.Length-failures}/{All.Length} completion checks passed.");return failures==0?0:1;}
     public static void Recipes()
     {
-        Check(CraftingRecipes.All.Length==92,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
+        Check(CraftingRecipes.All.Length==164,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
         foreach(var recipe in CraftingRecipes.All)
         {
             outputs.Add(recipe.Output.Item);var pattern=(CraftingIngredient[])typeof(ShapedRecipe).GetField("_ingredients",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(recipe);
             for(int width=2;width<=3;width++)if(recipe.Width<=width&&recipe.Height<=width)
             for(int oy=0;oy<=width-recipe.Height;oy++)for(int ox=0;ox<=width-recipe.Width;ox++)
             {
-                var grid=new CraftingGrid(width);for(int y=0;y<recipe.Height;y++)for(int x=0;x<recipe.Width;x++){var ingredient=pattern[y*recipe.Width+x];if(ingredient!=default)grid.SetSlot((y+oy)*width+x+ox,S(ingredient.Item,ingredient.Count*2));}
+                var grid=new CraftingGrid(width,recipe.Station);for(int y=0;y<recipe.Height;y++)for(int x=0;x<recipe.Width;x++){var ingredient=pattern[y*recipe.Width+x];if(ingredient!=default)grid.SetSlot((y+oy)*width+x+ox,S(ingredient.Item,ingredient.Count*2));}
                 Check(grid.Preview.Item==recipe.Output.Item,"Recipe offset/output failed: "+Items.Name(recipe.Output.Item));
                 int before=Enumerable.Range(0,grid.SlotCount).Sum(i=>grid[i].Count);var mouse=new InventoryInteraction(new Inventory());Check(grid.TryCraft(mouse),"Could not take output.");
                 Check(Enumerable.Range(0,grid.SlotCount).Sum(i=>grid[i].Count)==before-pattern.Sum(i=>i==default?0:i.Count),"Craft consumed the wrong ingredient quantities.");

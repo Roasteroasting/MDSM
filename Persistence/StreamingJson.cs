@@ -18,7 +18,18 @@ internal static class StreamingJson
     internal static byte[] Encode<T>(T value)=>JsonSerializer.SerializeToUtf8Bytes(value,Options);
     internal static T Decode<T>(byte[] bytes)
     {
-        try{return JsonSerializer.Deserialize<T>(bytes,Options)??throw new InvalidDataException("Missing streamed state.");}
+        try
+        {
+            T value=JsonSerializer.Deserialize<T>(bytes,Options)??throw new InvalidDataException("Missing streamed state.");
+            if(value is MDSM.Worlds.Streaming.ChunkGameplay chunk && chunk.Drops!=null)
+                for(int i=0;i<chunk.Drops.Length;i++)
+                {
+                    var drop=chunk.Drops[i];
+                    var item=WorldSerializer.MigrateSavedItem(drop.State.Item);
+                    if(item!=drop.State.Item)chunk.Drops[i]=drop with{State=drop.State with{Item=item}};
+                }
+            return value;
+        }
         catch(Exception e)when(e is JsonException or ArgumentException or OverflowException){throw new InvalidDataException("Invalid streamed state.",e);}
     }
     private sealed class StackConverter:JsonConverter<ItemStack>
@@ -27,7 +38,7 @@ internal static class StreamingJson
         {
             using var doc=JsonDocument.ParseValue(ref reader);var p=doc.RootElement;
             int count=p.GetProperty("count").GetInt32();if(count==0)return default;
-            return new(new ItemId(p.GetProperty("item").GetUInt16()),count,p.GetProperty("durability").GetInt32(),p.GetProperty("instance").GetGuid());
+            return new(WorldSerializer.MigrateSavedItem(new(p.GetProperty("item").GetUInt16())),count,p.GetProperty("durability").GetInt32(),p.GetProperty("instance").GetGuid());
         }
         public override void Write(Utf8JsonWriter writer,ItemStack value,JsonSerializerOptions options)
         {writer.WriteStartObject();writer.WriteNumber("item",value.Item.Value);writer.WriteNumber("count",value.Count);writer.WriteNumber("durability",value.Durability);writer.WriteString("instance",value.InstanceId);writer.WriteEndObject();}

@@ -4,6 +4,7 @@ using MDSM.Worlds;
 namespace MDSM.Inventories;
 
 public readonly record struct CraftingIngredient(ItemId Item, int Count = 1);
+public enum CraftingStation { Standard, Metalworking, Mortar }
 
 // Patterns are never implicitly mirrored/rotated. Empty cells and all cells outside
 // the pattern must be empty; a larger grid may translate the complete pattern.
@@ -14,7 +15,9 @@ public sealed class ShapedRecipe
     public int Height { get; }
     public ItemStack Output { get; }
     public bool Shapeless {get;}
-    public ShapedRecipe(int width, int height, ReadOnlySpan<CraftingIngredient> ingredients, ItemStack output,bool shapeless=false)
+    public CraftingStation Station { get; }
+    public ShapedRecipe(int width, int height, ReadOnlySpan<CraftingIngredient> ingredients, ItemStack output,bool shapeless=false,
+        CraftingStation station=CraftingStation.Standard)
     {
         if (width < 1 || width > 3 || height < 1 || height > 3 || ingredients.Length != width * height || output.IsEmpty)
             throw new ArgumentException("Invalid crafting recipe.");
@@ -28,7 +31,7 @@ public sealed class ShapedRecipe
             }
         if (!any) throw new ArgumentException("Recipes need ingredients.");
         Width = width; Height = height; _ingredients = ingredients.ToArray(); Output = output;
-        Shapeless=shapeless;
+        Shapeless=shapeless; Station=station;
     }
     internal bool Matches(CraftingGrid grid, int offsetX, int offsetY)
     {
@@ -162,6 +165,7 @@ public static class CraftingRecipes
             MaterialRecipe(3,3,Items.Armor((ArmorMaterial)material,ArmorSlot.Leggings),M,"MMMM.MM.M".ToCharArray());
             MaterialRecipe(3,2,Items.Armor((ArmorMaterial)material,ArmorSlot.Boots),M,"M.MM.M".ToCharArray());
         }
+        IndustrialRecipes.AddTo(recipes);
         return recipes.ToArray();
     }
     public static ReadOnlySpan<ShapedRecipe> All => Definitions;
@@ -171,13 +175,14 @@ public sealed class CraftingGrid
 {
     private readonly ItemStack[] _inputs;
     public int Width { get; }
+    public CraftingStation Station { get; }
     public int SlotCount => _inputs.Length;
     public ItemStack this[int slot] => _inputs[slot];
     public void SetSlot(int slot, ItemStack stack) => _inputs[slot] = stack;
-    public CraftingGrid(int width)
+    public CraftingGrid(int width,CraftingStation station=CraftingStation.Standard)
     {
         if (width is not (2 or 3)) throw new ArgumentOutOfRangeException(nameof(width));
-        Width = width; _inputs = new ItemStack[width * width];
+        Width = width; Station=station; _inputs = new ItemStack[width * width];
     }
     public void Click(int slot, InventoryInteraction interaction, bool right) => _inputs[slot] = interaction.ClickStack(_inputs[slot], right);
     public ItemStack Preview => PreviewFor(CraftingRecipes.All);
@@ -193,8 +198,11 @@ public sealed class CraftingGrid
     private ShapedRecipe Find(ReadOnlySpan<ShapedRecipe> recipes, out int x, out int y)
     {
         foreach (ShapedRecipe recipe in recipes)
+        {
+            if (recipe.Station!=Station) continue;
             for (int row = 0; row <= Width - recipe.Height; row++) for (int column = 0; column <= Width - recipe.Width; column++)
                 if (recipe.Matches(this, column, row)) { x = column; y = row; return recipe; }
+        }
         x = y = 0; return null;
     }
 }

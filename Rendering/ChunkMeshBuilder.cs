@@ -37,7 +37,7 @@ internal sealed partial class ChunkMeshBuilder
     {
         foreach (Face face in Faces)
             AddQuad(origin + face.A, origin + face.B, origin + face.C, origin + face.D,
-                Blocks.Tile(block, face.Normal), new Color(new Vector3(face.Shade)), false);
+                Blocks.Tile(block, face.Normal), new Color(DyePalette.Tint(block).ToVector3()*face.Shade), false);
     }
 
     public void AppendItem(BlockType block, Vector3 center)
@@ -72,12 +72,12 @@ internal sealed partial class ChunkMeshBuilder
         else if(definition.Shape==BlockShape.Pane)
         {
             Vector3 min=new(0,0,7f/16),max=new(1,1,9f/16);
-            foreach(Face face in Faces)PaneFace(origin+min*size,origin+max*size,min,max,face,definition.SideTile,face.Normal.X!=0);
+            foreach(Face face in Faces)PaneFace(origin+min*size,origin+max*size,min,max,face,definition.SideTile,face.Normal.X!=0,block);
         }
         else
             foreach (Face face in Faces)
                 AddQuad(origin + face.A * size, origin + face.B * size, origin + face.C * size, origin + face.D * size,
-                    definition.Tile(face.Normal), new Color(new Vector3(face.Shade)), false);
+                    definition.Tile(face.Normal), new Color(DyePalette.Tint(block).ToVector3()*face.Shade), false);
         void Box(Vector3 min,Vector3 max,int tile,bool cropped=false)
         {
             foreach(Face face in Faces)
@@ -204,7 +204,7 @@ internal sealed partial class ChunkMeshBuilder
                         int bit=face.Offset.X<0?1:face.Offset.X>0?2:face.Offset.Z<0?4:face.Offset.Z>0?8:0;
                         if(box==0 && (connections&bit)!=0 || box>0 && (bit==(1<<direction) || bit==(1<<(direction^1))))continue;
                         bool endCap=box==0 && bit!=0 && (bit<=2?(connections&12)==0:(connections&3)==0);
-                        PaneFace(boxes[box].Min,boxes[box].Max,boxes[box].Min-position,boxes[box].Max-position,face,definition.SideTile,endCap);
+                        PaneFace(boxes[box].Min,boxes[box].Max,boxes[box].Min-position,boxes[box].Max-position,face,definition.SideTile,endCap,block);
                     }
                 }
                 continue;
@@ -282,7 +282,7 @@ internal sealed partial class ChunkMeshBuilder
                 BlockType neighbor=world.GetBlock(worldX + face.Offset.X,y + face.Offset.Y,worldZ + face.Offset.Z);
                 // A thin, non-opaque snow layer must never remove the terrain's
                 // supporting top face (including during asynchronous snow edits).
-                if (Blocks.IsOpaque(neighbor) || block==BlockType.Glass && neighbor==BlockType.Glass)
+                if (Blocks.IsOpaque(neighbor) || Blocks.GlassCube(block) && Blocks.GlassCube(neighbor))
                     continue;
 
                 int tile = block==BlockType.Grass && face.Normal.Y==0 &&
@@ -433,7 +433,7 @@ internal sealed partial class ChunkMeshBuilder
             AddQuad(min+face.A*size,min+face.B*size,min+face.C*size,min+face.D*size,tile,new Color(new Vector3(face.Shade)),false,region,transpose,flipU);
         }
     }
-    private void PaneFace(Vector3 min,Vector3 max,Vector3 localMin,Vector3 localMax,Face face,int tile,bool endCap=false)
+    private void PaneFace(Vector3 min,Vector3 max,Vector3 localMin,Vector3 localMax,Face face,int tile,bool endCap,BlockType block)
     {
         Rectangle region;bool transpose=false;
         if(face.Normal.Y!=0)
@@ -453,7 +453,8 @@ internal sealed partial class ChunkMeshBuilder
             region=new((int)MathF.Round(start*16),0,Math.Max(1,(int)MathF.Round((end-start)*16)),16);
         }
         Vector3 size=max-min;
-        AddQuad(min+face.A*size,min+face.B*size,min+face.C*size,min+face.D*size,tile,new Color(new Vector3(face.Shade)),false,region,transpose);
+        Color color = new((_world==null || _singleBlock.HasValue ? DyePalette.Tint(block).ToVector3() : Vector3.One)*face.Shade);
+        AddQuad(min+face.A*size,min+face.B*size,min+face.C*size,min+face.D*size,tile,color,false,region,transpose);
     }
 
     internal static float SignTextPixelSize(int characters)=>Math.Min(1f/64,.94f/Math.Max(1,characters*6));
@@ -495,12 +496,20 @@ internal sealed partial class ChunkMeshBuilder
         ref VertexPositionColorTexture[] vertices=ref (text?ref _textVertices:ref _vertices);
         int at=text?TextVertexCount:VertexCount;
         if (at + needed > vertices.Length)Array.Resize(ref vertices, vertices.Length * 2);
+        // Terrain vertex colors hold lighting data. Keep the tint with the UVs
+        // for the lit terrain effect, while inventory/held meshes use vertex RGB.
+        Vector2 tintOffset=default;
+        if(tile==DyePalette.GlassTile && _world!=null && !_singleBlock.HasValue)
+        {
+            Color tint=DyePalette.Tint(_surfaceBlock);
+            tintOffset=new(1+(tint.R>>3)*64+(tint.G>>2),tint.B>>3);
+        }
         Vector2 Uv(float u,float v)
         {
-            if(region is not Rectangle r)return TextureAtlas.Uv(tile,u,v);
+            if(region is not Rectangle r)return TextureAtlas.Uv(tile,u,v)+tintOffset;
             if(transpose)(u,v)=(v,u);if(flipU)u=1-u;
             Rectangle source=TextureAtlas.Source(tile);
-            return new((source.X+r.X+.5f+u*(r.Width-1))/TextureAtlas.AtlasSize,(source.Y+r.Y+.5f+v*(r.Height-1))/TextureAtlas.AtlasSize);
+            return new Vector2((source.X+r.X+.5f+u*(r.Width-1))/TextureAtlas.AtlasSize,(source.Y+r.Y+.5f+v*(r.Height-1))/TextureAtlas.AtlasSize)+tintOffset;
         }
         var a = new VertexPositionColorTexture(aPosition, ca, Uv(0,1));
         var b = new VertexPositionColorTexture(bPosition, cb, Uv(1,1));

@@ -35,9 +35,9 @@ internal sealed class ShelterCache(World world)
 
     private static int Boundary(BlockType block)
     {
-        if(block==BlockType.Glass)return 2;
+        if(Blocks.GlassCube(block))return 2;
         if(block is BlockType.Door or BlockType.DoorUpper)return 3;
-        if(block==BlockType.GlassPane)return 4;
+        if(Blocks.GlassPane(block))return 4;
         return (Blocks.Get(block).Shape==BlockShape.Cube && Blocks.IsSolid(block)) || Blocks.Soil(block) ? 1 : 0;
     }
 

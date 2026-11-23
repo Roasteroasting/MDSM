@@ -344,6 +344,14 @@ public class Game1 : Game
         if(equipmentNotice!=null){_notice=equipmentNotice;_noticeSeconds=3;}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         // Entity interaction takes priority; holding shears never falls through to placement/food.
+        if (!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released
+            && _session.Inventory.Selected.Item==Items.MortarAndPestle)
+        {
+            bool opened=_session.TryOpenCrafting(2,CraftingStation.Mortar);
+            SetState(GameState.Inventory);
+            if (!opened) _inventoryScreen.CannotClose();
+            return;
+        }
         if(!_awaitMouseRelease && mouse.RightButton==ButtonState.Pressed && _previousMouse.RightButton==ButtonState.Released
             && _selection is BlockHit sign && world.GetBlock(sign.Cell.X,sign.Cell.Y,sign.Cell.Z)==BlockType.Sign)
         {_signEditor.Open(world,sign.Cell);SetState(GameState.SignEditing);return;}
@@ -355,10 +363,10 @@ public class Game1 : Game
             if(target?.Species==MobSpecies.Sheep){_session.Mobs.TryShear(target,_session.Inventory,_session.Items);return;}
         }
         if (!_awaitMouseRelease && mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released
-            && _selection is BlockHit tableHit && (world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) == BlockType.CraftingTable
+            && _selection is BlockHit tableHit && (world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) is BlockType.CraftingTable or BlockType.MetalworkingBench
                 || BlockEntities.HasState(world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z))))
         {
-            bool opened = world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z)==BlockType.CraftingTable
+            bool opened = world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z) is BlockType.CraftingTable or BlockType.MetalworkingBench
                 ?_session.TryOpenCraftingTable(tableHit):_session.TryOpenContainer(tableHit);
             SetState(GameState.Inventory);
             if (!opened) _inventoryScreen.CannotClose();

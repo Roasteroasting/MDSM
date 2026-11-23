@@ -14,10 +14,13 @@ public static class MiningRules
         BlockType.Sandstone => new(MiningCategory.Mineral,.8f,ToolTier.Wood),
         BlockType.Cobblestone or BlockType.CobblestoneSlab or BlockType.CobblestoneStairs or BlockType.DoubleCobblestoneSlab or BlockType.MossyCobblestone => new(MiningCategory.Mineral,2,ToolTier.Wood),
         BlockType.CoalOre => new(MiningCategory.Mineral,3,ToolTier.Wood),
-        BlockType.IronOre => new(MiningCategory.Mineral,3,ToolTier.Stone),
+        BlockType.IronOre or BlockType.CopperOre => new(MiningCategory.Mineral,3,ToolTier.Stone),
+        BlockType.CopperBlock or BlockType.BrickBlock => new(MiningCategory.Mineral,2.5f,ToolTier.Wood),
         BlockType.DiamondOre => new(MiningCategory.Mineral,3,ToolTier.Iron),
         BlockType.Furnace => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
-        BlockType.Smoker or BlockType.BlastFurnace => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
+        BlockType.Smoker or BlockType.BlastFurnace or BlockType.BrickKiln => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
+        BlockType.MetalworkingBench => new(MiningCategory.Wood,2),
+        BlockType.Clay => new(MiningCategory.Earth,.6f),
         BlockType.Obsidian => new(MiningCategory.Mineral,50,ToolTier.Diamond),
         BlockType.WoodLog or BlockType.WoodenPlanks or BlockType.CraftingTable or BlockType.Chest or BlockType.Fence or BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper or BlockType.WoodenSlab or BlockType.DoubleWoodenSlab or BlockType.WoodenStairs or BlockType.Sign => new(MiningCategory.Wood,Blocks.Get(block).MiningSeconds/1.5f),
         BlockType.Grass or BlockType.Dirt or BlockType.Sand or BlockType.Gravel or BlockType.FarmlandDry or BlockType.FarmlandWet => new(MiningCategory.Earth,Blocks.Get(block).MiningSeconds/1.5f),
@@ -40,10 +43,10 @@ public static class MiningRules
         || Items.Get(tool.Item).Tool==ToolKind.Pickaxe && Items.Get(tool.Item).Tier>=Profile(block).Required;
     public static ItemId? Drop(BlockType block,ItemStack held,Random random)
     {
-        if(!Harvests(block,held) || block is BlockType.Glass or BlockType.GlassPane or BlockType.TallGrass or BlockType.Leaves || Blocks.Crop(block))return null;
+        if(!Harvests(block,held) || Blocks.GlassCube(block) || Blocks.GlassPane(block) || block is BlockType.TallGrass or BlockType.Leaves || Blocks.Crop(block))return null;
         return block switch
         {
-            BlockType.Stone=>Items.FromBlock(BlockType.Cobblestone),BlockType.CoalOre=>Items.Coal,BlockType.DiamondOre=>Items.Diamond,
+            BlockType.Stone=>Items.FromBlock(BlockType.Cobblestone),BlockType.CoalOre=>Items.Coal,BlockType.DiamondOre=>Items.Diamond,BlockType.Clay=>Items.ClayBall,
             BlockType.FarmlandDry or BlockType.FarmlandWet=>Items.FromBlock(BlockType.Dirt),BlockType.DoorUpper=>Items.FromBlock(BlockType.Door),BlockType.BedHead=>Items.FromBlock(BlockType.Bed),
             BlockType.Gravel when random.Next(10)==0=>Items.Flint,_=>Items.FromBlock(block)
         };
@@ -51,6 +54,7 @@ public static class MiningRules
     public static bool Wears(ItemStack stack) => Items.Get(stack.Item).Tool is >=ToolKind.Pickaxe and <=ToolKind.Shovel;
     public static int Drops(BlockType block,ItemStack held,Random random,Span<ItemId> output,bool winterCrop=false)
     {
+        if(block==BlockType.Clay){output[..4].Fill(Items.ClayBall);return 4;}
         if(block==BlockType.Fire)return 0;
         if(block==BlockType.DeadBush)
         {if(held.Item==Items.Shears){output[0]=Items.FromBlock(block);return 1;}int sticks=random.Next(3);for(int i=0;i<sticks;i++)output[i]=Items.Stick;return sticks;}

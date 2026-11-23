@@ -48,7 +48,7 @@ internal static class GameplayRefinementGraphicsChecks
             Check(session.Inventory[0].Item==Items.Obtainable[0] && Enumerable.Range(0,36).Sum(i=>session.Inventory[i].Count)>=before,"Browser mouse did not grant registered item.");
             int selected=session.Inventory.SelectedSlot;
             Rectangle browser=InventoryLayout.Browser(viewport);
-            screen.Update(session,new MouseState(browser.Center.X,browser.Center.Y,-2400,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released),default,viewport);
+            screen.Update(session,new MouseState(browser.Center.X,browser.Center.Y,-12000,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released),default,viewport);
             Check(session.Inventory.SelectedSlot==selected,"Browser scrolling changed hotbar selection.");
             int ScrollRow() => (int)typeof(InventoryScreen).GetField("_creativeScroll",flags).GetValue(screen);
             int lastRow=ScrollRow();

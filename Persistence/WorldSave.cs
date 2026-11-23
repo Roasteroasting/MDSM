@@ -110,16 +110,24 @@ public sealed partial class GameSession
             Mobs.CapturePigs(), Mobs.CaptureOthers(), Mobs.CapturePopulation(),Projectiles.Capture(),Hostiles.Capture(),Player.HealthValue,Projectiles.CaptureSnowballs(),Player.Burning.Capture(),World.IsInfinite?Player.AbsolutePosition:null);
     }
 
-    public bool TryOpenCrafting(int width)
+    public bool TryOpenCrafting(int width,CraftingStation station=CraftingStation.Standard)
     {
         if (Player.IsDead || width is not (2 or 3) || !TryReturnInterfaceItems()) return false;
         ContainerCell=null;
-        Crafting = new CraftingGrid(width);
+        Crafting = new CraftingGrid(width,station);
         return true;
     }
 
-    public bool TryOpenCraftingTable(BlockHit? hit) => hit is BlockHit target && target.Distance >= 0
-        && target.Distance <= BlockRaycaster.Reach && World.GetBlock(target.Cell.X, target.Cell.Y, target.Cell.Z) == BlockType.CraftingTable && TryOpenCrafting(3);
+    public bool TryOpenCraftingTable(BlockHit? hit)
+    {
+        if(hit is not BlockHit target || !(target.Distance>=0 && target.Distance<=BlockRaycaster.Reach))return false;
+        return World.GetBlock(target.Cell.X,target.Cell.Y,target.Cell.Z) switch
+        {
+            BlockType.CraftingTable => TryOpenCrafting(3),
+            BlockType.MetalworkingBench => TryOpenCrafting(3,CraftingStation.Metalworking),
+            _ => false
+        };
+    }
 
     public bool TryOpenContainer(BlockHit hit)
     {
