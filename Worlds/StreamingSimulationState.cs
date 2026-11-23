@@ -23,19 +23,52 @@ namespace MDSM.Worlds
     }
     public sealed partial class FluidSimulation
     {
-        internal Point3[] CaptureChunk(ChunkAddress a)=>_queue.Where(p=>ChunkGameplay.Owns(a,p)).ToArray();
+        internal Point3[] CaptureChunk(ChunkAddress a)=>_queue.UnorderedItems.Where(p=>ChunkGameplay.Owns(a,p.Element))
+            .OrderBy(p=>p.Priority).Select(p=>p.Element).ToArray();
         internal void RestoreChunk(Point3[] cells){foreach(var p in cells)Enqueue(p);}
         internal void DetachChunk(ChunkAddress a)
-        {var keep=_queue.Where(p=>!ChunkGameplay.Owns(a,p)).ToArray();_queue.Clear();_queued.Clear();foreach(var p in keep)Enqueue(p);}
+        {
+            if (_queued.RemoveWhere(p=>ChunkGameplay.Owns(a,p))>0)
+            {
+                var keep=_queue.UnorderedItems.Where(p=>_queued.Contains(p.Element)).ToArray();
+                _queue.Clear();
+                _queue.EnqueueRange(keep);
+            }
+        }
         internal void InitializeChunk(Chunk chunk)
         {
-            if((_lava?chunk.LavaCount:chunk.WaterCount)==0)return;
-            for(int y=0;y<128;y++)for(int z=0;z<16;z++)for(int x=0;x<16;x++)
+            bool wet = (_lava ? chunk.LavaCount : chunk.WaterCount) != 0;
+            if (wet && _world.IsSimulated(new(chunk.OriginX,0,chunk.OriginZ)))
             {
-                var b=chunk.GetBlock(x,y,z);if(!IsFluid(b))continue;Point3 p=new(chunk.OriginX+x,y,chunk.OriginZ+z);
-                if(!IsSource(b))Enqueue(p);
-                foreach(var d in Neighbors){Point3 n=p+d;var next=At(n);if(d.Y>0&&!IsFluid(next))continue;if(Replaceable(next)&&!IsSource(next))Enqueue(n);}
+                for (int y=0; y<World.Height; y++)
+                for (int z=0; z<Chunk.Size; z++)
+                for (int x=0; x<Chunk.Size; x++)
+                    Wake(new(chunk.OriginX+x,y,chunk.OriginZ+z),chunk.GetBlock(x,y,z));
             }
+            if (!_world.IsInfinite) return;
+            // A newly published dry chunk can expose the face of an old wet
+            // chunk. Inspect only that face, even when the new chunk is dry.
+            foreach (Point3 direction in Horizontal)
+            {
+                long x=chunk.OriginX+direction.X*Chunk.Size, z=chunk.OriginZ+direction.Z*Chunk.Size;
+                if (!_world.TryGetChunkAt(x,z,out var neighbor) || (_lava ? neighbor.LavaCount : neighbor.WaterCount)==0
+                    || !_world.IsSimulated(new(x,0,z))) continue;
+                for (int y=0; y<World.Height; y++)
+                for (int along=0; along<Chunk.Size; along++)
+                {
+                    int nx=direction.X==0 ? along : direction.X>0 ? 0 : Chunk.Size-1;
+                    int nz=direction.Z==0 ? along : direction.Z>0 ? 0 : Chunk.Size-1;
+                    Wake(new(x+nx,y,z+nz),neighbor.GetBlock(nx,y,nz));
+                }
+            }
+        }
+        private void Wake(Point3 cell,BlockType block)
+        {
+            if (!IsFluid(block)) return;
+            if (!IsSource(block) || CanDisplace(cell+Down)) { Enqueue(cell); return; }
+            foreach (Point3 direction in Horizontal)
+                if (CanDisplace(cell+direction)) { Enqueue(cell); return; }
+            if (_lava && Water.IsWater(At(cell+Up))) Enqueue(cell);
         }
     }
     public sealed partial class FarmingSimulation

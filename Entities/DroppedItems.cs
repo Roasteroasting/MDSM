@@ -58,6 +58,9 @@ public sealed class DroppedItem
         float before=VerticalVelocity;
         VerticalVelocity = Math.Max(-40, VerticalVelocity - 18 * elapsed);
         Vector3 movement=new(HorizontalVelocity.X*elapsed,(before+VerticalVelocity)*.5f*elapsed,HorizontalVelocity.Y*elapsed);
+        Vector3 extent=new(Radius);
+        if (Water.Intersects(world,new BoundingBox(Position-extent,Position+extent),out Vector3 current))
+            movement+=current*(Water.CurrentSpeed*elapsed);
         int steps = Math.Max(1, (int)MathF.Ceiling(movement.Length() / 0.1f));
         bool grounded=false;
         for (int i = 0; i < steps; i++)

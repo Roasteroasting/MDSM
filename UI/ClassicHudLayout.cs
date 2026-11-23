@@ -9,6 +9,12 @@ internal static class ClassicHudLayout
     internal static Rectangle Slot(Viewport v,int slot){var b=Bar(v);int s=Scale(v);return new(b.X+(1+slot*20)*s,b.Y+s,20*s,20*s);}
     internal static Rectangle Selection(Viewport v,int slot){var b=Bar(v);int s=Scale(v);return new(b.X+(slot*20-1)*s,b.Y-s,24*s,24*s);}
     internal static Rectangle Armor(Viewport v){var b=Bar(v);int s=Scale(v);return new(b.Right-82*s,b.Y-10*s,81*s,9*s);}
+    internal static Rectangle BootsIndicator(Viewport v)
+    {
+        Rectangle bar=Bar(v);
+        int scale=Scale(v);
+        return new(bar.Center.X-4*scale,bar.Y-10*scale,8*scale,8*scale);
+    }
 }
 // Original procedural hotbar and corner-bracket selection artwork.
 internal sealed class ClassicHudGraphics:IDisposable

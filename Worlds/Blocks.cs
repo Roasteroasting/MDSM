@@ -33,7 +33,11 @@ public enum BlockType : byte
     WoodenSlab=63,CobblestoneSlab=64,WoodenStairs=65,CobblestoneStairs=66,Sign=67,DoubleWoodenSlab=68,DoubleCobblestoneSlab=69,
     MossyCobblestone=70,Carrot1=71,Carrot2=72,Carrot3=73,Carrot4=74,Carrot5=75,Carrot6=76,Carrot7=77,
     Potato1=78,Potato2=79,Potato3=80,Potato4=81,Potato5=82,Potato6=83,Potato7=84,Snow=85,Fire=86,Cactus=87,DeadBush=88,Sandstone=89,
-    Peony=90,Violet=91
+    Peony=90,Violet=91,
+    WaterFalling1=92, WaterFalling2=93, WaterFalling3=94, WaterFalling4=95,
+    WaterFalling5=96, WaterFalling6=97, WaterFalling7=98,
+    LavaFalling1=99, LavaFalling2=100, LavaFalling3=101, LavaFalling4=102,
+    LavaFalling5=103, LavaFalling6=104, LavaFalling7=105
 }
 
 public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus }
@@ -50,6 +54,8 @@ public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaq
 public static class Blocks
 {
     internal const int SnowyGrassTile=84;
+    private static readonly BlockDefinition WaterDefinition = new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1);
+    private static readonly BlockDefinition LavaDefinition = new("LAVA", false, false, BlockShape.Fluid, 50, Placeable: false, MiningSeconds: -1);
     private static readonly BlockDefinition[] Definitions =
     {
         new("AIR", false, false, BlockShape.None, 0, Placeable: false, MiningSeconds: -1),
@@ -143,7 +149,9 @@ public static class Blocks
         new("DEAD BUSH",false,false,BlockShape.Cross,80,MiningSeconds:0),
         new("SANDSTONE",true,true,BlockShape.Cube,81,82,83,MiningSeconds:1.2f),
         new("PEONY",false,false,BlockShape.Cross,85,MiningSeconds:0),
-        new("VIOLET",false,false,BlockShape.Cross,86,MiningSeconds:0)
+        new("VIOLET",false,false,BlockShape.Cross,86,MiningSeconds:0),
+        WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition, WaterDefinition,
+        LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition, LavaDefinition
     };
     private static readonly BlockType[] Palette =
     {
@@ -173,6 +181,7 @@ public static class Blocks
     public static bool DoubleGrass(BlockType block)=>block is BlockType.DoubleTallGrassLower or BlockType.DoubleTallGrassUpper;
     // Occupied voxel may be replaced, independently of collision/selection bounds.
     public static bool Replaceable(BlockType block)=>block==BlockType.Air || block==BlockType.Snow || Get(block).Shape==BlockShape.Cross || Crop(block);
+    internal static bool ReplaceableBySolid(BlockType block) => Replaceable(block) || Lava.Fluid(block);
     public static float PlantHeight(BlockType block)=>Crop(block)?(.25f + CropStage(block)*.125f)
         :block==BlockType.Sapling?.8f:Flower(block) || block==BlockType.DeadBush?.7f:.9f;
     public static bool Falls(BlockType block) => block is BlockType.Sand or BlockType.Gravel;

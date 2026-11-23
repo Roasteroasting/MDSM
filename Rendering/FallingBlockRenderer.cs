@@ -40,7 +40,7 @@ internal sealed class FallingBlockRenderer : IDisposable
             Vector3 position = world==null?block.RenderPosition(fraction):new Vector3(block.X-world.OriginX,(float)(block.PreviousY+(block.Y-block.PreviousY)*Math.Clamp(fraction,0,1)),block.Z-world.OriginZ);
             if (!_frustum.Intersects(new BoundingBox(position, position + Vector3.One))) continue;
             VertexPositionColorTexture[] template = block.Block == BlockType.Sand ? _sand : _gravel;
-            float light=world==null?1:BlockLighting.Visibility(world.Lighting.Effective(position+Vector3.One*.5f),brightness);
+            float light=world==null?1:BlockLighting.Visibility(world.Lighting.ForRendering(position+Vector3.One*.5f),brightness);
             if (count + template.Length > _vertices.Length) Array.Resize(ref _vertices, _vertices.Length * 2);
             foreach (VertexPositionColorTexture vertex in template)
                 _vertices[count++] = new VertexPositionColorTexture(vertex.Position + position, new Color(vertex.Color.ToVector3()*light), vertex.TextureCoordinate);

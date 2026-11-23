@@ -142,6 +142,8 @@ internal static class PrototypeChecks
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,StreamingFoundationChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,TerrainBalanceChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteWaterChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,BetaFluidChecks.All));
+        checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Append(checks,("Running Boots recipe, armor, movement and persistence",RunningBootsChecks.Boots)));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InventoryIconChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,SandstoneChecks.All));
         checks=System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Concat(checks,InfiniteIntegrationChecks.All));

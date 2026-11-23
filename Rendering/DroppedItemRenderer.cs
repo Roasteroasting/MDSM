@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -66,7 +66,7 @@ internal sealed class DroppedItemRenderer : IDisposable
                 if(!_frustum.Intersects(new BoundingSphere(center,.6f)))continue;
                 float rotation=item.RenderPhase(interpolation)*.5f;
                 Matrix turn=Matrix.CreateRotationY(rotation);
-                float light=world==null?1:BlockLighting.Visibility(world.Lighting.Effective(item.Position),brightness);
+                float light=world==null?1:BlockLighting.Visibility(world.Lighting.ForRendering(item.Position),brightness);
                 if(!Items.IsSprite(item.Item) && Items.TryGetBlock(item.Item,out var block))
                 {
                     var model=Model(block);Reserve(ref _blocks,BlockVertices+model.Vertices.Length);center.Y+=model.Lift;

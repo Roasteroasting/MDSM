@@ -37,7 +37,7 @@ internal static class CompletionChecks
     public static int Run(){int failures=0;foreach(var test in All)try{test.Check();Console.WriteLine("PASS: "+test.Name);}catch(Exception e){failures++;Console.Error.WriteLine("FAIL: "+test.Name+": "+e);}Console.WriteLine($"{All.Length-failures}/{All.Length} completion checks passed.");return failures==0?0:1;}
     public static void Recipes()
     {
-        Check(CraftingRecipes.All.Length==91,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
+        Check(CraftingRecipes.All.Length==92,"Missing crafting recipes.");var outputs=new HashSet<ItemId>();
         foreach(var recipe in CraftingRecipes.All)
         {
             outputs.Add(recipe.Output.Item);var pattern=(CraftingIngredient[])typeof(ShapedRecipe).GetField("_ingredients",BindingFlags.Instance|BindingFlags.NonPublic).GetValue(recipe);
@@ -81,16 +81,17 @@ internal static class CompletionChecks
     }
     public static void Fluids()
     {
-        var world=PigChecks.Flat();world.SetBlock(15,3,16,BlockType.LavaSource);world.LavaFlow.Update(.2);Check(world.GetBlock(15,2,16)==BlockType.Air,"Lava moved at water speed.");world.LavaFlow.Update(.6);Check(Lava.IsLava(world.GetBlock(15,2,16)),"Lava did not flow downward.");
+        var world=PigChecks.Flat();world.SetBlock(15,3,16,BlockType.LavaSource);world.LavaFlow.Update(1.49);Check(world.GetBlock(15,2,16)==BlockType.Air,"Lava moved before its 30-tick delay.");world.LavaFlow.Update(.01);Check(Lava.IsLava(world.GetBlock(15,2,16)),"Lava did not flow downward.");
         for(int i=0;i<50;i++){world.LavaFlow.Tick();Check(world.LavaFlow.LastProcessedCount<=512,"Unbounded lava updates.");}
         Check(Lava.IsLava(world.GetBlock(16,1,16)) && !Blocks.IsSolid(BlockType.LavaSource),"Lava crossed chunks incorrectly or became solid.");
         world.SetBlock(15,3,16,BlockType.Air);for(int i=0;i<80;i++)world.LavaFlow.Tick();Check(!Lava.IsLava(world.GetBlock(15,1,16)),"Unsupported Lava did not recede.");
         world.SetBlock(20,1,20,BlockType.LavaSource);world.SetBlock(21,1,20,BlockType.WaterSource);Check(world.GetBlock(20,1,20)==BlockType.Obsidian && Water.IsSource(world.GetBlock(21,1,20)),"Water/lava order failed.");
-        world.SetBlock(30,1,30,BlockType.WaterSource);world.SetBlock(31,1,30,BlockType.LavaFlow1);Check(world.GetBlock(31,1,30)==BlockType.Obsidian,"Flowing lava contact failed.");
+        world.SetBlock(30,1,30,BlockType.WaterSource);world.SetBlock(31,1,30,BlockType.LavaFlow1);Check(world.GetBlock(31,1,30)==BlockType.Cobblestone,"Flowing lava contact failed.");
         world.SetBlock(40,1,40,BlockType.LavaSource);world.SetBlock(42,1,40,BlockType.LavaSource);for(int i=0;i<10;i++)world.LavaFlow.Tick();Check(world.GetBlock(41,1,40)!=BlockType.LavaSource,"Infinite lava source regeneration.");
         var seam=new World(173,WorldSize.Small,false);int revision=seam.GetChunk(0,0).Revision;
         seam.SetBlock(16,4,16,BlockType.LavaSource);seam.SetBlock(15,4,16,BlockType.LavaFlow1);
-        Check(seam.GetChunk(0,0).Revision>revision && Lava.CornerHeight(seam,16,4,16)>Lava.Height(BlockType.LavaFlow1),"Lava shared-corner heights or diagonal invalidation failed.");
+        float expected=(11*Lava.Height(BlockType.LavaSource)+Lava.Height(BlockType.LavaFlow1))/14;
+        Check(seam.GetChunk(0,0).Revision>revision && Math.Abs(Lava.CornerHeight(seam,16,4,16)-expected)<.001f,"Lava shared-corner heights or diagonal invalidation failed.");
         var items=new DroppedItems(world);items.Spawn(Items.IronIngot,1,new(40.5f,1.2f,40.5f));Check(items.Entities.Count==0,"Lava did not immediately destroy ordinary items.");
         foreach(var item in new[]{B(BlockType.Obsidian),Items.Tool(ToolTier.Obsidian,ToolKind.Hoe),Items.Armor(ArmorMaterial.Obsidian,ArmorSlot.Boots)})items.Spawn(item,1,new(40.5f,1.2f,40.5f));Check(items.Entities.Count==3,"Lava destroyed Obsidian items.");
         foreach(int fps in new[]{30,60,144,360})

@@ -31,7 +31,7 @@ internal sealed class ProjectileRenderer:IDisposable
         {
             var arrow=projectiles.Arrows[i];
             if(Vector3.DistanceSquared(camera.Position,arrow.Position)>WorldRenderer.FogEnd*WorldRenderer.FogEnd)continue;
-            light=world==null?1:BlockLighting.Visibility(world.Lighting.Effective(arrow.Position),brightness);
+            light=world==null?1:BlockLighting.Visibility(world.Lighting.ForRendering(arrow.Position),brightness);
             if(arrow.Kind==ProjectileKind.Snowball)
             {
                 ItemSpriteGeometry.Fill(_balls,ballCount,arrow.Position,camera.Right,Vector3.Up,Items.Snowball);

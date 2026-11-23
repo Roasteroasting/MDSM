@@ -36,7 +36,7 @@ public sealed class Hud : IDisposable
 
     public void Draw(Viewport viewport, Inventory inventory, bool captured, bool showDebug,
         Vector3 playerPosition, World world, GameTime gameTime, string notification = null, float miningProgress = 0,
-        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0,bool creative=false,BreathMeter breath=null,WorldPosition? exactPosition=null)
+        int health = Player.MaximumHealth, bool visible = true, WorldRenderer renderer = null, FrameDiagnostics diagnostics = null,float bowPower=0,bool creative=false,BreathMeter breath=null,WorldPosition? exactPosition=null,bool bootSprint=false)
     {
         UpdateDebug(showDebug && visible, exactPosition??world.AbsolutePosition(playerPosition), world, gameTime.ElapsedGameTime.TotalSeconds, renderer, diagnostics);
         if (!visible) return;
@@ -55,6 +55,15 @@ public sealed class Hud : IDisposable
         }
         if (!creative) HealthHud.Draw(_sprites, _pixel, viewport, health);
         ArmorHud.Draw(_sprites,_pixel,viewport,inventory.ArmorPoints);
+        if (inventory.Equipped((int)ArmorSlot.Boots).Item==Items.RunningBoots)
+        {
+            Rectangle indicator=ClassicHudLayout.BootsIndicator(viewport);
+            MdsmUiStyle.Frame(_sprites,_pixel,indicator,scale);
+            Fill(new(indicator.X+2*scale,indicator.Y+2*scale,4*scale,4*scale),
+                bootSprint ? new Color(38,227,94) : new Color(25,29,31));
+            Fill(new(indicator.X+3*scale,indicator.Y+2*scale,2*scale,scale),
+                bootSprint ? new Color(168,255,179) : new Color(65,73,76));
+        }
         if (!creative && breath?.Submerged == true) BreathHud.Draw(_sprites, _pixel, viewport, inventory.ArmorPoints, breath.Bubbles);
 
         if (captured)

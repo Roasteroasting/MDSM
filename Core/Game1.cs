@@ -266,6 +266,7 @@ public class Game1 : Game
         World world = _session.World;
         _creativeFlight.Update(keyboard,_previousKeyboard,player.Creative,gameTime.ElapsedGameTime.TotalSeconds);
         player.SetFlightEnabled(_creativeFlight.Flying);
+        if (Pressed(keyboard,Keys.LeftAlt)) player.ToggleBootSprint();
         if(_creativeFlight.FlightChanged)_pendingJump=false;
         if(world.IsInfinite){if(!_session.AdvanceStreaming(out bool reframed)){_notice=_session.StreamingNotice;_noticeSeconds=1;return;}if(reframed){_playerAudio.Reset();_audio.StopAll();}}
         camera.Look(lookDelta.X, lookDelta.Y);
@@ -299,8 +300,11 @@ public class Game1 : Game
             held = false;
         }
         if (!held || _session.Mining.Target != _selection?.Cell) _session.Mining.Reset();
+        bool spaceHeld = keyboard.IsKeyDown(Keys.Space);
+        bool repeatJump = spaceHeld && !_creativeFlight.FlightChanged;
         if(!_creativeFlight.FlightChanged)_pendingJump |= Pressed(keyboard, Keys.Space);
         int steps = _simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
+        int fluidBudget = FluidSimulation.MaximumUpdatesPerFrame;
         for (int i = 0; i < steps; i++)
         {
             const float dt = (float)SimulationClock.StepSeconds;
@@ -310,7 +314,7 @@ public class Game1 : Game
             world.Particles.Update(world,dt);
             world.Fire.Update(dt);
             world.Fire.UpdatePresentation(camera.Position,dt);
-            player.Update(world, movement, _pendingJump, dt, keyboard.IsKeyDown(Keys.LeftShift), keyboard.IsKeyDown(Keys.Space),
+            player.Update(world, movement, _pendingJump || repeatJump, dt, keyboard.IsKeyDown(Keys.LeftShift), spaceHeld,
                 _creativeFlight.FastFlight);
             _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
             _playerAudio.Update(player,world,dt);
@@ -318,8 +322,11 @@ public class Game1 : Game
             camera.Position = player.EyePosition;
             if (player.IsDead) { EnterDeath(); return; }
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
-            world.Fluids.Update(dt);
-            world.LavaFlow.Update(dt);world.Farming.Update(dt);
+            world.Fluids.Update(dt,Math.Min(32,fluidBudget));
+            fluidBudget-=world.Fluids.LastProcessedCount;
+            world.LavaFlow.Update(dt,Math.Min(16,fluidBudget));
+            fluidBudget-=world.LavaFlow.LastProcessedCount;
+            world.Farming.Update(dt);
             world.Gravity.Update(dt);
             world.Containers.Update(dt);
             world.Vegetation.Update(dt,_session.Items);
@@ -804,11 +811,12 @@ public class Game1 : Game
             _diagnostics.FallingBlocks = _session.World.Gravity.Active.Count;
             _diagnostics.DynamicBufferBytes = _renderer.DynamicBufferBytes + _mobRenderer.BufferBytes;
             if (_presentation.HudVisible && State==GameState.Playing) _firstPerson.Draw(State, _session.Inventory,
-                BlockLighting.Visibility(_session.World.Lighting.Effective(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform,_session.Camera.PresentationTransform);
+                BlockLighting.Visibility(_session.World.Lighting.ForRendering(_session.Camera.Position),_settings.Brightness),_session.Swing.Transform,_session.Camera.PresentationTransform);
             _renderer.DrawUnderwater(_session.Camera);
             _hud.Draw(GraphicsDevice.Viewport, _session.Inventory, State == GameState.Playing, _presentation.DebugEnabled,
                 _session.Player.Position, _session.World, gameTime, State == GameState.Playing ? _notice : null, progress,
-                _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath,_session.Player.AbsolutePosition);
+                _session.Player.Health, _presentation.HudVisible && State!=GameState.Sleeping, _renderer, _diagnostics,_session.Bow.Power,_session.Player.Creative,_session.Player.Breath,_session.Player.AbsolutePosition,
+                _session.Player.BootSprintActive);
             if (State == GameState.Inventory) _inventoryScreen.Draw(_session, Mouse.GetState(), GraphicsDevice.Viewport);
             if (State is GameState.Paused or GameState.Death or GameState.Settings or GameState.Controls or GameState.About)
                 _menu.Draw(GraphicsDevice.Viewport, _session.Name);

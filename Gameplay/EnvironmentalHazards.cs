@@ -9,7 +9,9 @@ namespace MDSM.Gameplay;
 public sealed class EnvironmentalHazards
 {
     private double _actors;
+    internal const double CactusDamageInterval = .8;
     private double _cactusSeconds;
+    private bool _touchingCactus;
     internal static bool CactusSideContact(World world,BoundingBox body)
     {
         const float skin=.012f;
@@ -32,11 +34,21 @@ public sealed class EnvironmentalHazards
     public void Update(GameSession session,float dt)
     {
         if(!float.IsFinite(dt)||dt<=0)return;
-        if(session.Player.Creative||session.Player.IsDead||!CactusSideContact(session.World,session.Player.Bounds))_cactusSeconds=0;
+        if(session.Player.Creative||session.Player.IsDead||!CactusSideContact(session.World,session.Player.Bounds))
+        {
+            _touchingCactus=false;
+            _cactusSeconds=0;
+        }
         else
         {
+            if (!_touchingCactus) session.Player.TakeDamage(1,false);
+            _touchingCactus=true;
             _cactusSeconds+=dt;
-            while(_cactusSeconds>=1-1e-7){_cactusSeconds=Math.Max(0,_cactusSeconds-1);session.Player.TakeDamage(1,false);}
+            while (_cactusSeconds>=CactusDamageInterval-1e-7 && !session.Player.IsDead)
+            {
+                _cactusSeconds=Math.Max(0,_cactusSeconds-CactusDamageInterval);
+                session.Player.TakeDamage(1,false);
+            }
         }
         if(session.Player.Creative)session.Player.Burning.Reset();
         else {int damage=session.Player.Burning.Update(session.World,session.Player.Bounds,dt);if(damage>0)session.Player.TakeDamage(damage,false);}

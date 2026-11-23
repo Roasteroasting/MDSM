@@ -28,9 +28,17 @@ public sealed partial class WorldRenderer
             var job=_jobs[i];if(!job.Task.IsCompleted)continue;
             var result=job.Task.GetAwaiter().GetResult();_jobs.RemoveAt(i);
             int slot=job.Source.Slot;
-            if(_world.ChunkAtSlot(slot)!=job.Source||!_region.Contains(slot)||job.Source.Revision!=job.Revision||job.Source.WaterRevision!=job.WaterRevision||result.Terrain.SmoothLighting!=SmoothLighting)continue;
-            _world.Lighting.AcceptPage(job.Source.X,job.Source.Z,result.Light);
-            _meshes[slot]??=new ChunkMesh(_device,job.Source);_meshes[slot].UploadPrepared(result.Terrain,job.Revision);if(result.Water!=null)_water.UploadPrepared(slot,result.Water,job.WaterRevision);
+            if(_world.ChunkAtSlot(slot)!=job.Source || !_region.Contains(slot) || job.Source.Revision!=job.Revision)continue;
+            bool terrainReady=result.Terrain!=null && result.Terrain.SmoothLighting==SmoothLighting;
+            bool waterReady=result.Water!=null && job.Source.WaterRevision==job.WaterRevision;
+            if (!terrainReady && !waterReady) continue;
+            if (result.Light!=null) _world.Lighting.AcceptPage(job.Source.X,job.Source.Z,result.Light);
+            if (terrainReady)
+            {
+                _meshes[slot]??=new ChunkMesh(_device,job.Source);
+                _meshes[slot].UploadPrepared(result.Terrain,job.Revision);
+            }
+            if (waterReady) _water.UploadPrepared(slot,result.Water,job.WaterRevision);
             RebuiltChunks++;PreparedChunks++;if(RebuiltChunks>=budget)break;
         }
         if(_jobs.Count<2)
@@ -51,15 +59,24 @@ public sealed partial class WorldRenderer
                 // worker. A tiny main-thread light budget starved this pipeline
                 // at capped FPS, especially above terrain where no foreground
                 // light query happened to finish a page as a side effect.
-                World snapshot=_world.MeshSnapshot(next,false);int revision=next.Revision,waterRevision=next.WaterRevision;bool smooth=SmoothLighting,buildWater=_water.NeedsBuild(next.Slot);
+                World snapshot=_world.MeshSnapshot(next,false);
+                int revision=next.Revision,waterRevision=next.WaterRevision;
+                bool smooth=SmoothLighting,buildWater=_water.NeedsBuild(next.Slot);
+                bool buildTerrain=_meshes[next.Slot]==null || _meshes[next.Slot].NeedsBuild;
+                bool cachedLight=_world.Lighting.CopyReadyPage(next.X,next.Z,snapshot.Lighting);
                 var task=Task.Run(()=>
                 {
                     try
                     {
                         var center=snapshot.GetChunk(0L,0L);center.RestoreBlocks(center.Blocks);
-                        var builder=new ChunkMeshBuilder{SmoothLighting=smooth};builder.Build(snapshot,center);
+                        ChunkMeshBuilder builder=null;
+                        if (buildTerrain)
+                        {
+                            builder=new ChunkMeshBuilder{SmoothLighting=smooth};
+                            builder.Build(snapshot,center);
+                        }
                         List<WaterFace> faces=null;if(buildWater){faces=new();WaterMeshBuilder.Build(snapshot,center,faces);}
-                        return new StreamedMeshResult(builder,faces,snapshot.Lighting.GetPage(0,0).Data);
+                        return new StreamedMeshResult(builder,faces,cachedLight ? null : snapshot.Lighting.GetPage(0,0).Data);
                     }
                     finally{snapshot.Lighting.ReleaseWorkerScratch();}
                 });

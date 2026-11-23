@@ -51,9 +51,12 @@ internal static class WaterChecks
     }
     public static void Propagation()
     {
-        var world = Floor(); world.SetBlock(15, 5, 15, BlockType.WaterSource);
+        var world = Floor();
+        world.SetBlock(15, 5, 15, BlockType.WaterSource);
         world.Fluids.Tick();
         Require(world.GetBlock(15, 4, 15) == BlockType.WaterFalling && world.GetBlock(16, 5, 15) == BlockType.Air, "Downward flow did not take priority.");
+        foreach (Point3 side in FluidSimulation.Horizontal)
+            world.SetBlock(15+side.X,5,15+side.Z,BlockType.Stone);
         Settle(world);
         Require(world.GetBlock(15, 1, 15) == BlockType.WaterFalling && world.GetBlock(16, 1, 15) == Water.Flow(1), "Waterfall did not spread at its foot.");
         Require(world.GetBlock(22, 1, 15) == Water.Flow(7) && world.GetBlock(23, 1, 15) == BlockType.Air, "Horizontal reach is not seven blocks.");
@@ -82,11 +85,11 @@ internal static class WaterChecks
         var supplied = Floor(); supplied.SetBlock(20, 1, 20, BlockType.WaterSource); supplied.SetBlock(24, 1, 20, BlockType.WaterSource); Settle(supplied);
         supplied.SetBlock(20, 1, 20, BlockType.Air); Settle(supplied);
         Require(Water.IsWater(supplied.GetBlock(21, 1, 20)) && !Water.IsSource(supplied.GetBlock(21, 1, 20)), "A valid remaining upstream supply was discarded.");
-        // Opening a floor invalidates horizontal recipients even if its upstream source stays unchanged.
+        // A source can keep existing lateral streams once its waterfall occupies the opening.
         var floor = Floor(); floor.SetBlock(20, 3, 20, BlockType.Stone); floor.SetBlock(20, 4, 20, BlockType.WaterSource); Settle(floor);
         Require(Water.IsWater(floor.GetBlock(21, 4, 20)), "Raised platform did not spill.");
         floor.SetBlock(20, 3, 20, BlockType.Air); Settle(floor);
-        Require(floor.GetBlock(21, 4, 20) == BlockType.Air && Water.IsWater(floor.GetBlock(20, 1, 20)), "Removing a source's floor left suspended side flows.");
+        Require(Water.IsWater(floor.GetBlock(21, 4, 20)) && Water.IsWater(floor.GetBlock(20, 1, 20)), "A source above existing water lost its lateral supply or waterfall.");
     }
     public static void BoundariesAndScheduling()
     {
@@ -106,7 +109,7 @@ internal static class WaterChecks
             Equal(a, b); Require(a.Fluids.PendingCount == b.Fluids.PendingCount, "Water timing depends on render rate.");
         }
         var busy = Floor();
-        for (int z = 2; z < 126; z += 3) for (int x = 2; x < 126; x += 3) busy.SetBlock(x, 3, z, BlockType.WaterSource);
+        for (int z = 2; z < 146; z += 3) for (int x = 2; x < 146; x += 3) busy.SetBlock(x, 3, z, BlockType.WaterSource);
         Require(busy.Fluids.PendingCount > FluidSimulation.MaximumUpdatesPerTick, "Budget fixture was too small.");
         busy.Fluids.Tick(); Require(busy.Fluids.LastProcessedCount == FluidSimulation.MaximumUpdatesPerTick && busy.Fluids.PendingCount > 0, "Unbounded fluid update processing.");
         var idle = Floor(); idle.Fluids.Initialize(); idle.Fluids.Tick(); Require(idle.Fluids.LastProcessedCount == 0, "Dry world performed fluid work.");
@@ -118,7 +121,7 @@ internal static class WaterChecks
         var faces = new List<WaterFace>(); WaterMeshBuilder.Build(world, world.GetChunk(0, 0), faces);
         Require(faces.Count == 6, "Isolated water omitted a face.");
         float height = faces[0].A.Y;
-        Require(MathF.Abs(height - 4 - Water.Height(BlockType.WaterSource)) < 0.001f, "Source surface height is incorrect.");
+        Require(MathF.Abs(height - 4 - Water.Height(BlockType.WaterSource)*11/14) < 0.001f, "Air around a source did not lower its corners.");
         var opaque = new ChunkMeshBuilder(); opaque.Build(world, world.GetChunk(0, 0)); Require(opaque.VertexCount == 0, "Water entered the opaque pass.");
         world.SetBlock(16, 4, 15, Water.Flow(7));
         WaterMeshBuilder.Build(world, world.GetChunk(0, 0), faces); Require(faces.Count == 5, "Internal water face remained at seam.");

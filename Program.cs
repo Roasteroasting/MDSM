@@ -47,6 +47,15 @@ else if(args.Length==1 && args[0]=="--infinite-water-test")
 {
     System.Environment.ExitCode=MDSM.Testing.InfiniteWaterChecks.Run();
 }
+else if(args.Length==1 && args[0]=="--fluid-test")
+{
+    System.Environment.ExitCode=MDSM.Testing.BetaFluidChecks.Run();
+}
+else if(args.Length==1 && args[0]=="--running-boots-test")
+{
+    MDSM.Testing.RunningBootsChecks.Boots();
+    System.Console.WriteLine("PASS: Running Boots recipe, armor, sprint modes and equipment save round-trip.");
+}
 else if(args.Length==1 && args[0]=="--terrain-balance-test")
 {
     System.Environment.ExitCode=MDSM.Testing.TerrainBalanceChecks.Run();

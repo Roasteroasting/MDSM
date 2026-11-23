@@ -83,6 +83,27 @@ public sealed class BlockLighting
     public int Effective(Point3 p)
     { byte packed=Packed(p);return Math.Max(packed&15,Math.Max(0,(packed>>4)-(Maximum-_world.Time.SunlightLevel))); }
     public int Effective(Vector3 p)=>Effective(_world.GlobalCell(p));
+    internal int ForRendering(Vector3 position)
+    {
+        if (!_world.IsInfinite) return Effective(position);
+        Point3 p=_world.GlobalCell(position);
+        if (p.Y>=World.Height) return _world.Time.SunlightLevel;
+        if (p.Y<0) return 0;
+        // The renderer publishes fresh pages from its workers. Read the last
+        // result while a changed page is dirty to avoid rebuilding it in Draw.
+        if (_pages.TryGetValue(ChunkAddress.At(p.X,p.Z),out var cached))
+        {
+            byte light=cached.Value.At(p.X,p.Y,p.Z);
+            return Math.Max(light&15,Math.Max(0,(light>>4)-(Maximum-_world.Time.SunlightLevel)));
+        }
+        return p.Y>_world.SurfaceY(p.X,p.Z) ? _world.Time.SunlightLevel : 0;
+    }
+    internal bool CopyReadyPage(long cx,long cz,BlockLighting target)
+    {
+        if (!_pages.TryGetValue(new(cx,cz),out var entry) || entry.Value.Dirty) return false;
+        target.SetSnapshot(entry.Value.Data);
+        return true;
+    }
     internal bool TryEffective(Point3 p,out int level)
     {
         if(p.Y>=World.Height){level=_world.Time.SunlightLevel;return true;}

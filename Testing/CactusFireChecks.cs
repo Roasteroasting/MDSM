@@ -29,21 +29,31 @@ internal static class CactusFireChecks
         {
             var world=World();world.SetBlock(20,2,20,BlockType.Cactus);var session=new GameSession("cactus",new(world,"Cactus",position,0,0));
             Check(EnvironmentalHazards.CactusSideContact(world,session.Player.Bounds),"A cactus side missed actual player contact.");
-            for(int i=0;i<fps*3;i++)session.Hazards.Update(session,1f/fps);
-            Check(session.Player.HealthValue==17,"Cactus contact is not one HP per gameplay second.");
+            session.Hazards.Update(session,1f/fps);
+            Check(session.Player.HealthValue==19,"Cactus contact did not hurt immediately.");
+            for(int i=1;i<fps*3;i++)session.Hazards.Update(session,1f/fps);
+            Check(session.Player.HealthValue==16,"Cactus contact did not repeat every 0.8 seconds.");
         }
         var w=World();w.SetBlock(20,2,20,BlockType.Cactus);
         Check(!EnvironmentalHazards.CactusSideContact(w,new(new(20.2f,3,20.2f),new(20.8f,4.8f,20.8f))),"Cactus top causes contact damage.");
         Check(!EnvironmentalHazards.CactusSideContact(w,new(new(20.2f,.2f,20.2f),new(20.8f,2,20.8f))),"Cactus bottom causes contact damage.");
         Check(!EnvironmentalHazards.CactusSideContact(w,new(new(19,2,20.2f),new(20,3.8f,20.8f))),"Cactus damage reaches across its inset gap.");
-        var s=new GameSession("cactus",new(w,"Cactus",new(19.7625f,2,20.5f),0,0));s.Hazards.Update(s,.75f);s.Player.Teleport(new(18,2,20.5f));s.Hazards.Update(s,.1f);s.Player.Teleport(new(19.7625f,2,20.5f));s.Hazards.Update(s,.75f);Check(s.Player.Health==20,"Leaving cactus contact retained a partial damage tick.");
-        s.ApplySettings(new(){GameMode=GameMode.Creative});s.Hazards.Update(s,5);Check(s.Player.Health==20,"Creative cactus contact bypassed invulnerability.");
+        var s=new GameSession("cactus",new(w,"Cactus",new(19.7625f,2,20.5f),0,0));s.Hazards.Update(s,.75f);s.Player.Teleport(new(18,2,20.5f));s.Hazards.Update(s,.1f);s.Player.Teleport(new(19.7625f,2,20.5f));s.Hazards.Update(s,.75f);Check(s.Player.Health==18,"Re-entering cactus contact did not reset the damage interval.");
+        s.ApplySettings(new(){GameMode=GameMode.Creative});s.Hazards.Update(s,5);Check(s.Player.Health==18,"Creative cactus contact bypassed invulnerability.");
         var walking=new GameSession("walking",new(w,"Cactus",new(18.8f,2,20.5f),0,0));walking.ApplySettings(new(){GameMode=GameMode.Survival});
         for(int i=0;i<360;i++){walking.Player.Update(w,Vector3.Right,false,1f/120);walking.Hazards.Update(walking,1f/120);}
-        Check(walking.Player.Position.X<=19.763f&&walking.Player.Health==18,"Real wall collision does not trigger sustained cactus side contact.");
+        Check(walking.Player.Position.X<=19.763f&&walking.Player.Health==16,"Real wall collision does not trigger sustained cactus side contact.");
         var atop=new GameSession("top",new(w,"Cactus",new(20.5f,3,20.5f),0,0));
         for(int i=0;i<240;i++){atop.Player.Update(w,Vector3.Zero,false,1f/120);atop.Hazards.Update(atop,1f/120);}
         Check(atop.Player.Health==20&&Math.Abs(atop.Player.Position.Y-3)<.001f,"Standing on a cactus top is unsafe.");
+        var wet=World();
+        wet.SetBlock(20,2,20,BlockType.Cactus);
+        wet.SetBlock(20,3,20,BlockType.Cactus);
+        wet.SetBlock(18,2,20,BlockType.WaterSource);
+        wet.SetBlock(20,4,20,BlockType.WaterSource);
+        WaterChecks.Settle(wet);
+        Check(Water.IsWater(wet.GetBlock(19,2,20)) && wet.GetBlock(20,2,20)==BlockType.Cactus
+            && wet.GetBlock(20,3,20)==BlockType.Cactus,"Side flow or water above broke supported cactus.");
         var fire=World();fire.Sounds=new SoundEvents();fire.Sounds.SetListener(new(20.5f,3,20.5f));Check(fire.Fire.Ignite(new(20,2,20)),"Fire fixture failed.");var before=fire.Fire.Capture();
         for(int i=0;i<120*20;i++){fire.Particles.Update(fire,1f/120);fire.Fire.UpdatePresentation(new(20.5f,3,20.5f),1f/120);}
         Check(fire.Fire.Capture().SequenceEqual(before),"Presentation changed fire simulation timers.");Check(fire.Particles.Active.ToArray().Any(p=>p.Spark),"Burning fire never emitted a spark.");

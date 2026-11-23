@@ -8,7 +8,7 @@ public sealed partial class World
     {
         BlockType At(Point3 p)=>p==changed?next:GetBlock(p.X,p.Y,p.Z);
         if(At(cell+new Point3(0,-1,0)) is not (BlockType.Sand or BlockType.Cactus))return false;
-        for(int i=0;i<4;i++){BlockType b=At(cell+FacingDirection(i));if(Blocks.IsSolid(b)||Lava.Fluid(b))return false;}
+        for(int i=0;i<4;i++){BlockType b=At(cell+FacingDirection(i));if(Blocks.IsSolid(b)||Lava.IsLava(b))return false;}
         return Contains(cell.X,cell.Y,cell.Z);
     }
 }

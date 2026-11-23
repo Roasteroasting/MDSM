@@ -166,7 +166,7 @@ public sealed class PassiveMob
             Vector3 desired=steering.Value;desired.Y=0;if(desired.LengthSquared()>1)desired.Normalize();walking=desired*Definition.WalkSpeed;
             if(desired.LengthSquared()>.001f)Yaw=MathF.Atan2(-desired.X,-desired.Z);
         }
-        bool swimming = Water.Intersects(world, Bounds);
+        bool swimming = Water.Intersects(world, Bounds, out Vector3 current);
         if (swimming)
         {
             walking *= 0.45f;
@@ -175,7 +175,7 @@ public sealed class PassiveMob
             _velocity.Y = submerged ? Math.Max(1.5f, _velocity.Y - 4 * dt) : Math.Max(-2, _velocity.Y * MathF.Exp(-3 * dt) - 4 * dt);
         }
         else _velocity.Y = Math.Max(-40, _velocity.Y - Gravity * dt);
-        Vector3 displacement = (walking + _velocity) * dt;
+        Vector3 displacement = (walking + _velocity + current*Water.CurrentSpeed) * dt;
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.15f));
         Vector3 step = displacement / steps;
         Grounded = false;

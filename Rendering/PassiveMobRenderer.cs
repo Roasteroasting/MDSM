@@ -71,7 +71,7 @@ internal sealed class PassiveMobRenderer : IDisposable
         void Append(PassiveMob mob)
         {
             int start=_builder.Count;PassiveMobModels.Append(_builder,mob);
-            float light=world==null?1:BlockLighting.Visibility(world.Lighting.Effective(mob.Position+Vector3.Up*(mob.Definition.Height*.5f)),brightness);
+            float light=world==null?1:BlockLighting.Visibility(world.Lighting.ForRendering(mob.Position+Vector3.Up*(mob.Definition.Height*.5f)),brightness);
             Shade(_builder,start,light);
             if(mob.Species==MobSpecies.Skeleton)
             {

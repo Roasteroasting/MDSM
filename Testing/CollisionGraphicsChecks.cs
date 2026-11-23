@@ -89,12 +89,58 @@ internal static class CollisionGraphicsChecks
                         Console.WriteLine("PASS: Actual Creative RMB-close/Space, W/S, ascent/descent, speed and camera orientation after recovery.");
                         VerifyMobPlacement(MobSpecies.Cow);
                         VerifyMobPlacement(MobSpecies.Zombie);
+                        VerifyHeldJump();
+                        VerifyArmorEquip();
                     }
                 }
                 base.Draw(time);
                 if (_frame > 1) { Verified = true; Exit(); }
             }
             catch (Exception e) { Failure = e; Exit(); }
+        }
+
+        private void VerifyArmorEquip()
+        {
+            var session=Field<GameSession>("_session");
+            var inventory=session.Inventory;
+            var iron=new ItemStack(Items.Armor(ArmorMaterial.Iron,ArmorSlot.Boots),1,100);
+            var running=new ItemStack(Items.RunningBoots,1,140);
+            inventory.SetSlot(0,iron);
+            Input(true);
+            if (inventory.Equipped((int)ArmorSlot.Boots)!=iron || !inventory.Selected.IsEmpty)
+                throw new InvalidOperationException("Right-click did not equip held armor into an empty slot.");
+            inventory.SetSlot(0,running);
+            Input();
+            Input(true);
+            Input(true);
+            if (inventory.Equipped((int)ArmorSlot.Boots)!=running || inventory.Selected!=iron)
+                throw new InvalidOperationException("Right-click did not swap distinct armor stacks exactly once.");
+            Console.WriteLine("PASS: Actual right-click equips or swaps armor and preserves both item identities and durability.");
+        }
+
+        private void VerifyHeldJump()
+        {
+            var world = PigChecks.Flat();
+            var save = new WorldSave(world, "Held jump", new(20.5f, 1, 20.5f), 0, 0);
+            string id = Field<WorldSaveManager>("_saves").Create(save);
+            Call("BeginWorld", id, save);
+            Input();
+            var player = Field<GameSession>("_session").Player;
+            int jumps = 0;
+            bool rising = false;
+            for (int frame = 0; frame < 150; frame++)
+            {
+                float before = player.Position.Y;
+                Input(false, Keys.Space);
+                bool ascending = player.Position.Y > before + .001f;
+                if (ascending && !rising) jumps++;
+                rising = ascending;
+            }
+            if (jumps < 3) throw new InvalidOperationException("Holding Space did not repeat grounded jumps.");
+            for (int frame = 0; frame < 60; frame++) Input();
+            if (!player.Grounded || player.Position.Y != 1)
+                throw new InvalidOperationException("Releasing Space did not stop repeated jumps.");
+            Console.WriteLine("PASS: Holding Space repeats Survival jumps and releasing it lets the player settle.");
         }
 
         private void VerifyMobPlacement(MobSpecies species)

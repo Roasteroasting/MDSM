@@ -90,6 +90,8 @@ public sealed class Chunk
         DoubleGrassCount=counts[(int)BlockType.DoubleTallGrassLower]+counts[(int)BlockType.DoubleTallGrassUpper];
         for(int i=(int)BlockType.WaterSource;i<=(int)BlockType.WaterFalling;i++)WaterCount+=counts[i];
         for(int i=(int)BlockType.LavaSource;i<=(int)BlockType.LavaFalling;i++)LavaCount+=counts[i];
+        for(int i=(int)BlockType.WaterFalling1;i<=(int)BlockType.WaterFalling7;i++)WaterCount+=counts[i];
+        for(int i=(int)BlockType.LavaFalling1;i<=(int)BlockType.LavaFalling7;i++)LavaCount+=counts[i];
         for(int i=(int)BlockType.Wheat1;i<=(int)BlockType.Wheat7;i++)CropCount+=counts[i];
         for(int i=(int)BlockType.Carrot1;i<=(int)BlockType.Potato7;i++)CropCount+=counts[i];
         StructureCount=counts[(int)BlockType.FenceGate]+counts[(int)BlockType.Door]+counts[(int)BlockType.DoorUpper]+counts[(int)BlockType.Torch]+counts[(int)BlockType.Bed]+counts[(int)BlockType.BedHead];

@@ -18,6 +18,9 @@ internal static class ClassicHudChecks
             var v=new Viewport(0,0,size.X,size.Y);int s=ClassicHudLayout.Scale(v);var b=ClassicHudLayout.Bar(v);var hearts=HealthHud.Bounds(v);var armor=ClassicHudLayout.Armor(v);
             Check(b.Width==182*s&&b.Height==22*s&&b.Bottom==v.Height&&Math.Abs(b.Center.X-v.Width/2)<=1,"Hotbar proportions/anchor differ from Beta.");
             Check(hearts.Y==armor.Y&&hearts.Right<armor.Left&&armor.Right<b.Right,"Health/armor do not share separate left/right halves.");
+            Rectangle led=ClassicHudLayout.BootsIndicator(v);
+            Check(led.Left>=hearts.Right && led.Right<=armor.Left && led.Center.X==b.Center.X && led.Bottom<=b.Top,
+                "Running Boots indicator is outside the center gap.");
             for(int i=0;i<9;i++)Check(b.Contains(InventoryLayout.HotbarSlot(v,i))&&ClassicHudLayout.Selection(v,i).Width==24*s,"Slot or selection layout escaped the strip.");
             Check(BreathHud.Bounds(v,30).Bottom<armor.Y-10*s,"Breath overlaps the additional armor row.");
         }
@@ -43,6 +46,19 @@ internal static class ClassicHudChecks
                 Check(Math.Abs(center.R-(255-sky.R))<=1&&Math.Abs(center.G-(255-sky.G))<=1,"Crosshair does not invert background colors.");
                 var slot=InventoryLayout.HotbarSlot(v,4);Color inner=pixels[(slot.Y+slot.Height/2)*size.X+slot.X+slot.Width/2];Check(inner!=sky&&inner.B>10,"Hotbar interior lost alpha/background tint.");
                 using var file=File.Create(Path.Combine(AppContext.BaseDirectory,$"classic-hud-{size.X}.png"));target.SaveAsPng(file,size.X,size.Y);
+                Rectangle led=ClassicHudLayout.BootsIndicator(v);
+                int ledIndex=led.Center.Y*size.X+led.Center.X;
+                Check(pixels[ledIndex]==sky,"An unequipped Running Boots indicator appeared.");
+                inventory.SetEquipment((int)ArmorSlot.Boots,new(Items.RunningBoots,1));
+                foreach (bool enabled in new[] { false,true })
+                {
+                    GraphicsDevice.SetRenderTarget(target);GraphicsDevice.Clear(sky);
+                    hud.Draw(v,inventory,true,false,Vector3.Zero,world,new GameTime(),health:19,bootSprint:enabled);
+                    GraphicsDevice.SetRenderTarget(null);target.GetData(pixels);
+                    Check(pixels[ledIndex]==(enabled ? new Color(38,227,94) : new Color(25,29,31)),
+                        "Running Boots indicator did not show the correct state.");
+                }
+                inventory.SetEquipment((int)ArmorSlot.Boots,new(Items.Armor(ArmorMaterial.Iron,ArmorSlot.Boots),1));
             }
             Passed=true;Console.WriteLine("PASS: Classic HUD sizes, hearts/armor/breath, selection, inverted crosshair, translucent slots and real hand previews.");Exit();
         }

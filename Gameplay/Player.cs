@@ -16,6 +16,7 @@ public sealed class Player
     public const float StandingEyeHeight = 1.62f;
     public const float CrouchingEyeHeight = 1.50f;
     public const float MoveSpeed = 4.3f;
+    internal const float SprintMultiplier = 1.3f;
     public const float CreativeFlightBoostMultiplier = 3f;
     public const float Gravity = 28f;
     public const float JumpSpeed = 8.4f;
@@ -26,6 +27,13 @@ public sealed class Player
     public bool Creative => Settings.GameMode == GameMode.Creative;
     private bool _flightEnabled=true;
     public bool Flying=>Creative&&_flightEnabled;
+    private bool _bootSprintEnabled=true;
+    internal bool WearingRunningBoots => _equipment?.Equipped((int)ArmorSlot.Boots).Item==Items.RunningBoots;
+    internal bool BootSprintActive => WearingRunningBoots && _bootSprintEnabled && !Flying;
+    internal void ToggleBootSprint()
+    {
+        if (WearingRunningBoots && !Flying) _bootSprintEnabled=!_bootSprintEnabled;
+    }
     internal void SetFlightEnabled(bool enabled)
     {if(_flightEnabled==enabled)return;_flightEnabled=enabled;StopMovement();Breath.Reset();}
     public BreathMeter Breath { get; } = new();
@@ -131,7 +139,7 @@ public sealed class Player
         if (movement.LengthSquared() > 1)
             movement.Normalize();
 
-        bool swimming = Water.Intersects(world, Bounds);
+        bool swimming = Water.Intersects(world, Bounds, out Vector3 current);
         float surface=0, surfaceDisplacement=0;
         bool surfaceStroke=(swimUp||jump)&&(swimming||(_surfaceSwimming&&!Grounded))&&TrySwimSurface(world,out surface);
         _surfaceSwimming=surfaceStroke;
@@ -185,14 +193,19 @@ public sealed class Player
             _verticalSpeed = swimUp || jump ? 2.8f : MathF.Max(-2, _verticalSpeed * MathF.Exp(-3 * dt) - 4 * dt);
         }
         else { _fall.Observe(Position.Y); _verticalSpeed = MathF.Max(_verticalSpeed - Gravity * dt, -TerminalVelocity); }
-        Vector3 target=movement*MoveSpeed*(swimming ? .45f : 1)*(Crouching ? .35f : 1);
-        if(movement.LengthSquared()==0)_horizontalSpeed*=MathF.Exp(-(swimming?8:Grounded?24:2)*dt);
+        bool sprinting = BootSprintActive && !swimming && !Crouching;
+        float speed = sprinting ? MoveSpeed * SprintMultiplier : MoveSpeed;
+        Vector3 target=movement*speed*(swimming ? .45f : 1)*(Crouching ? .35f : 1);
+        // Give a sprint jump its horizontal launch speed before air control takes over.
+        if (sprinting && jumping && movement!=Vector3.Zero) _horizontalSpeed=target;
+        else if(movement.LengthSquared()==0)_horizontalSpeed*=MathF.Exp(-(swimming?8:Grounded?24:2)*dt);
         else
         {
             Vector3 change=target-_horizontalSpeed;float acceleration=(swimming?12:Grounded?60:12)*dt;
             _horizontalSpeed+=change.LengthSquared()<=acceleration*acceleration?change:Vector3.Normalize(change)*acceleration;
         }
-        Vector3 displacement = _horizontalSpeed*dt + new Vector3(0, surfaceStroke ? surfaceDisplacement : _verticalSpeed * dt, 0);
+        Vector3 displacement = (_horizontalSpeed + current*Water.CurrentSpeed)*dt
+            + new Vector3(0, surfaceStroke ? surfaceDisplacement : _verticalSpeed * dt, 0);
         // Each step is narrower than a block, so fast falls cannot tunnel through terrain.
         int steps = Math.Max(1, (int)MathF.Ceiling(displacement.Length() / 0.2f));
         Vector3 step = displacement / steps;

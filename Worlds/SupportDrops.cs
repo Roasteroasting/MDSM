@@ -20,6 +20,23 @@ public sealed partial class World
     internal bool RemoveHarvestedBlock(Point3 cell,DroppedItems items,int reservedDrops,bool creative=false)
         => ChangeWithSupportDrops(cell,BlockType.Air,items,reservedDrops,creative,true);
 
+    internal bool SpreadFluid(Point3 cell,BlockType next,bool lava)
+    {
+        BlockType previous=GetBlock(cell.X,cell.Y,cell.Z);
+        if (previous==BlockType.Air || Lava.Fluid(previous))
+            return SetBlock(cell.X,cell.Y,cell.Z,next);
+        Span<ItemId> loot=stackalloc ItemId[5];
+        int count=0;
+        if (!lava && LiveDrops!=null && !SuppressSupportDrops)
+        {
+            _supportLootRandom??=new Random(unchecked(Seed^0x53555050));
+            count=MiningRules.Drops(previous,default,_supportLootRandom,loot,Blocks.Crop(previous) && WinterCrop(cell));
+        }
+        if (!ChangeWithSupportDrops(cell,next,LiveDrops,count,false,true)) return false;
+        for (int i=0;i<count;i++) LiveDrops.Spawn(loot[i],1,Center(cell));
+        return true;
+    }
+
     private bool ChangeWithSupportDrops(Point3 cell,BlockType next,DroppedItems items,int reservedDrops,bool suppress,bool rootHarvested)
     {
         if(_blockChangeDepth!=0)return SetBlockCore(cell.X,cell.Y,cell.Z,next);

@@ -51,6 +51,11 @@ public static class SurvivalInteractions
         {session.Sleep.TryBegin(session,bed);return true;}
         if(hit is BlockHit post && session.Mobs.InteractFence(post.Cell,session.Inventory,session.Items))return true;
         if(hit is BlockHit structure && world.Toggle(structure.Cell))return true;
+        if (session.Inventory.TryEquipSelectedArmor())
+        {
+            session.Sounds.Local(SoundKind.Equip);
+            return true;
+        }
         if(held.Item==Items.Bucket || held.Item==Items.WaterBucket || held.Item==Items.LavaBucket)
         {UseBucket(session,hit);return true;}
         if(hit is not BlockHit block)return false;

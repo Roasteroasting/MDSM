@@ -8,7 +8,7 @@ namespace MDSM.Rendering;
 // Original small sprite designs; all existing atlas texels retain their source artwork.
 internal static class SeasonalArtwork
 {
-    internal static void Extend(Texture2D terrain,Texture2D items)
+    internal static void Extend(Texture2D terrain)
     {
         var snow=new Color[256];var earth=new Color[256];
         terrain.GetData(0,TextureAtlas.Source(61),snow,0,256);
@@ -19,7 +19,6 @@ internal static class SeasonalArtwork
         Put(terrain,Blocks.SnowyGrassTile,earth);
         Put(terrain,85,Plant(true));
         Put(terrain,86,Plant(false));
-        Put(items,80,LeadPixels());
         static void Put(Texture2D atlas,int tile,Color[] pixels)=>atlas.SetData(0,TextureAtlas.Source(tile),pixels,0,256);
     }
 
@@ -43,19 +42,6 @@ internal static class SeasonalArtwork
             image[(5+dy)*16+7+dx]=rim>=5 || dy==3?dark:dy<=0?light:mid;
         }
         image[5*16+7]=new Color(255,214,124);
-        return image;
-    }
-
-    internal static Color[] LeadPixels()
-    {
-        var image=new Color[256];
-        string[] design={
-            "................","...####.........","..#+oo+#........",".#+o..o+#.......",
-            ".#o....o#.......",".#o....o#.......",".#+o..o+#.......","..#oooo#........",
-            "...##+#.........",".....#o#........","......#o###.....",".......##o+#....",
-            "..........#o#...","..........#o#...",".........#o#....","..........#....."};
-        for(int y=0;y<16;y++)for(int x=0;x<16;x++)
-            image[y*16+x]=design[y][x] switch {'#'=>new Color(94,57,35),'o'=>new Color(158,102,57),'+'=>new Color(218,161,96),_=>Color.Transparent};
         return image;
     }
 

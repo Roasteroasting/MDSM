@@ -5,20 +5,14 @@ namespace MDSM.Worlds;
 
 public static class Lava
 {
-    public static bool IsLava(BlockType block)=>block is >=BlockType.LavaSource and <=BlockType.LavaFalling;
+    public static bool IsLava(BlockType block)=>block is >=BlockType.LavaSource and <=BlockType.LavaFalling
+        or >=BlockType.LavaFalling1 and <=BlockType.LavaFalling7;
     public static bool Fluid(BlockType block)=>Water.IsWater(block)||IsLava(block);
-    public static float Height(BlockType block)=>block==BlockType.LavaFalling?1:IsLava(block)?(8-(int)block+(int)BlockType.LavaSource)/9f:0;
+    internal static int Decay(BlockType block)=>block>=BlockType.LavaFalling1
+        ? 9 + (int)block - (int)BlockType.LavaFalling1 : (int)block - (int)BlockType.LavaSource;
+    public static float Height(BlockType block)=>IsLava(block)?(8-(Decay(block)>=8?0:Decay(block)))/9f:0;
     public static float CornerHeight(World world,int x,int y,int z)
-    {
-        float sum=0;int weights=0;
-        for(int pz=z-1;pz<=z;pz++)for(int px=x-1;px<=x;px++)
-        {
-            BlockType block=world.GetBlock(px,y,pz);if(!IsLava(block))continue;
-            if(IsLava(world.GetBlock(px,y+1,pz)))return 1;
-            int weight=block==BlockType.LavaSource?4:1;sum+=Height(block)*weight;weights+=weight;
-        }
-        return weights==0?0:sum/weights;
-    }
+        => Water.LiquidCornerHeight(world,world.OriginX+x,y,world.OriginZ+z,true);
     public static bool Intersects(World world,BoundingBox bounds)
     {
         for(int cz=Math.Max(world.LocalMinZ/16,(int)MathF.Floor(bounds.Min.Z/16));cz<=Math.Min((world.LocalMaxZ-1)/16,(int)MathF.Floor(bounds.Max.Z/16));cz++)

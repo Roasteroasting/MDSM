@@ -217,8 +217,8 @@ public sealed partial class World
             else if (cx>=0 && cx<ChunksX && cz>=0 && cz<ChunksZ)
             {GetChunk(cx, cz).MarkWaterDirty();if(Lava.IsLava(previous)||Lava.IsLava(block))GetChunk(cx,cz).MarkDirty();}
         Revision++;
-        Fluids.Changed(new Point3(x, y, z), previous, block);
-        LavaFlow.Changed(new Point3(x,y,z),previous,block);
+        Fluids.Changed(changedCell,block);
+        LavaFlow.Changed(changedCell,block);
         if(Lava.Fluid(block))ResolveFluidContact(new Point3(x,y,z));
         Gravity.Changed(x, z, previous, block);
         if (!Blocks.SupportsPlant(block,GetBlock(x,y+1,z)) && Blocks.Get(GetBlock(x, y + 1, z)).NeedsGrass)
@@ -258,8 +258,8 @@ public sealed partial class World
         if(block==BlockType.Chest&&!Containers.CanPlaceChest(cell))return false;
         if (!definition.Placeable || !Contains(cell.X, cell.Y, cell.Z)
             || support.HasValue && support.Value.Y>0 && Blocks.RejectsUnderside(block)
-            || (!Blocks.Replaceable(GetBlock(cell.X, cell.Y, cell.Z))
-                && !(definition.Solid && Water.IsWater(GetBlock(cell.X, cell.Y, cell.Z))))
+            || !(definition.Solid ? Blocks.ReplaceableBySolid(GetBlock(cell.X, cell.Y, cell.Z))
+                                  : Blocks.Replaceable(GetBlock(cell.X, cell.Y, cell.Z)))
             || (definition.Solid && PlacementOverlaps(cell,block,playerBounds,proposed))
             || (definition.Solid && PlacementBlockedByMobs(cell,block,proposed))
             || (definition.Solid && Gravity.Intersects(LocalBounds(cell)))

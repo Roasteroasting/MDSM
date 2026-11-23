@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MDSM.Gameplay;
@@ -21,7 +21,7 @@ internal sealed class ParticleRenderer:IDisposable
         foreach(var p in world.Particles.Active)
         {
             if(p.Life<=0||Vector3.DistanceSquared(p.Position,camera.Position)>48*48)continue;
-            Color color=p.Spark?new Color(255,175,65)*Math.Clamp(p.Life*3,0,1):new(new Vector3(BlockLighting.Visibility(world.Lighting.Effective(p.Position),brightness)));
+            Color color=p.Spark?new Color(255,175,65)*Math.Clamp(p.Life*3,0,1):new(new Vector3(BlockLighting.Visibility(world.Lighting.ForRendering(p.Position),brightness)));
             Rectangle tile=TextureAtlas.Source(p.Tile);float u=(tile.X+p.Patch%8*2+.5f)/256f,v=(tile.Y+p.Patch/8*2+.5f)/256f;
             Vector3 r=right*p.Size,h=up*p.Size;
             var a=new VertexPositionColorTexture(p.Position-r-h,color,new(u,v+1/256f));

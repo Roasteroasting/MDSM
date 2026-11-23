@@ -18,11 +18,9 @@ internal static class ItemAtlasChecks
         foreach(ItemId item in Items.Sprites)
         {
             int tile=Items.Get(item).Sprite;var bounds=TextureAtlas.Source(tile);bool opaque=false,clear=false;
-            // The Lead is drawn from a versioned pixel design when the content atlas is loaded.
-            var procedural=item==Items.Lead?SeasonalArtwork.LeadPixels():null;
             for(int y=bounds.Top;y<bounds.Bottom;y++)for(int x=bounds.Left;x<bounds.Right;x++)
             {
-                byte alpha=procedural==null?atlas.Pixels[(y*256+x)*4+3]:procedural[(y-bounds.Top)*16+x-bounds.Left].A;
+                byte alpha=atlas.Pixels[(y*256+x)*4+3];
                 opaque|=alpha>=128;clear|=alpha==0;
             }
             if(!opaque || !clear)throw new Exception("Item atlas tile missing silhouette/transparency: "+Items.Name(item));

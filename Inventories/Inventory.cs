@@ -17,6 +17,17 @@ public sealed class Inventory
     {if(slot<0||slot>=4 || !stack.IsEmpty && Items.Get(stack.Item).Armor!=(ArmorSlot)slot)throw new ArgumentException("Armor does not fit this slot.");_equipment[slot]=stack;}
     public void ClickEquipment(int slot,InventoryInteraction interaction,bool right)
     {if(!interaction.Cursor.IsEmpty && Items.Get(interaction.Cursor.Item).Armor!=(ArmorSlot)slot)return;SetEquipment(slot,interaction.ClickStack(_equipment[slot],right));}
+    internal bool TryEquipSelectedArmor()
+    {
+        ItemStack held=Selected;
+        if (held.IsEmpty || Items.Get(held.Item).Armor is not (>=ArmorSlot.Helmet and <=ArmorSlot.Boots))
+            return false;
+        int slot=(int)Items.Get(held.Item).Armor;
+        ItemStack previous=Equipped(slot);
+        SetEquipment(slot,held);
+        SetSlot(SelectedSlot,previous);
+        return true;
+    }
     public void WearArmor(){for(int i=0;i<4;i++)if(!_equipment[i].IsEmpty){ItemStack old=_equipment[i];_equipment[i]=old.Wear();if(old.Durability==1)EquipmentBroken?.Invoke(old.Item);}}
     private int _selected;
     public int SelectedSlot

@@ -92,6 +92,8 @@ public static class CraftingRecipes
             recipes.Add(new(w,h,pattern,new ItemStack(output,count)));
         }
         Add(2,2,Items.FromBlock(BlockType.CraftingTable),1,P,P,P,P);
+        Add(3,3,Items.RunningBoots,1,Items.Feather,default,Items.Feather,
+            Items.Leather,default,Items.Leather,Items.IronIngot,default,Items.IronIngot);
         ItemId sand=Items.FromBlock(BlockType.Sand);
         Add(2,2,Items.FromBlock(BlockType.Sandstone),1,sand,sand,sand,sand);
         recipes.Add(new(2,1,new[]{new CraftingIngredient(Items.IronIngot),new CraftingIngredient(Items.Flint)},new(Items.FlintAndSteel,1),true));

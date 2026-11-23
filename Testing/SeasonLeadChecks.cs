@@ -341,7 +341,8 @@ internal static class SeasonLeadChecks
             }
             foreach(var block in new[]{BlockType.Peony,BlockType.Violet})
                 Require(Pixels(atlas.Texture,Blocks.Get(block).SideTile).Any(p=>p.A==255),"A spring flower texture is missing.");
-            Require(Pixels(atlas.ItemAtlas,Items.Get(Items.Lead).Sprite).SequenceEqual(SeasonalArtwork.LeadPixels()),"Lead sprite was not uploaded.");
+            var lead=Pixels(atlas.ItemAtlas,Items.Get(Items.Lead).Sprite);
+            Require(lead.Any(p=>p.A==255) && lead.Any(p=>p.A==0),"Lead sprite is missing or lacks transparency.");
 
             var world=Flat(SeasonsMode.Off);
             var post=new Point3(23,1,20);world.SetBlock(23,1,20,BlockType.Fence);

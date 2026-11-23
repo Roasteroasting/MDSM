@@ -38,8 +38,13 @@ internal sealed class WaterRenderer : IDisposable
     internal bool NeedsBuild(int index) => _revisions[index] != _world.ChunkAtSlot(index).WaterRevision;
     internal void Evict(int index)
     {
-        if (_chunks[index] != null) { CachedChunks--; CachedFaces -= _chunks[index].Count; }
-        _chunks[index] = null; _revisions[index] = -1; _geometryChanged = true;
+        if (_chunks[index] != null)
+        {
+            CachedChunks--;
+            CachedFaces -= _chunks[index].Count;
+            _geometryChanged |= _chunks[index].Count>0;
+        }
+        _chunks[index] = null; _revisions[index] = -1;
     }
     internal void PrepareChunk(int index)
     {
@@ -62,7 +67,15 @@ internal sealed class WaterRenderer : IDisposable
     }
 
     internal void UploadPrepared(int slot,List<WaterFace> faces,int revision)
-    {Evict(slot);_chunks[slot]=faces;_revisions[slot]=revision;CachedChunks++;CachedFaces+=faces.Count;_geometryChanged=true;}
+    {
+        Evict(slot);
+        _revisions[slot]=revision;
+        if (faces.Count==0) return;
+        _chunks[slot]=faces;
+        CachedChunks++;
+        CachedFaces+=faces.Count;
+        _geometryChanged=true;
+    }
     private long _originX=long.MinValue,_originZ;
     public void Draw(Camera camera)
     {

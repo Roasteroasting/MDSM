@@ -98,7 +98,7 @@ internal sealed class InventoryScreen : IDisposable
     private int _creativeScroll;
     private bool _creativeItems=true;
     private int _menuScale=1;
-    private bool _dragScroll;
+    private int? _scrollGrabOffset;
     private readonly int[] _filtered=new int[CreativeCatalog.All.Length];
     private int _filteredCount;
     public bool SearchFocused {get;private set;}
@@ -114,7 +114,16 @@ internal sealed class InventoryScreen : IDisposable
     private void Filter()
     {
         _filteredCount=0;_creativeScroll=0;
+        _scrollGrabOffset=null;
         for(int i=0;i<CatalogIcons.Length;i++)if(CreativeCatalog.Matches(CatalogIcons[i].Item,SearchText))_filtered[_filteredCount++]=i;
+    }
+    private int MaximumScroll(int visibleRows) => Math.Max(0,(_filteredCount+8)/9-visibleRows);
+    private Rectangle ScrollThumb(Rectangle track,int visibleRows)
+    {
+        int max=MaximumScroll(visibleRows);
+        int height=Math.Clamp(track.Height*visibleRows/(visibleRows+max),Math.Min(8,track.Height),track.Height);
+        int top=max==0 ? 0 : (track.Height-height)*_creativeScroll/max;
+        return new(track.X,track.Y+top,track.Width,height);
     }
     private static readonly ItemStack[] CatalogIcons = CreateCatalogIcons();
     private static ItemStack[] CreateCatalogIcons()
@@ -145,6 +154,22 @@ internal sealed class InventoryScreen : IDisposable
         bool left = mouse.LeftButton == ButtonState.Pressed && previous.LeftButton == ButtonState.Released;
         bool right = mouse.RightButton == ButtonState.Pressed && previous.RightButton == ButtonState.Released;
         bool creative = session.Player.Creative && session.ActiveContainer==null && session.Crafting.Width==2;
+        if (!creative || !_creativeItems || mouse.LeftButton==ButtonState.Released) _scrollGrabOffset=null;
+        if (creative && _creativeItems)
+        {
+            Rectangle track=InventoryLayout.BrowserTrack(viewport);
+            int visibleRows=InventoryLayout.BrowserRows(viewport);
+            Rectangle thumb=ScrollThumb(track,visibleRows);
+            if (left && track.Contains(mouse.Position))
+                _scrollGrabOffset=thumb.Contains(mouse.Position) ? mouse.Y-thumb.Top : thumb.Height/2;
+            if (_scrollGrabOffset is int grab)
+            {
+                int travel=track.Height-thumb.Height;
+                _creativeScroll=travel>0 ? (int)Math.Round(Math.Clamp((mouse.Y-track.Top-grab)/(double)travel,0,1)
+                    *MaximumScroll(visibleRows)) : 0;
+                return;
+            }
+        }
         int rows=session.ActiveContainer?.Block==BlockType.Chest?session.ActiveContainer.SlotCount/9:0;
         if(creative&&!_creativeItems&&(left||right)&&InventoryLayout.CreativeDelete(viewport).Contains(mouse.Position))
         {
@@ -157,11 +182,7 @@ internal sealed class InventoryScreen : IDisposable
         if (creative && _creativeItems && InventoryLayout.Browser(viewport).Contains(mouse.Position) && mouse.Y<InventoryLayout.Slot(viewport,0,true).Y)
         {
             int browserRows = InventoryLayout.BrowserRows(viewport);
-            var track=InventoryLayout.BrowserTrack(viewport);
-            if(mouse.LeftButton==ButtonState.Released)_dragScroll=false;
-            if(left&&track.Contains(mouse.Position))_dragScroll=true;
-            if(_dragScroll){_creativeScroll=(int)Math.Round(Math.Clamp((mouse.Y-track.Y)/(double)Math.Max(1,track.Height),0,1)*Math.Max(0,(_filteredCount+8)/9-browserRows));return;}
-            _creativeScroll = Math.Clamp(_creativeScroll - (mouse.ScrollWheelValue-previous.ScrollWheelValue)/120,0,Math.Max(0,(_filteredCount+8)/9-browserRows));
+            _creativeScroll = Math.Clamp(_creativeScroll - (mouse.ScrollWheelValue-previous.ScrollWheelValue)/120,0,MaximumScroll(browserRows));
             if (left||right) for (int slot=0;slot<browserRows*9;slot++)
             {
                 int visible=_creativeScroll*9+slot;if(visible>=_filteredCount)break;int index=_filtered[visible];
@@ -338,10 +359,9 @@ internal sealed class InventoryScreen : IDisposable
             {
                 Rectangle search=InventoryLayout.BrowserSearch(viewport);Fill(search,SearchFocused?MdsmUiStyle.Light:MdsmUiStyle.Inset);
                 Text(PixelFont.Fit(SearchText.Length==0?"SEARCH...":SearchText.ToUpperInvariant(),Math.Max(1,(search.Width-4*_menuScale)/(6*_menuScale))),search.X+2*_menuScale,search.Center.Y-7*_menuScale/2,_menuScale,Color.White);
-                int browserRows=InventoryLayout.BrowserRows(viewport);_creativeScroll=Math.Clamp(_creativeScroll,0,Math.Max(0,(_filteredCount+8)/9-browserRows));
+                int browserRows=InventoryLayout.BrowserRows(viewport);_creativeScroll=Math.Clamp(_creativeScroll,0,MaximumScroll(browserRows));
                 var track=InventoryLayout.BrowserTrack(viewport);Fill(track,MdsmUiStyle.Inset);
-                int maxScroll=Math.Max(0,(_filteredCount+8)/9-browserRows);int thumbHeight=Math.Max(8,track.Height*browserRows/Math.Max(browserRows,(_filteredCount+8)/9));
-                MdsmUiStyle.ScrollThumb(_sprites,_pixel,new(track.X,track.Y+(maxScroll==0?0:(track.Height-thumbHeight)*_creativeScroll/maxScroll),track.Width,thumbHeight),_menuScale);
+                MdsmUiStyle.ScrollThumb(_sprites,_pixel,ScrollThumb(track,browserRows),_menuScale);
                 for(int slot=0;slot<browserRows*9;slot++)
                 {
                     int visible=_creativeScroll*9+slot;var bounds=InventoryLayout.BrowserSlot(viewport,slot);

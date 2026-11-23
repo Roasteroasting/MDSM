@@ -27,11 +27,27 @@ public sealed partial class World
     private static readonly Point3[] Adjacent={new(1,0,0),new(-1,0,0),new(0,1,0),new(0,-1,0),new(0,0,1),new(0,0,-1)};
     private void ResolveFluidContact(Point3 cell)
     {
-        bool water=Water.IsWater(GetBlock(cell.X,cell.Y,cell.Z));
-        if(water)
-        {foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Lava.IsLava(GetBlock(p.X,p.Y,p.Z)) && SetBlock(p.X,p.Y,p.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,Center(p));}}
-        else if(Lava.IsLava(GetBlock(cell.X,cell.Y,cell.Z)))
-            foreach(Point3 direction in Adjacent){Point3 p=cell+direction;if(Water.IsWater(GetBlock(p.X,p.Y,p.Z))){if(SetBlock(cell.X,cell.Y,cell.Z,BlockType.Obsidian))Sounds?.At(SoundKind.Fizz,Center(cell));break;}}
+        if (Water.IsWater(GetBlock(cell.X,cell.Y,cell.Z)))
+        {
+            HardenLava(cell+new Point3(0,-1,0));
+            foreach (Point3 direction in FluidSimulation.Horizontal) HardenLava(cell+direction);
+        }
+        else HardenLava(cell);
+    }
+    internal bool HardenLava(Point3 cell)
+    {
+        BlockType block=GetBlock(cell.X,cell.Y,cell.Z);
+        if (!Lava.IsLava(block) || Lava.Decay(block)>4) return false;
+        bool touches=Water.IsWater(GetBlock(cell.X,cell.Y+1,cell.Z));
+        foreach (Point3 direction in FluidSimulation.Horizontal)
+        {
+            Point3 near=cell+direction;
+            touches |= Water.IsWater(GetBlock(near.X,near.Y,near.Z));
+        }
+        if (!touches || !SetBlock(cell.X,cell.Y,cell.Z,block==BlockType.LavaSource ? BlockType.Obsidian : BlockType.Cobblestone))
+            return false;
+        Sounds?.At(SoundKind.Fizz,Center(cell));
+        return true;
     }
     public StructureState Structure(Point3 cell)
     {
@@ -63,7 +79,7 @@ public sealed partial class World
         var proposed = new StructureState(cell,orientation,false,support);
         if(block==BlockType.Door)
         {
-            if(!Contains(cell.X,cell.Y+1,cell.Z) || !Blocks.Replaceable(GetBlock(cell.X,cell.Y,cell.Z)) || !Blocks.Replaceable(GetBlock(cell.X,cell.Y+1,cell.Z))
+            if(!Contains(cell.X,cell.Y+1,cell.Z) || !Blocks.ReplaceableBySolid(GetBlock(cell.X,cell.Y,cell.Z)) || !Blocks.ReplaceableBySolid(GetBlock(cell.X,cell.Y+1,cell.Z))
                 || !SupportsVoxelTop(new(cell.X,cell.Y-1,cell.Z)) || Overlaps(new(LocalPosition(cell),LocalPosition(cell)+new Vector3(1,2,1)),player)
                 || PlacementBlockedByMobs(cell,block,proposed)
                 || PlacementBlockedByMobs(cell+new Point3(0,1,0),BlockType.DoorUpper,proposed))return false;

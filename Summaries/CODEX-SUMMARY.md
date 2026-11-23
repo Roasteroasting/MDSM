@@ -2930,3 +2930,64 @@ With Seasons: On and cheats enabled, /season winter, /season summer,
 /season spring, or /season autumn overrides the calendar for the current world
 session. Reloading resumes the local calendar. The creation mode and save
 format stay the same. /help season and Tab completion list the choices.
+
+### Beta fluid simulation
+
+Water and lava now schedule individual cells at five and thirty 20 Hz ticks,
+respectively. The active queue represents moving fluid, and stable cells sleep
+until a neighbor changes. Flow gives drops priority, searches up to four steps
+past the first horizontal neighbor, preserves all falling levels, and retracts
+when supply disappears. Water regenerates over solid floors between sources.
+Lava thins twice as fast, hardens on side or upper water contact according to its
+level, and can be displaced by normal solid placement. Water currents use the
+Beta level-gradient rules with drift adapted to MDSM's movement system.
+
+The existing terrain generator and save layout remain in use. New falling-depth
+IDs are appended and existing block IDs remain valid. Infinite chunk publication
+wakes exposed fluid edges, and saved pending cells resume on a fresh fluid
+deadline. Water and lava surfaces share weighted corner heights, with water
+side UVs following the height of the surface.
+
+Verified with a clean build using the cached MGCB entry point, --fluid-test,
+--water-graphics-test, and --infinite-water-test. The fluid suite includes a
+signed Infinite chunk seam, unloaded frontier, stationary pool, and saved
+waterfall resuming and retracting after reload.
+
+### Cactus contact, fluid frame pacing, and Running Boots
+
+Water can run along a supported cactus without invalidating it. Walking into a
+cactus side deals one base damage immediately and every 0.8 seconds thereafter.
+
+Fluid updates share a 96-cell budget per gameplay frame, with smaller slices
+across fixed steps. Unfinished work stays queued. Infinite rendering reads the
+last published light page during an edit, reuses clean pages in workers, and
+keeps water-only mesh updates separate from terrain uploads.
+
+Running Boots use the F-F / L-L / I-I table recipe and iron boots protection and
+durability. Equipping them enables 1.3x dry, uncrouched movement outside flight.
+Left Alt toggles the session setting. The hotbar center LED is green when the
+boost is enabled outside flight and dark otherwise.
+
+Holding Space now repeats jumps after landing. Verified through scripted
+in-game Survival input, including settling after release.
+
+Sprint jumps launch at the 1.3x horizontal speed when movement and jump are
+pressed together. A fixed-step regression verifies 5.59 blocks per second
+through diagonal takeoffs, airtime, and repeated landings on level ground.
+
+Right-click now equips held armor or swaps it with the matching equipped piece.
+The old piece returns to the selected slot with its durability intact. Block
+interactions retain priority. Build, scripted input, and completion checks passed.
+
+Running Boots artwork now comes from tile 81 of Content/Items/items.png.
+The migration verified every sprite pixel and every pixel outside the tile.
+The runtime sprite generator was removed. UI can be drawn in code. Item and
+block artwork belongs in editable PNG files.
+
+Lead artwork now lives in tile 80 of Content/Items/items.png. The one-time
+pixel check matched the old runtime sprite and confirmed that all other tiles,
+including the Running Boots, kept their pixels. The runtime Lead writer was removed.
+
+Creative catalog dragging now uses the scrollbar thumb's travel and retains
+its grab offset until release, including beyond the item grid. Dragging and
+the wheel share the same last-row limit.

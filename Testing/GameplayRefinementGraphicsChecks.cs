@@ -36,6 +36,7 @@ internal static class GameplayRefinementGraphicsChecks
         }
         foreach(Point size in new[]{new Point(320,240),new Point(640,360),new Point(1280,720)})
         {
+            screen.Open();
             using var target=new RenderTarget2D(device,size.X,size.Y,false,SurfaceFormat.Color,DepthFormat.Depth24);
             device.SetRenderTarget(target);device.Clear(Color.CornflowerBlue);var viewport=device.Viewport;
             screen.Draw(session,default,viewport);var pixels=Read(target,$"gameplay-creative-{size.X}.png");
@@ -49,6 +50,21 @@ internal static class GameplayRefinementGraphicsChecks
             Rectangle browser=InventoryLayout.Browser(viewport);
             screen.Update(session,new MouseState(browser.Center.X,browser.Center.Y,-2400,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released),default,viewport);
             Check(session.Inventory.SelectedSlot==selected,"Browser scrolling changed hotbar selection.");
+            int ScrollRow() => (int)typeof(InventoryScreen).GetField("_creativeScroll",flags).GetValue(screen);
+            int lastRow=ScrollRow();
+            Check(lastRow==(CreativeCatalog.All.Length+8)/9-InventoryLayout.BrowserRows(viewport),"Wheel did not reach the last catalog row.");
+            screen.Open();
+            Rectangle track=InventoryLayout.BrowserTrack(viewport);
+            MouseState Drag(int x,int y) => new(x,y,0,ButtonState.Pressed,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released);
+            MouseState grab=Drag(track.Center.X,track.Top+2);
+            MouseState bottom=Drag(track.Right+10,track.Bottom-1);
+            MouseState top=Drag(track.Right+10,track.Top);
+            screen.Update(session,grab,default,viewport);
+            screen.Update(session,bottom,grab,viewport);
+            Check(ScrollRow()==lastRow,"Dragging below the catalog cells missed the last row.");
+            screen.Update(session,top,bottom,viewport);
+            Check(ScrollRow()==0,"Dragging outside the track did not return to the first row.");
+            screen.Update(session,default,top,viewport);
             device.SetRenderTarget(null);
         }
         // Render crop planes and both halves of the actual atlas texture through the real terrain pass.
