@@ -123,7 +123,7 @@ internal static class CraftingChecks
     {
         Require((byte)BlockType.CraftingTable == 24 && Table.Value == 24 && Blocks.IsSolid(BlockType.CraftingTable) && Blocks.IsOpaque(BlockType.CraftingTable), "Table IDs/properties wrong.");
         Require(Blocks.Tile(BlockType.CraftingTable, Vector3.Up) == 16 && Blocks.Tile(BlockType.CraftingTable, Vector3.Forward) == 17
-            && Blocks.Tile(BlockType.CraftingTable, Vector3.Right) == 7
+            && Blocks.Tile(BlockType.CraftingTable, Vector3.Right) == 17
             && Blocks.Tile(BlockType.CraftingTable, Vector3.Down) == 7, "Table face mappings incorrect.");
         foreach (WorldSize size in WorldExpansionChecks.RoutineSizes)
         {

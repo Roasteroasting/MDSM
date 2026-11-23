@@ -45,10 +45,10 @@ internal static class CubePlacementChecks
                     && inventory[0].Count==(creative?2:1),"Station placement or inventory accounting failed.");
                 Point3 cell=hit.PlacementCell;
                 Require(world.Structure(cell).Facing==facing,"Station did not face the player's yaw.");
-                Require(FaceTile(world,builder,cell,World.FacingDirection(facing))==Blocks.Get(station).FrontTile,
-                    "World mesh used the wrong front tile.");
-                Require(FaceTile(world,builder,cell,World.FacingDirection(facing+2))==Blocks.Get(station).SideTile,
-                    "Opposite wall used the station's front tile.");
+                var definition=Blocks.Get(station);
+                for(int side=0;side<4;side++)
+                    Require(FaceTile(world,builder,cell,World.FacingDirection(side))==(side==facing?definition.FrontTile:definition.SideTile),
+                        "World mesh used the wrong lateral tile.");
             }
         }
 
@@ -113,6 +113,11 @@ internal static class CubePlacementChecks
         var away=new ChunkAddress(6,0);
         var log=new Point3(-1,70,6);
         var furnace=new Point3(-2,70,10);
+        var workbenches=new[]
+        {
+            (Cell: new Point3(-2,70,2), Block: BlockType.CraftingTable, Side: 17, Top: 16),
+            (Cell: new Point3(-2,70,14), Block: BlockType.MetalworkingBench, Side: 94, Top: 95)
+        };
         World live=null;
         try
         {
@@ -121,6 +126,8 @@ internal static class CubePlacementChecks
                 var blocks=new byte[Chunk.BlockCount];
                 blocks[Coordinates.Index(14,70,6)]=(byte)BlockType.Stone;
                 blocks[Coordinates.Index(14,69,10)]=(byte)BlockType.Stone;
+                foreach(var bench in workbenches)
+                    blocks[Coordinates.Index(14,69,(int)bench.Cell.Z)]=(byte)BlockType.Stone;
                 store.WriteAsync(home,new ChunkSnapshot(home,BetaDensityGenerator.Version,blocks).Encode()).GetAwaiter().GetResult();
                 var neighbor=new ChunkAddress(0,0);
                 store.WriteAsync(neighbor,new ChunkSnapshot(neighbor,BetaDensityGenerator.Version,new byte[Chunk.BlockCount]).Encode()).GetAwaiter().GetResult();
@@ -133,6 +140,14 @@ internal static class CubePlacementChecks
             inventory.SetSlot(0,new(Items.FromBlock(BlockType.Furnace),1));
             Require(BlockPlacement.TryPlace(live,inventory,new BlockHit(new(-2,69,10),new(0,1,0),1),player,yaw:MathHelper.PiOver2),
                 "Streamed furnace placement failed.");
+            foreach(var bench in workbenches)
+            {
+                var support=new Point3(bench.Cell.X,bench.Cell.Y-1,bench.Cell.Z);
+                inventory.SetSlot(0,new(Items.FromBlock(bench.Block),1));
+                Require(BlockPlacement.TryPlace(live,inventory,new BlockHit(support,new(0,1,0),1),player,yaw:MathHelper.PiOver2),
+                    "Streamed workbench placement failed.");
+                live.SetBlock(support.X,support.Y,support.Z,BlockType.Air);
+            }
             var meshWorld=live.MeshSnapshot(live.GetChunk(home.X,home.Z),includeLighting:false);
             Require(FaceTile(meshWorld,builder,new(15,70,6),new(1,0,0))==5
                 && FaceTile(meshWorld,builder,new(14,70,10),new(-1,0,0))==24,"Worker mesh snapshot lost orientation.");
@@ -142,6 +157,18 @@ internal static class CubePlacementChecks
             Pump(home,()=>live.IsLoaded(log));
             Require(live.Structure(log).Facing==1 && live.Structure(furnace).Facing==3
                 && live.Containers.Get(furnace)?.Block==BlockType.Furnace,"Streamed reload lost orientation or furnace state.");
+            meshWorld=live.MeshSnapshot(live.GetChunk(home.X,home.Z),includeLighting:false);
+            foreach(var bench in workbenches)
+            {
+                var cell=new Point3(14,bench.Cell.Y,bench.Cell.Z);
+                Require(live.GetBlock(bench.Cell.X,bench.Cell.Y,bench.Cell.Z)==bench.Block && live.Structure(bench.Cell).Facing==3,
+                    "Streamed reload lost the workbench or its orientation.");
+                for(int side=0;side<4;side++)
+                    Require(FaceTile(meshWorld,builder,cell,World.FacingDirection(side))==bench.Side,
+                        "Streamed workbench used the wrong lateral tile.");
+                Require(FaceTile(meshWorld,builder,cell,new(0,1,0))==bench.Top && FaceTile(meshWorld,builder,cell,new(0,-1,0))==7,
+                    "Streamed workbench used the wrong top or bottom tile.");
+            }
         }
         finally
         {
