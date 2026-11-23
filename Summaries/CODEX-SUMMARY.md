@@ -3078,3 +3078,10 @@ The existing structure records store non-default orientations in finite
 and Infinite saves. Unannotated blocks keep north-facing stations and
 vertical logs. Placement, mesh UVs, save/load, and Infinite chunk eviction
 and reload are covered by --placement-update-test.
+
+## Agent development instructions
+
+Expanded `AGENTS.md` with project context and guidance for implementation,
+streamed worlds, compatibility, rendering, testing, and Git attribution.
+Preserved the Infinite-first development targets and documented .NET 9 to
+match `MDSM.csproj`. This change affects documentation only.
