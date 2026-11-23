@@ -248,8 +248,17 @@ public sealed partial class World
             _chunks[checked((int)(z * ChunksX + x))].MarkDirty();
     }
 
-    public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds,Point3? support=null)
-        => TryPlaceBlock(cell,block,playerBounds,support,null);
+    public bool TryPlace(Point3 cell, BlockType block, BoundingBox playerBounds,Point3? support=null,byte frontFacing=0)
+    {
+        int facing=block==BlockType.WoodLog
+            ? support is {X:not 0} ? 1 : support is {Z:not 0} ? 2 : 0
+            : Blocks.HasPlacementOrientation(block) ? frontFacing&3 : 0;
+        if(facing!=0 && Structures.Count>=65536 && !Structures.ContainsKey(cell))return false;
+        if(!TryPlaceBlock(cell,block,playerBounds,support,null))return false;
+        // Default north-facing cubes and vertical logs need no saved metadata.
+        if(facing!=0)Structures[cell]=new(cell,(byte)facing,false,new(0,-1,0));
+        return true;
+    }
 
     private bool TryPlaceBlock(Point3 cell,BlockType block,BoundingBox playerBounds,Point3? support,StructureState? proposed)
     {

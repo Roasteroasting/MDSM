@@ -276,10 +276,13 @@ internal sealed partial class ChunkMeshBuilder
                     position + new Vector3(0.1f, height, 0.9f), position + new Vector3(0.9f, height, 0.1f), definition.SideTile, Color.White, true);
                 continue;
             }
+            int orientation=Blocks.HasPlacementOrientation(block) && world.Structures.TryGetValue(new(worldX,y,worldZ),out var placement)
+                ? placement.Facing : 0;
             foreach (Face face in Faces)
             {
                 // World queries include adjacent chunks and return air beyond finite edges.
-                BlockType neighbor=world.GetBlock(worldX + face.Offset.X,y + face.Offset.Y,worldZ + face.Offset.Z);
+                Vector3 normal=orientation==0 ? face.Normal : RotateCube(face.Normal,block,orientation);
+                BlockType neighbor=world.GetBlock(worldX+(int)normal.X,y+(int)normal.Y,worldZ+(int)normal.Z);
                 // A thin, non-opaque snow layer must never remove the terrain's
                 // supporting top face (including during asynchronous snow edits).
                 if (Blocks.IsOpaque(neighbor) || Blocks.GlassCube(block) && Blocks.GlassCube(neighbor))
@@ -288,8 +291,16 @@ internal sealed partial class ChunkMeshBuilder
                 int tile = block==BlockType.Grass && face.Normal.Y==0 &&
                     world.GetBlock(worldX,y+1,worldZ)==BlockType.Snow ? Blocks.SnowyGrassTile : Blocks.Tile(block, face.Normal);
                 // Shading changes RGB only: reducing vertex alpha would discard dark leaf faces.
-                Color color = new(new Vector3(face.Shade));
-                AddQuad(position + face.A, position + face.B, position + face.C, position + face.D, tile, color, false);
+                if(orientation==0)
+                    AddQuad(position+face.A,position+face.B,position+face.C,position+face.D,tile,new(new Vector3(face.Shade)),false);
+                else
+                {
+                    // Rotate the corners with their UVs so sideways bark and machine tops rotate too.
+                    float shade=normal.Y>0 ? Faces[2].Shade : normal.Y<0 ? Faces[3].Shade : normal.X!=0 ? Faces[0].Shade : Faces[4].Shade;
+                    Vector3 center=new(.5f);
+                    Vector3 Corner(Vector3 p)=>position+center+RotateCube(p-center,block,orientation);
+                    AddQuad(Corner(face.A),Corner(face.B),Corner(face.C),Corner(face.D),tile,new(new Vector3(shade)),false);
+                }
             }
         }
         if(_singleBlock.HasValue)return true;
@@ -560,6 +571,16 @@ internal sealed partial class ChunkMeshBuilder
     }
     private static Vector3 LavaVertex(World world,Vector3 at,Vector3 point)
         =>at+new Vector3(point.X,point.Y==0?0:Lava.CornerHeight(world,(int)(at.X+point.X),(int)at.Y,(int)(at.Z+point.Z)),point.Z);
+
+    private static Vector3 RotateCube(Vector3 point,BlockType block,int orientation)
+        => block==BlockType.WoodLog
+            ? orientation==1 ? new(point.Y,-point.X,point.Z) : new(point.X,-point.Z,point.Y)
+            : orientation switch
+            {
+                1=>new(-point.Z,point.Y,point.X),
+                2=>new(-point.X,point.Y,-point.Z),
+                _=>new(point.Z,point.Y,-point.X)
+            };
 
     private readonly record struct Face(Point3 Offset, Vector3 Normal, float Shade, Vector3 A, Vector3 B, Vector3 C, Vector3 D);
 }

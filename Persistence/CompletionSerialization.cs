@@ -45,7 +45,8 @@ public static partial class WorldSerializer
             Point3 p=ReadPoint(reader);byte facing=reader.ReadByte();bool open=reader.ReadBoolean();Point3 support=ReadPoint(reader);
             BlockType block=world.GetBlock(p.X,p.Y,p.Z);
             if(facing>(block==BlockType.Sign?15:block==BlockType.Door || World.OrientedBuilding(block)?7:3)||!world.Contains(p.X,p.Y,p.Z)||Math.Abs((long)support.X)+Math.Abs((long)support.Y)+Math.Abs((long)support.Z)!=1
-                ||!(block is BlockType.Torch or BlockType.Door or BlockType.FenceGate or BlockType.Bed or BlockType.BedHead || World.OrientedBuilding(block))||!world.Structures.TryAdd(p,new(p,facing,open,support)))throw new InvalidDataException("Invalid structure state.");
+                ||!(block is BlockType.Torch or BlockType.Door or BlockType.FenceGate or BlockType.Bed or BlockType.BedHead || World.OrientedBuilding(block) || Blocks.HasPlacementOrientation(block))
+                ||!world.Structures.TryAdd(p,new(p,facing,open,support)))throw new InvalidDataException("Invalid structure state.");
             if(world.GetBlock(p.X,p.Y,p.Z)==BlockType.Torch)world.Torches.Add(p);
         }
         ValidateStructures(world);
@@ -64,10 +65,16 @@ public static partial class WorldSerializer
     }
     private static void ValidateStructures(World world)
     {
-        if(world.Structures.Count>65536)throw new InvalidDataException("Too many structures.");int expected=world.Structures.Count;
+        if(world.Structures.Count>65536)throw new InvalidDataException("Too many structures.");int expected=0;
         foreach(var state in world.Structures.Values)
         {
             Point3 p=state.Cell;BlockType block=world.GetBlock(p.X,p.Y,p.Z);
+            if(Blocks.HasPlacementOrientation(block))
+            {
+                if(!World.ValidPlacementOrientation(block,state))throw new InvalidDataException("Invalid block texture orientation.");
+                continue;
+            }
+            expected++;
             if(state.Facing>(block==BlockType.Sign?15:block==BlockType.Door || World.OrientedBuilding(block)?7:3)||Math.Abs((long)state.Support.X)+Math.Abs((long)state.Support.Y)+Math.Abs((long)state.Support.Z)!=1)throw new InvalidDataException("Invalid structure orientation/support.");
             if(block==BlockType.Door){expected++;if(world.GetBlock(p.X,p.Y+1,p.Z)!=BlockType.DoorUpper)throw new InvalidDataException("Orphaned door.");}
             else if(Blocks.Bed(block))

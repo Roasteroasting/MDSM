@@ -54,6 +54,8 @@ public sealed partial class World
         if(GetBlock(cell.X,cell.Y,cell.Z)==BlockType.DoorUpper)cell+=new Point3(0,-1,0);
         return Structures.TryGetValue(cell,out var state)?state:new(cell,0,false,new(0,-1,0));
     }
+    internal static bool ValidPlacementOrientation(BlockType block,StructureState state)
+        => !state.Open && state.Support==new Point3(0,-1,0) && state.Facing<=(block==BlockType.WoodLog?2:3);
     public bool Toggle(Point3 cell)
     {
         BlockType block=GetBlock(cell.X,cell.Y,cell.Z);if(block is not (BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper))return false;
@@ -103,6 +105,7 @@ public sealed partial class World
     }
     private void DetailChanged(Point3 cell,BlockType previous,BlockType next)
     {
+        if(previous!=next && Blocks.HasPlacementOrientation(previous))Structures.Remove(cell);
         BedChanged(cell,previous,next);
         Farming.Changed(cell,previous,next);
         if(previous==BlockType.Torch)Torches.Remove(cell);

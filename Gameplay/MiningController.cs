@@ -117,13 +117,16 @@ public static class BlockPlacement
             if(!world.PlaceBuilding(cell,block,facing,upper,playerBounds,support))return false;
             if(!creative)inventory.ConsumeSelected();return true;
         }
-        return TryPlace(world,inventory,destination,playerBounds,creative,attachment);
+        // Camera yaw points from the player toward the block, so the front faces back.
+        byte front=(byte)(((int)MathF.Round(yaw/MathHelper.PiOver2)+2)&3);
+        if(block==BlockType.WoodLog)attachment=new(-hit.Normal.X,-hit.Normal.Y,-hit.Normal.Z);
+        return TryPlace(world,inventory,destination,playerBounds,creative,attachment,front);
     }
-    public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false,Point3? support=null)
+    public static bool TryPlace(World world, Inventory inventory, Point3 cell, BoundingBox playerBounds,bool creative=false,Point3? support=null,byte frontFacing=0)
     {
         ItemStack stack = inventory.Selected;
         if (stack.IsEmpty || !Items.TryGetBlock(stack.Item, out BlockType block)
-            || !(block==BlockType.Bed?world.PlaceBed(cell,0,playerBounds):block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,support??new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds,support))) return false;
+            || !(block==BlockType.Bed?world.PlaceBed(cell,0,playerBounds):block is BlockType.Door or BlockType.FenceGate or BlockType.Torch?world.PlaceStructure(cell,block,0,support??new(0,-1,0),playerBounds):world.TryPlace(cell, block, playerBounds,support,frontFacing))) return false;
         if (!creative) inventory.ConsumeSelected();
         return true;
     }

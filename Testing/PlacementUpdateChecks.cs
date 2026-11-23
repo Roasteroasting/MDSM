@@ -21,6 +21,7 @@ internal static class PlacementUpdateChecks
     private static readonly Point3[] Directions={new(-1,0,0),new(1,0,0),new(0,0,-1),new(0,0,1)};
     private static void Check(bool value,string message){if(!value)throw new InvalidOperationException(message);}
     public static readonly (string Name,Action Check)[] All={
+        ("Directional station fronts and log ends, world meshes and streamed persistence",CubePlacementChecks.Verify),
         ("Placed Fence/Gate plank UVs, connections and all open/closed directions",FenceUvs),
         ("Decorative underside rejection without consumption and valid Torch attachments",Placement),
         ("Glass Pane registry, offset recipe, stacks, Creative catalog and drops",RecipeAndDrops),

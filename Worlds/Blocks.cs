@@ -95,7 +95,7 @@ public static class Blocks
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
         new("WATER", false, false, BlockShape.Fluid, 0, Placeable: false, MiningSeconds: -1),
         new("WHITE WOOL", true, true, BlockShape.Cube, 15, MiningSeconds: 1.25f),
-        new("CRAFTING TABLE", true, true, BlockShape.Cube, 17, 16, 7, MiningSeconds: 2.5f),
+        new("CRAFTING TABLE", true, true, BlockShape.Cube, 7, 16, 7, MiningSeconds: 2.5f, FrontTile: 17),
         new("GLASS",true,false,BlockShape.Cube,18,MiningSeconds:.45f),
         new("IRON ORE",true,true,BlockShape.Cube,19,MiningSeconds:4.5f),
         new("COAL ORE",true,true,BlockShape.Cube,20,MiningSeconds:4.5f),
@@ -170,7 +170,7 @@ public static class Blocks
         new("CLAY",true,true,BlockShape.Cube,89,MiningSeconds:.9f),
         new("BRICKS",true,true,BlockShape.Cube,90,MiningSeconds:2.5f),
         new("BRICK KILN",true,true,BlockShape.Cube,91,92,90,MiningSeconds:3.75f,FrontTile:93),
-        new("METALWORKING BENCH",true,true,BlockShape.Cube,94,95,7,MiningSeconds:2.5f),
+        new("METALWORKING BENCH",true,true,BlockShape.Cube,7,95,7,MiningSeconds:2.5f,FrontTile:94),
         new("CORNFLOWER",false,false,BlockShape.Cross,96,MiningSeconds:0),
         new("DAISY",false,false,BlockShape.Cross,97,MiningSeconds:0),
         new("MARIGOLD",false,false,BlockShape.Cross,98,MiningSeconds:0)
@@ -203,6 +203,7 @@ public static class Blocks
     public static bool IsRenderable(BlockType block) => Get(block).Renderable;
     public static bool IsPlaceable(BlockType block) => Get(block).Placeable;
     public static int Tile(BlockType block, Vector3 normal) => Get(block).Tile(normal);
+    internal static bool HasPlacementOrientation(BlockType block) => block==BlockType.WoodLog || Get(block).FrontTile>=0;
     public static bool SupportsPlant(BlockType block) => block == BlockType.Grass;
     public static bool SupportsPlant(BlockType ground,BlockType plant) => plant==BlockType.DoubleTallGrassUpper?ground==BlockType.DoubleTallGrassLower
         :plant==BlockType.DeadBush?ground is BlockType.Sand or BlockType.Dirt:Crop(plant)?Soil(ground):SupportsPlant(ground) || plant==BlockType.Sapling && ground==BlockType.Dirt;

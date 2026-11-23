@@ -44,7 +44,15 @@ public sealed partial class World
         ChunkGameplay.Validate(a,state);
         if(statics)
         {
-            foreach(var s in state.Structures){if(!Contains(s.Cell.X,s.Cell.Y,s.Cell.Z)||s.Facing>15||GetBlock(s.Cell.X,s.Cell.Y,s.Cell.Z)==BlockType.Air)throw new System.IO.InvalidDataException("Invalid structure.");Structures.Add(s.Cell,s);if(GetBlock(s.Cell.X,s.Cell.Y,s.Cell.Z)==BlockType.Torch)Torches.Add(s.Cell);}
+            foreach(var s in state.Structures)
+            {
+                var block=GetBlock(s.Cell.X,s.Cell.Y,s.Cell.Z);
+                if(!Contains(s.Cell.X,s.Cell.Y,s.Cell.Z)||s.Facing>15||block==BlockType.Air
+                    || Blocks.HasPlacementOrientation(block)&&!ValidPlacementOrientation(block,s))
+                    throw new System.IO.InvalidDataException("Invalid structure.");
+                Structures.Add(s.Cell,s);
+                if(block==BlockType.Torch)Torches.Add(s.Cell);
+            }
             foreach(var s in state.Signs){if(!ValidSignText(s.Text))throw new System.IO.InvalidDataException("Invalid sign.");Signs.Add(s.Cell,s.Text);}
             Containers.Restore(state.Containers);
         }

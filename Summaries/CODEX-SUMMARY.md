@@ -3064,3 +3064,17 @@ dotnet run --project Tools/WikiExport -- .
 The exporter reads current game registries. Wiki/notes.js and the HTML guide
 pages contain the accompanying hand-maintained explanations. The site is
 kept local for manual publication.
+
+
+## Directional station and log placement
+
+Placed crafting tables, metalworking benches, furnaces, smokers, blast
+furnaces, brick kilns and chests face the player. The crafting table and
+metalworking bench use their existing detailed artwork for the front.
+Logs follow the clicked face normal and can stand upright or lie along
+either horizontal axis. Rotated cube faces retain their world-side lighting.
+
+The existing structure records store non-default orientations in finite
+and Infinite saves. Unannotated blocks keep north-facing stations and
+vertical logs. Placement, mesh UVs, save/load, and Infinite chunk eviction
+and reload are covered by --placement-update-test.
