@@ -52,7 +52,8 @@ internal sealed partial class ChunkMeshBuilder
             for(int i=first;i<VertexCount;i++)Vertices[i].Position=origin+Vertices[i].Position*size;
             return;
         }
-        if(definition.Shape is BlockShape.Wire or BlockShape.Solar)AppendElectrical(block,origin,3,size);
+        if(definition.Shape==BlockShape.Vase)AppendVase(block,origin,size);
+        else if(definition.Shape is BlockShape.Wire or BlockShape.Solar)AppendElectrical(block,origin,3,size);
         else if(definition.Shape==BlockShape.Cactus)AppendCactus(origin,size,null);
         else if (definition.Shape is BlockShape.Cross or BlockShape.Torch)
         {
@@ -61,6 +62,8 @@ internal sealed partial class ChunkMeshBuilder
             AddQuad(origin + new Vector3(size, 0, 0), origin + new Vector3(0, 0, size),
                 origin + new Vector3(0, size, size), origin + new Vector3(size, size, 0), definition.SideTile, Color.White, true);
         }
+        else if(GlassMaterial(block)&&definition.Shape is BlockShape.Slab or BlockShape.Stairs)
+            AppendGlassMask(definition.Shape==BlockShape.Slab?15:63,origin,block,size);
         else if(definition.Shape is BlockShape.Slab or BlockShape.Stairs or BlockShape.Sign)
         {
             if(definition.Shape==BlockShape.Sign){Box(new(0,.5f,.4375f),new(1,1,.5625f),7,true);Box(new(.4375f,0,.4375f),new(.5625f,.5f,.5625f),7,true);}
@@ -91,7 +94,7 @@ internal sealed partial class ChunkMeshBuilder
                     float v=face.Normal.Y==0?1-max.Y:face.Normal.Y>0?min.Z:1-max.Z;
                     region=new((int)MathF.Round(u*16),(int)MathF.Round(v*16),Math.Max(1,(int)MathF.Round((face.Normal.X==0?extent.X:extent.Z)*16)),Math.Max(1,(int)MathF.Round((face.Normal.Y==0?extent.Y:extent.Z)*16)));
                 }
-                AddQuad(origin+(min+face.A*(max-min))*size,origin+(min+face.B*(max-min))*size,origin+(min+face.C*(max-min))*size,origin+(min+face.D*(max-min))*size,tile,new Color(new Vector3(face.Shade)),false,region);
+                AddQuad(origin+(min+face.A*(max-min))*size,origin+(min+face.B*(max-min))*size,origin+(min+face.C*(max-min))*size,origin+(min+face.D*(max-min))*size,tile,new Color(DyePalette.Tint(block).ToVector3()*face.Shade),false,region);
             }
         }
     }
@@ -184,6 +187,8 @@ internal sealed partial class ChunkMeshBuilder
             Vector3 position = GeometryOrigin(new(worldX,y,worldZ));
             if(definition.Shape is BlockShape.Wire or BlockShape.Solar)
             {var cell=new Point3(worldX,y,worldZ);AppendElectrical(block,position,ElectricalGeometry.Connections(world,cell),raised:ElectricalGeometry.RaisedConnections(world,cell));continue;}
+            if(definition.Shape==BlockShape.Vase){AppendVase(block,position,cell:new(worldX,y,worldZ));continue;}
+            if(GlassMaterial(block)){AppendGlass(world,new(worldX,y,worldZ),block);continue;}
             if(World.OrientedBuilding(block))
             {AppendBuilding(world,new(worldX,y,worldZ),block,boxes);continue;}
             if(definition.Shape==BlockShape.Cactus){AppendCactus(position,1,world);continue;}
@@ -515,7 +520,7 @@ internal sealed partial class ChunkMeshBuilder
         // Terrain vertex colors hold lighting data. Keep the tint with the UVs
         // for the lit terrain effect, while inventory/held meshes use vertex RGB.
         Vector2 tintOffset=default;
-        if(tile==DyePalette.GlassTile && _world!=null && !_singleBlock.HasValue)
+        if((tile==DyePalette.GlassTile||GlassProcessing.IsGlass(_surfaceBlock)&&tile is GlassProcessing.DecorativeTile or GlassProcessing.VaseTile) && _world!=null && !_singleBlock.HasValue)
         {
             Color tint=DyePalette.Tint(_surfaceBlock);
             tintOffset=new(1+(tint.R>>3)*64+(tint.G>>2),tint.B>>3);

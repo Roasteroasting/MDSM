@@ -27,7 +27,7 @@ public sealed partial class World
         if(Blocks.Get(block).Shape==BlockShape.Slab && GetBlock(cell.X,cell.Y,cell.Z)==block
             && ((Structure(cell).Facing&4)!=0)!=upper)
         {
-            BlockType full=block==BlockType.WoodenSlab?BlockType.DoubleWoodenSlab:BlockType.DoubleCobblestoneSlab;
+            BlockType full=GlassProcessing.IsGlass(block)?GlassProcessing.Double(block):block==BlockType.WoodenSlab?BlockType.DoubleWoodenSlab:BlockType.DoubleCobblestoneSlab;
             if(PlacementOverlaps(cell,full,player)||PlacementBlockedByMobs(cell,full,null))return false;
             return SetBlock(cell.X,cell.Y,cell.Z,full);
         }

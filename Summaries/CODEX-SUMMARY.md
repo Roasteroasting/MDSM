@@ -277,3 +277,140 @@ Logs: `bin/wire-live-self-test.log`, `bin/wire-live-graphics-final.log`; current
 views and station screenshots are in `bin/headless-graphics-artifacts`.
 No outstanding failures. README.md and texture atlas pixels were not changed.
 No publishing, commits, tags or releases were performed.
+
+## 2026-11-28 · Industrialization milestone 3: electric processing
+
+Added electric furnace (block 153), electric glass kiln (154), and electric cooker
+(155), using the existing `IElectricalConsumer`, output-panel routes, five-machine
+switches, proportional allocator, electrical cadence and simulation window. There
+is no parallel power system. Machines register when placed/published/restored and
+unregister on removal/retirement; snapshot wire ports include them.
+
+`Worlds/AdvancedProcessing.cs` centralizes ratings, recipe definitions, durations,
+inventory sizes and product names. Nominal ratings are 2,000 W / 2,500 W / 400 W.
+The furnace processes all ordinary-furnace recipes in 2.5 seconds at full power
+(four times the ordinary furnace speed), with four input and four output slots.
+Inputs may hold different smelting materials, processed in slot order. Cooker
+simple dishes take two seconds; vegetable stew takes four. The fuel-based furnace
+still works without infrastructure, while ceramic pots still require the primitive
+brick kiln. No new generic components or raw ingredients were added.
+
+All machines show rated power, current demand, allocated power and a progress bar.
+Kiln/cooker arrows select products and show ingredient/output requirements.
+Selections remain fixed during partial work; finishing the work or removing its
+ingredients allows reselection. Work scales with delivered/nominal watts.
+Disconnected, shaded or switched-off machines preserve partial work; blocked
+outputs pause without drawing power. Ingredients are retained until an entire
+transaction can complete, then consumed together with output insertion. Output
+slots only allow withdrawal. Mixed batches use all compatible output slots.
+
+### Recipes and products
+
+All three machine recipes use the existing Metalworking Bench. Rows below use
+I=iron ingot, C=copper ingot, W=copper wire, P=ceramic pot, F=furnace, K=brick kiln,
+S=smoker, G=ordinary glass, B=brick item.
+
+- Electric furnace: IPI / WFW / ICI.
+- Electric glass kiln: IGI / WKW / BCB.
+- Electric cooker: IPI / WSW / ICI.
+
+The glass kiln accepts clear glass or any existing stained-glass block and
+preserves its color. Its selectable products are:
+
+- 1 glass -> 2 slabs, four seconds.
+- 3 glass -> 4 stairs, six seconds.
+- 3 glass -> 8 panes, four seconds.
+- 1 glass -> 1 decorative tile block, four seconds.
+- 2 glass -> 1 flower vase, five seconds.
+
+Slabs, stairs, decorative glass and vases each have clear plus sixteen stained
+variants. Existing panes and their dye recipes are reused. Eight clear new shapes
+around an existing dye yield eight colored shapes at the crafting table; all 64
+new staining recipes are covered. Slabs join into matching double slabs, which
+drop their two original slabs. Stairs reuse existing orientation, inverted
+placement and corner logic. New glass mesh faces merge half-cell regions and
+cull matching-color shared surfaces, including partial slab/stair intersections;
+collision/targeting use the existing oriented building boxes. Decorative tiles
+are full transparent glass blocks. Dye tint works in world, inventory, held and
+dropped meshes without new procedural artwork.
+
+Vases are hollow five-part glass models with matching collision and flower
+targeting. Right-click with any existing flower to insert one; right-click with
+an empty hand to retrieve it when inventory has space. Contents survive finite
+and Infinite saves and are included in asynchronous mesh snapshots. Survival
+mining drops the vase and its flower through the existing container-drop path.
+
+Cooker choices are cooked pork, baked potato, roasted carrot, fried egg, and
+vegetable stew. Stew uses one carrot, one potato and one ceramic pot; eating it
+returns the pot. The three new food items (IDs 360–362, sprites 106–108) heal
+4 / 4 / 8 and follow existing single-serving food conventions. No new ingredients
+are needed. Existing fuel-based food recipes remain available.
+
+### Integration and persistence
+
+Block IDs 156–240 append five contiguous 17-color families (slab, stairs,
+decorative tile, vase, joined slab). Joined slabs have no standalone inventory
+item. All obtainable new blocks/items have Creative entries, atlas-backed held
+and dropped models, crafting/mining integration and save validation.
+
+`BlockEntityState` adds optional recipe-selection and work-item metadata.
+Infinite JSON metadata saves it through the existing resident-container pipeline.
+Finite binary records append those two fields only for the three new machine
+IDs; old container records keep their layout. Power allocations are transient and
+recomputed after load. Corrected `Chunk.RestoreBlocks` to count all registered
+oriented building shapes, rather than just the old fixed slab/stair ID range,
+so newly saved shaped glass restores its orientation metadata correctly.
+
+### Artwork
+
+Used the imagegen skill for original textures, retained the source sheets as
+`Content/Blocks/advanced-processing-source.png` and
+`Content/Items/advanced-food-source.png`, and imported them with
+`Tools/ImportAdvancedTextures.ps1`. The importer only crops/nearest-samples
+generated artwork into 16x16 atlas tiles; it does not synthesize pixels. It
+preserves unassociated transparent RGB by cloning the existing atlas bitmap.
+
+Terrain slots 112–119 hold three machine fronts, shared side/top, decorative
+glass, vase glass and a reserved glass-edge variant. Item slots 106–108 hold the
+three new foods. Every pixel outside those assigned slots matches the pre-task
+atlases exactly, including transparent pixels: zero unexpected changes in either
+PNG. Existing artwork, including the previously baked seasonal tiles, is intact.
+UI remains code-drawn.
+
+Exact block-sheet imagegen prompt:
+
+> Production texture atlas sheet for original retro voxel survival game MDSM. Exactly FOUR columns and TWO rows of square tiles, flush edge-to-edge, NO margins, gutters, labels, captions, text, perspective or 3D scene. Crisp 16x16-style pixel art with muted weathered iron, copper and cream ceramic, consistent industrial palette. Order row-major: 1 electric furnace front, square insulated oven door with orange warm window and tiny green power lamp, no burning coal; 2 electric glass kiln front, deep dark crucible window and amber heat gauge, pale ceramic insulation; 3 electric cooker front, small oven hatch with dark glass window, copper knobs and tiny green lamp; 4 shared machine side, riveted grey iron with neat dark cooling vents; 5 shared machine top, dark iron rim and pale ceramic centre inset; 6 DECORATIVE GLASS TILE block-face texture: very thin neutral WHITE/PALE GRAY square outer border and fine white diamond/diagonal etched lines, truly TRANSPARENT empty interior, no colored backdrop; 7 GLASS VASE wall texture: delicate WHITE/pale gray rim and clear glass highlight streaks, truly TRANSPARENT interior, no colored backdrop, a texture face not an illustration of a whole vase; 8 GLASS EDGE texture: thin pale white glass border and small diagonal highlight on truly transparent interior. Tiles 1-5 must be fully opaque square block faces. Tiles 6-8 must have genuine alpha transparency throughout their interiors, suitable for a voxel cutout glass renderer and neutral enough for sixteen dye tints. No checkerboard pixels or background color baked into transparent regions. One coherent texture-sheet asset. All designs original.
+
+Exact food-sheet imagegen prompt:
+
+> A single game food sprite-sheet asset, exactly THREE equal square tiles in ONE horizontal row, aspect ratio 3:1, flush edge-to-edge no gutters or outer margins, each sprite centred with at least one logical transparent pixel around it. Crisp original 16x16-style pixel art, warm earthy palette, readable retro voxel survival inventory style. Left: one roasted carrot, orange-gold carrot with browned ridges and a tiny green stem. Centre: one fried egg, creamy irregular white with bright golden yolk and a brown cooked edge. Right: a small reddish-brown ceramic pot full of vegetable stew, orange carrot and pale potato chunks visible at its open top, no cutlery. Genuine fully transparent background outside each silhouette, no plate, no cast shadow, no checkerboard, no captions or text. No perspective scene; these are small clear inventory sprites. One coherent sprite sheet.
+
+### Verification
+
+- `dotnet build`: passed with zero warnings/errors.
+- `dotnet run --no-build -- --self-test`: 283/283 Infinite/shared checks passed.
+- Final `--advanced-processing-test`: all five focused checks passed, including
+  all kiln colors/products, machine and dye recipes, full and partial power,
+  atomic batches, output blocking, source/switch interruptions, finite work saves,
+  and repeated Infinite chunk retirement/reload of work, completed products,
+  input reserves, saved-off switches and vase flowers across signed chunk seams.
+- `--crafting-test`: passed; catalog now has 236 recipes.
+- All ten suites in the private WSL/Xvfb `--graphics-test` aggregate passed.
+  Final `--collision-graphics-test` and `--door-graphics-test` runs also passed
+  after sharing exposed-face glass geometry with inventory/held models.
+- Final focused `--industrial-test` and `--electrical-test` checks passed.
+- Atlas pixel preservation and `git diff --check`: passed.
+
+The broad graphics run exposed a fixed sprite-count assertion (105) that needed
+the three new food sprites (108); the check now also reports its actual count.
+Graphics checks exercise actual RMB station opening, selector/input/output clicks,
+live production, vase flower insertion/removal, 320x240 and 1280x720 interfaces,
+all obtainable held models, and stained shapes in both lighting modes. Screenshots
+are in `bin/headless-graphics-artifacts`; logs are
+`bin/milestone3-self-test.log`, `bin/milestone3-processing-test.log` and
+`bin/milestone3-graphics-test.log`. Final geometry/input logs are
+`bin/milestone3-collision-final.log` and `bin/milestone3-held-final.log`.
+
+Resident machines intentionally stop outside the simulation window and resume
+when active again; no offline catch-up is introduced. No publishing, commits,
+tags or releases were performed. README.md is unchanged.

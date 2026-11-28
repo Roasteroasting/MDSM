@@ -18,6 +18,7 @@ public static class MiningRules
         BlockType.CopperBlock or BlockType.BrickBlock => new(MiningCategory.Mineral,2.5f,ToolTier.Wood),
         BlockType.DiamondOre => new(MiningCategory.Mineral,3,ToolTier.Iron),
         BlockType.SolarPanel or BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel or BlockType.PowerSwitch => new(MiningCategory.Mineral,2,ToolTier.Wood),
+        BlockType.ElectricFurnace or BlockType.ElectricGlassKiln or BlockType.ElectricCooker => new(MiningCategory.Mineral,3,ToolTier.Wood),
         BlockType.Furnace => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
         BlockType.Smoker or BlockType.BlastFurnace or BlockType.BrickKiln => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
         BlockType.MetalworkingBench => new(MiningCategory.Wood,2),
@@ -44,6 +45,7 @@ public static class MiningRules
         || Items.Get(tool.Item).Tool==ToolKind.Pickaxe && Items.Get(tool.Item).Tier>=Profile(block).Required;
     public static ItemId? Drop(BlockType block,ItemStack held,Random random)
     {
+        if(GlassProcessing.IsGlass(block)&&!GlassProcessing.IsDouble(block))return Items.FromBlock(block);
         if(!Harvests(block,held) || Blocks.GlassCube(block) || Blocks.GlassPane(block) || block is BlockType.TallGrass or BlockType.Leaves || Blocks.Crop(block))return null;
         return block switch
         {
@@ -55,6 +57,7 @@ public static class MiningRules
     public static bool Wears(ItemStack stack) => Items.Get(stack.Item).Tool is >=ToolKind.Pickaxe and <=ToolKind.Shovel;
     public static int Drops(BlockType block,ItemStack held,Random random,Span<ItemId> output,bool winterCrop=false)
     {
+        if(GlassProcessing.IsDouble(block)){output[0]=output[1]=Items.FromBlock(GlassProcessing.Single(block));return 2;}
         if(block==BlockType.Clay){output[..4].Fill(Items.ClayBall);return 4;}
         if(block==BlockType.Fire)return 0;
         if(block==BlockType.DeadBush)

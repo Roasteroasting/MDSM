@@ -33,6 +33,7 @@ public static class Items
     public static readonly ItemId RunningBoots=new(335);
     public static readonly ItemId CopperIngot=new(336), ClayBall=new(337), Brick=new(338), CopperWire=new(339),
         MortarAndPestle=new(341), UnfiredPot=new(342), CeramicPot=new(343);
+    public static readonly ItemId RoastedCarrot=new(360),FriedEgg=new(361),VegetableStew=new(362);
     public static ItemId Dye(DyeColor color)=>new((ushort)(344+(int)color));
     private static readonly ItemDefinition[] Definitions = CreateDefinitions();
     private static readonly ItemId[] SpriteItems = CreateSprites();
@@ -47,7 +48,7 @@ public static class Items
     }
     private static ItemDefinition[] CreateDefinitions()
     {
-        var definitions = new ItemDefinition[88+DyePalette.Count];
+        var definitions = new ItemDefinition[91+DyePalette.Count];
         string[] names = { "RAW PORKCHOP", "LEATHER", "FEATHER", "IRON INGOT", "COAL", "FLINT", "DIAMOND", "STICK", "ARROW", "STRING", "CHARCOAL" };
         for (int i=0;i<names.Length;i++) definitions[i] = new(names[i], i==0?1:64, Sprite: i);
         int[] uses = {59,131,250,1561};
@@ -80,6 +81,7 @@ public static class Items
         definitions[86]=new("UNFIRED CLAY POT",Sprite:88);
         definitions[87]=new("CERAMIC POT",Sprite:89);
         for(int i=0;i<DyePalette.Count;i++)definitions[88+i]=new(DyePalette.Name((DyeColor)i)+" DYE",Sprite:90+i);
+        definitions[104]=new("ROASTED CARROT",1,Sprite:106);definitions[105]=new("FRIED EGG",1,Sprite:107);definitions[106]=new("VEGETABLE STEW",1,Sprite:108);
         return definitions;
     }
     private static ItemId[] CreateSprites()

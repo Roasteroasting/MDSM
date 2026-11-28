@@ -120,9 +120,9 @@ public sealed class ElectricalNetwork(World world)
     {
         // One vectorized rejection for ordinary terrain; inspect cells only in chunks
         // containing player-built electrical blocks. Never scan chunks on a tick.
-        if(!chunk.Blocks.ContainsAnyInRange((byte)BlockType.CopperWire,(byte)BlockType.PowerSwitch))return;
+        if(!chunk.Blocks.ContainsAnyInRange((byte)BlockType.CopperWire,(byte)BlockType.ElectricCooker))return;
         for(int y=0;y<World.Height;y++)for(int z=0;z<16;z++)for(int x=0;x<16;x++)
-        {var b=chunk.GetBlock(x,y,z);if(IsBlock(b))Add(new(chunk.OriginX+x,y,chunk.OriginZ+z),b);}
+        {var b=chunk.GetBlock(x,y,z);if(IsBlock(b))Add(new(chunk.OriginX+x,y,chunk.OriginZ+z),b);else if(AdvancedProcessing.Machine(b))world.Containers.Get(new(chunk.OriginX+x,y,chunk.OriginZ+z));}
     }
     internal void Detach(ChunkAddress address)
     {

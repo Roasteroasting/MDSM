@@ -29,5 +29,5 @@ internal static class DyePalette
         =>(BlockType)((int)(pane?BlockType.StainedPaneWhite:BlockType.StainedGlassWhite)+(int)color);
     internal static Color Tint(BlockType block)
         =>block is >=BlockType.StainedGlassWhite and <=BlockType.StainedPaneBlack
-            ? Colors[((int)block-(int)BlockType.StainedGlassWhite)%Count]:Color.White;
+            ? Colors[((int)block-(int)BlockType.StainedGlassWhite)%Count]:GlassProcessing.IsGlass(block)&&GlassProcessing.ColorIndex(block)>0?Colors[GlassProcessing.ColorIndex(block)-1]:Microsoft.Xna.Framework.Color.White;
 }

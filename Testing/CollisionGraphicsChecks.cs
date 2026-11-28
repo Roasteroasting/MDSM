@@ -96,6 +96,7 @@ internal static class CollisionGraphicsChecks
                         VerifyArmorEquip();
                         VerifyIndustrialStations();
                         VerifyElectricalStations();
+                        VerifyAdvancedMachines();
                         VerifyStreamedLiveInterface();
                         VerifyLiveInterfaces();
                     }
@@ -104,6 +105,86 @@ internal static class CollisionGraphicsChecks
                 if (_frame > 1) { Verified = true; Exit(); }
             }
             catch (Exception e) { Failure = e; Exit(); }
+        }
+
+        private void VerifyAdvancedMachines()
+        {
+            void Check(bool ok,string message){if(!ok)throw new InvalidOperationException(message);}
+            var world=PigChecks.Flat();world.Time.Restore(300);var source=new Point3(17,2,17);var target=new Point3(20,2,17);
+            world.SetBlock(source.X,source.Y,source.Z,BlockType.CoalGenerator);world.Containers.Get(source).SetSlot(0,new(Items.Coal,2));
+            world.TryPlace(new(18,2,17),BlockType.OutputPanel,new Player(new(40,1,40)).Bounds,frontFacing:1);world.SetBlock(19,2,17,BlockType.CopperWire);
+            var save=new WorldSave(world,"Advanced machines",new(20.5f,1,20.5f),0,0);
+            string id=Field<WorldSaveManager>("_saves").Create(save);Call("BeginWorld",id,save);
+            var session=Field<GameSession>("_session");var atlas=Field<TextureAtlas>("_atlas");
+            using var screen=new MDSM.UI.InventoryScreen(GraphicsDevice,atlas);
+            void Click(Rectangle bounds)
+            {
+                Input();var mouse=new MouseState(bounds.Center.X,bounds.Center.Y,0,ButtonState.Pressed,ButtonState.Released,ButtonState.Released,ButtonState.Released,ButtonState.Released);
+                Call("ProcessInput",default(KeyboardState),mouse,false,new GameTime(TimeSpan.Zero,TimeSpan.FromSeconds(1d/60)),Point.Zero);
+            }
+            void Insert(BlockContainer machine,int slot,ItemStack stack)
+            {
+                session.Inventory.SetSlot(0,stack);Click(MDSM.UI.InventoryLayout.Slot(GraphicsDevice.Viewport,0));
+                Click(MDSM.UI.InventoryLayout.ContainerSlot(GraphicsDevice.Viewport,machine.Block,slot));
+                Check(session.InventoryInteraction.Cursor.IsEmpty&&machine[slot]==stack,"Real machine slot click lost input");
+            }
+            foreach(var block in new[]{BlockType.ElectricFurnace,BlockType.ElectricGlassKiln,BlockType.ElectricCooker})
+            {
+                world.Containers.Detach(target);world.SetBlock(target.X,target.Y,target.Z,block);Input();Input(true);
+                var machine=session.ActiveContainer;Check(State==GameState.Inventory&&machine?.Block==block,"Actual RMB did not open electric machine");
+                int choice=block==BlockType.ElectricGlassKiln?1:block==BlockType.ElectricCooker?4:0;
+                for(int i=0;i<choice;i++)Click(MDSM.UI.InventoryLayout.ElectricRecipeButton(GraphicsDevice.Viewport,1));
+                Check(machine.SelectedRecipe==choice,"Product selector clicks failed");
+                if(block==BlockType.ElectricFurnace)
+                {
+                    Insert(machine,0,new(Items.FromBlock(BlockType.IronOre),4));Insert(machine,1,new(Items.FromBlock(BlockType.Sand),4));
+                    Insert(machine,2,new(Items.FromBlock(BlockType.CopperOre),4));Insert(machine,3,new(Items.FromBlock(BlockType.WoodLog),4));
+                }
+                else if(block==BlockType.ElectricGlassKiln)Insert(machine,0,new(Items.FromBlock(DyePalette.Glass(DyeColor.Blue)),6));
+                else {Insert(machine,0,new(Items.Carrot,2));Insert(machine,1,new(Items.Potato,2));Insert(machine,2,new(Items.CeramicPot,2));}
+                for(int i=0;i<60;i++)Input();Check(machine.Progress>0&&machine.AllocatedWatts==machine.NominalWatts,"Open machine did not show live allocated work");
+                foreach(var size in new[]{(320,240),(1280,720)})
+                {
+                    using var surface=new RenderTarget2D(GraphicsDevice,size.Item1,size.Item2,false,SurfaceFormat.Color,DepthFormat.Depth24);
+                    GraphicsDevice.SetRenderTarget(surface);GraphicsDevice.Clear(Color.Black);screen.Open();screen.Draw(session,default,GraphicsDevice.Viewport);GraphicsDevice.SetRenderTarget(null);
+                    var pixels=new Color[surface.Width*surface.Height];surface.GetData(pixels);
+                    Check(pixels.Count(p=>p!=Color.Black)>surface.Width*surface.Height/5,"Electric machine UI did not draw");
+                    using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,$"advanced-{block}-{surface.Width}.png")))surface.SaveAsPng(png,surface.Width,surface.Height);
+                    GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=atlas.Texture;
+                }
+                for(int i=0;i<360;i++)Input();Check(!machine[AdvancedProcessing.Inputs(block)].IsEmpty,"Live machine did not deliver its product");
+                int output=AdvancedProcessing.Inputs(block);var result=machine[output];
+                Click(MDSM.UI.InventoryLayout.ContainerSlot(GraphicsDevice.Viewport,block,output));
+                Check(machine[output].IsEmpty&&session.InventoryInteraction.Cursor==result,"Actual machine output click lost product");
+                Click(MDSM.UI.InventoryLayout.Slot(GraphicsDevice.Viewport,0));
+                Check(session.InventoryInteraction.Cursor.IsEmpty&&session.Inventory[0]==result,"Actual product transfer to inventory failed");
+                Input(false,Keys.Escape);Input();
+            }
+            world.Containers.Detach(target);world.SetBlock(target.X,target.Y,target.Z,GlassProcessing.Block(GlassProduct.Vase,15));
+            session.Inventory.SetSlot(0,new(Items.FromBlock(BlockType.RedFlower),2));Input();Input(true);
+            Check(State==GameState.Playing&&world.Containers.Get(target)[0].Count==1&&session.Inventory[0].Count==1,"Actual vase RMB did not insert one flower");
+            session.Inventory.SetSlot(0,default);Input();Input(true);
+            Check(State==GameState.Playing&&world.Containers.Get(target)[0].IsEmpty&&session.Inventory[0].Item==Items.FromBlock(BlockType.RedFlower),"Actual vase RMB did not return flower");
+            var display=PigChecks.Flat();display.Time.Restore(300);var body=new Player(new(40,1,40)).Bounds;
+            for(int color=0;color<17;color++)
+            {
+                var p=new Point3(16+color%6,1,17+color/6*2);
+                var product=(GlassProduct)(color%4);var block=GlassProcessing.Block(product,color);
+                if(product is GlassProduct.Slab or GlassProduct.Stairs)display.PlaceBuilding(p,block,(byte)(color%4),false,body,new(0,-1,0));
+                else display.SetBlock(p.X,p.Y,p.Z,block);
+                if(product==GlassProduct.Vase)display.Containers.Get(p).SetSlot(0,new(Items.FromBlock(color%2==0?BlockType.Daisy:BlockType.RedFlower),1));
+            }
+            for(int i=0;i<3;i++)display.SetBlock(17+i*2,1,15,(BlockType)((int)BlockType.ElectricFurnace+i));
+            using var renderer=new WorldRenderer(GraphicsDevice,atlas,display);
+            using var targetView=new RenderTarget2D(GraphicsDevice,960,540,false,SurfaceFormat.Color,DepthFormat.Depth24);
+            var camera=new Camera{Position=new(23,4.5f,25),FieldOfView=55};camera.RestoreOrientation(-.60f,-.4f);
+            foreach(bool smooth in new[]{false,true})
+            {
+                GraphicsDevice.SetRenderTarget(targetView);GraphicsDevice.Clear(WorldRenderer.SkyColor);renderer.SmoothLighting=smooth;RenderingPerformanceChecks.Warm(renderer,camera);renderer.Draw(camera,null);GraphicsDevice.SetRenderTarget(null);
+                using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,$"advanced-glass-{smooth}.png")))targetView.SaveAsPng(png,targetView.Width,targetView.Height);
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=atlas.Texture;
+            }
+            Console.WriteLine("PASS: Actual electric-machine RMB, selectable kiln/cooker products, input/output clicks, live production, responsive UI and stained glass/vase rendering.");
         }
 
         private void VerifyStreamedLiveInterface()

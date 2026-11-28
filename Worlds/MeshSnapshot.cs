@@ -34,7 +34,7 @@ public sealed partial class World
         foreach(var pair in Signs)if(Math.Abs(pair.Key.X-center.OriginX)<=32 && Math.Abs(pair.Key.Z-center.OriginZ)<=32)copy.Signs[Relative(pair.Key)]=pair.Value;
         foreach(var state in Fire.Capture())if(ChunkAddress.At(state.Cell.X,state.Cell.Z)==new ChunkAddress(center.X,center.Z))copy.Fire.Restore(new[]{state with{Cell=Relative(state.Cell)}});
         foreach(var entry in Containers.Entries.Values)
-            if(entry.Burn>0&&entry.Cell.X>=center.OriginX-16&&entry.Cell.X<center.OriginX+32&&entry.Cell.Z>=center.OriginZ-16&&entry.Cell.Z<center.OriginZ+32)
+            if((entry.Burn>0||GlassProcessing.IsVase(entry.Block))&&entry.Cell.X>=center.OriginX-16&&entry.Cell.X<center.OriginX+32&&entry.Cell.Z>=center.OriginZ-16&&entry.Cell.Z<center.OriginZ+32)
                 copy.Containers.Restore(new[]{entry.Capture() with{Cell=Relative(entry.Cell)}});
         if(includeLighting)copy.Lighting.SetSnapshot((byte[])Lighting.GetPage(center.X,center.Z).Data.Clone());
         else copy.Lighting.UseWorkerScratch();

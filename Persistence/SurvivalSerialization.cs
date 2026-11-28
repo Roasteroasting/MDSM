@@ -54,6 +54,7 @@ public static partial class WorldSerializer
             writer.Write(checked((int)state.Cell.X));writer.Write(state.Cell.Y);writer.Write(checked((int)state.Cell.Z));writer.Write((byte)state.Block);writer.Write(state.Slots.Length);
             foreach(var stack in state.Slots)WriteStack(writer,stack);
             writer.Write(state.Progress);writer.Write(state.Burn);writer.Write(state.BurnTotal);
+            if(AdvancedProcessing.Machine(state.Block)){writer.Write(state.Recipe);writer.Write(state.WorkItem.Value);}
         }
         ArrowState[] arrows=save.Arrows??Array.Empty<ArrowState>();if(arrows.Length>Projectiles.Maximum)throw new InvalidDataException("Too many arrows.");
         writer.Write(arrows.Length);
@@ -90,6 +91,7 @@ public static partial class WorldSerializer
             if(!BlockEntities.HasState(block) || slots!=BlockEntities.SlotCount(block))throw new InvalidDataException("Invalid container layout.");
             var items=new ItemStack[slots];for(int j=0;j<slots;j++)items[j]=ReadStack(reader,legacyFood);
             states[i]=new(cell,block,items,reader.ReadDouble(),reader.ReadDouble(),reader.ReadDouble());
+            if(AdvancedProcessing.Machine(block))states[i]=states[i] with{Recipe=reader.ReadInt32(),WorkItem=new(reader.ReadUInt16())};
         }
         world.Containers.Restore(states);
         int arrowCount=reader.ReadInt32();if(arrowCount<0 || arrowCount>Projectiles.Maximum)throw new InvalidDataException("Invalid arrow count.");

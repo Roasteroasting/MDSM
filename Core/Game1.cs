@@ -324,7 +324,7 @@ public class Game1 : Game
         }
         if (!_awaitMouseRelease && mouse.RightButton == ButtonState.Pressed && _previousMouse.RightButton == ButtonState.Released
             && _selection is BlockHit tableHit && (world.GetBlock(tableHit.Cell.X, tableHit.Cell.Y, tableHit.Cell.Z) is BlockType.CraftingTable or BlockType.MetalworkingBench
-                || BlockEntities.HasState(world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z))))
+                || BlockEntities.HasState(world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z)) && !GlassProcessing.IsVase(world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z))))
         {
             bool opened = world.GetBlock(tableHit.Cell.X,tableHit.Cell.Y,tableHit.Cell.Z) is BlockType.CraftingTable or BlockType.MetalworkingBench
                 ?_session.TryOpenCraftingTable(tableHit):_session.TryOpenContainer(tableHit);

@@ -49,6 +49,19 @@ internal static class IndustrialRecipes
         Shape(3,2,Items.FromBlock(BlockType.PowerSwitch),1,CraftingStation.Metalworking,
             iron,Items.Stick,iron,wire,Items.CopperIngot,wire);
 
+        Shape(3,3,Items.FromBlock(BlockType.ElectricFurnace),1,CraftingStation.Metalworking,
+            iron,Items.CeramicPot,iron,wire,Items.FromBlock(BlockType.Furnace),wire,iron,Items.CopperIngot,iron);
+        Shape(3,3,Items.FromBlock(BlockType.ElectricGlassKiln),1,CraftingStation.Metalworking,
+            iron,glass,iron,wire,Items.FromBlock(BlockType.BrickKiln),wire,Items.Brick,Items.CopperIngot,Items.Brick);
+        Shape(3,3,Items.FromBlock(BlockType.ElectricCooker),1,CraftingStation.Metalworking,
+            iron,Items.CeramicPot,iron,wire,Items.FromBlock(BlockType.Smoker),wire,iron,Items.CopperIngot,iron);
+        foreach(GlassProduct product in new[]{GlassProduct.Slab,GlassProduct.Stairs,GlassProduct.Tile,GlassProduct.Vase})
+        foreach(DyeColor color in Enum.GetValues<DyeColor>())
+        {
+            var clear=Items.FromBlock(GlassProcessing.Block(product));var dyed=Items.FromBlock(GlassProcessing.Block(product,(int)color+1));
+            Shape(3,3,dyed,8,CraftingStation.Standard,clear,clear,clear,clear,Items.Dye(color),clear,clear,clear,clear);
+        }
+
         foreach(var (block,color) in new[]
         {
             (BlockType.RedFlower,DyeColor.Red),(BlockType.YellowFlower,DyeColor.Yellow),

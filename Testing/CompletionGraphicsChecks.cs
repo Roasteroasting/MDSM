@@ -36,7 +36,7 @@ internal static class CompletionGraphicsChecks
         {
             pixel.SetData(new[]{Color.White});device.SetRenderTarget(target);device.Clear(new Color(35,40,50));batch.Begin(samplerState:SamplerState.PointClamp);
             int i=0;foreach(ItemId item in Items.Sprites){ItemStack stack=S(item);if(stack.Durability>0)stack=stack.Wear();ItemIcons.Draw(batch,atlas,pixel,stack,new Rectangle(8+i%10*79,8+i/10*89,70,80));i++;}batch.End();
-            var pixels=Read(target,"complete-items.png");Check(i==Items.Sprites.Length && i==105 && pixels.Count(c=>c!=new Color(35,40,50))>30000,"New atlas icons/durability bars missing.");
+            var pixels=Read(target,"complete-items.png");Check(i==Items.Sprites.Length && i==108 && pixels.Count(c=>c!=new Color(35,40,50))>30000,"New atlas icons/durability bars missing.");
         }
         var world=new World(173,WorldSize.Small,false);for(int z=0;z<25;z++)for(int x=0;x<40;x++)world.SetBlock(x,0,z,BlockType.Stone);
         world.SetBlock(6,1,12,BlockType.FarmlandDry);world.SetBlock(8,1,12,BlockType.FarmlandWet);
@@ -80,7 +80,7 @@ internal static class CompletionGraphicsChecks
         HostileModelChecks.VerifyGraphics(game);
         TorchChecks.VerifyGraphics(game);
         PlacementUpdateChecks.VerifyGraphics(game);
-        Console.WriteLine("PASS: All 73 item icons, baby/hostile models, crop/soil/fence/door/machine/lava geometry, 26-point Armor HUD, graphics state, and real till/plant/equip/save input.");
+        Console.WriteLine($"PASS: All {Items.Sprites.Length} item icons, baby/hostile models, crop/soil/fence/door/machine/lava geometry, 26-point Armor HUD, graphics state, and real till/plant/equip/save input.");
     }
     private static ItemStack S(ItemId item,int count=1)=>new(item,count);
 }

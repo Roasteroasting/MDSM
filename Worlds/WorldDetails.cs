@@ -156,6 +156,13 @@ public sealed partial class World
         if(collision && !Blocks.IsSolid(block))return 0;
         if(collision&&shape==BlockShape.Solar)return ElectricalGeometry.Boxes(LocalPosition(cell),block,0,boxes);
         if(shape is BlockShape.Wire or BlockShape.Solar)return ElectricalGeometry.Boxes(this,cell,block,boxes);
+        if(shape==BlockShape.Vase)
+        {
+            int parts=GlassProcessing.VaseBoxes(LocalPosition(cell),boxes);
+            if(!collision&&Containers.Entries.TryGetValue(cell,out var vase)&&!vase[0].IsEmpty)
+            {var at=LocalPosition(cell);boxes[parts++]=new(at+new Vector3(.25f,.625f,.25f),at+new Vector3(.75f,.98f,.75f));}
+            return parts;
+        }
         if(shape==BlockShape.Fire)return Fire.SelectionBoxes(cell,boxes);
         if(OrientedBuilding(block))return BuildingBoxes(cell,block,boxes,proposed,changedNeighbor,replacement,neighborState);
         if(shape==BlockShape.Pane)return PaneBoxes(new(cell.X-OriginX,cell.Y,cell.Z-OriginZ),PaneConnections(cell,changedNeighbor,replacement),boxes);

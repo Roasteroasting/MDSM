@@ -47,6 +47,7 @@ public static class SurvivalInteractions
     public static bool Use(GameSession session,BlockHit? hit)
     {
         ItemStack held=session.Inventory.Selected;World world=session.World;
+        if(hit is BlockHit vase && world.UseVase(vase.Cell,session.Inventory,session.Player.Creative))return true;
         if(hit is BlockHit bed && Blocks.Bed(world.GetBlock(bed.Cell.X,bed.Cell.Y,bed.Cell.Z)))
         {session.Sleep.TryBegin(session,bed);return true;}
         if(hit is BlockHit post && session.Mobs.InteractFence(post.Cell,session.Inventory,session.Items))return true;

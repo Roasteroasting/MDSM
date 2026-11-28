@@ -48,10 +48,17 @@ public enum BlockType : byte
     StainedPaneYellow=135, StainedPaneLime=136, StainedPanePink=137, StainedPaneGray=138,
     StainedPaneLightGray=139, StainedPaneCyan=140, StainedPanePurple=141, StainedPaneBlue=142,
     StainedPaneBrown=143, StainedPaneGreen=144, StainedPaneRed=145, StainedPaneBlack=146,
-    CopperWire=147, SolarPanel=148, CoalGenerator=149, AccessPanel=150, OutputPanel=151, PowerSwitch=152
+    CopperWire=147, SolarPanel=148, CoalGenerator=149, AccessPanel=150, OutputPanel=151, PowerSwitch=152,
+    ElectricFurnace=153, ElectricGlassKiln=154, ElectricCooker=155,
+    // Each family reserves 17 IDs: clear, then all sixteen colors in DyeColor order.
+    GlassSlab=156, StainedGlassSlabWhite=157, StainedGlassSlabBlack=172,
+    GlassStairs=173, StainedGlassStairsWhite=174, StainedGlassStairsBlack=189,
+    DecorativeGlassTile=190, StainedGlassTileWhite=191, StainedGlassTileBlack=206,
+    GlassVase=207, StainedGlassVaseWhite=208, StainedGlassVaseBlack=223,
+    DoubleGlassSlab=224, StainedDoubleGlassSlabWhite=225, StainedDoubleGlassSlabBlack=240
 }
 
-public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus, Wire, Solar }
+public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus, Wire, Solar, Vase }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
@@ -191,6 +198,7 @@ public static class Blocks
         original[(int)BlockType.AccessPanel]=new("ACCESS PANEL",true,true,BlockShape.Cube,106,104,104,MiningSeconds:3,FrontTile:107);
         original[(int)BlockType.OutputPanel]=new("OUTPUT PANEL",true,true,BlockShape.Cube,106,104,104,MiningSeconds:3,FrontTile:108);
         original[(int)BlockType.PowerSwitch]=new("POWER SWITCH",true,true,BlockShape.Cube,106,104,104,MiningSeconds:2,FrontTile:109);
+        GlassProcessing.Define(ref original);
         return original;
     }
     private static readonly BlockType[] Palette =
@@ -230,7 +238,7 @@ public static class Blocks
     internal static bool Flower(BlockType block)=>block is BlockType.RedFlower or BlockType.YellowFlower or BlockType.Peony or BlockType.Violet
         or BlockType.Cornflower or BlockType.Daisy or BlockType.Marigold;
     public static bool RejectsUnderside(BlockType block)=>block is BlockType.Torch or BlockType.TallGrass || Flower(block);
-    internal static bool GlassCube(BlockType block)=>block==BlockType.Glass || block is >=BlockType.StainedGlassWhite and <=BlockType.StainedGlassBlack;
+    internal static bool GlassCube(BlockType block)=>block==BlockType.Glass || block is >=BlockType.StainedGlassWhite and <=BlockType.StainedGlassBlack || GlassProcessing.IsGlass(block)&&Get(block).Shape==BlockShape.Cube;
     internal static bool GlassPane(BlockType block)=>Get(block).Shape==BlockShape.Pane;
     public static bool ConnectsPane(BlockType block)=>GlassPane(block) || IsSolid(block) && Get(block).Shape==BlockShape.Cube;
 }

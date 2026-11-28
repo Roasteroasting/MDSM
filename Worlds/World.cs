@@ -193,8 +193,8 @@ public sealed partial class World
         if(block==BlockType.Air && Blocks.IsRenderable(previous) && !Lava.Fluid(previous)
             && _blockChangeRoot!=changedCell && _doorPartnerEdit!=changedCell && !(_plantEdit && Blocks.DoubleGrass(previous)) && !(_bedEdit && Blocks.Bed(previous)))
             Sounds?.Block(SoundKind.Break,previous,Center(changedCell));
-        Containers.Changed(new Point3(x,y,z),block);
         Electricity.Changed(new(x,y,z),previous,block);
+        Containers.Changed(new Point3(x,y,z),block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
         DetailChanged(new Point3(x,y,z),previous,block);
         Fire.Changed(new(x,y,z),previous,block);

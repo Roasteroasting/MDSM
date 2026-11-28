@@ -30,11 +30,12 @@ public static class Smelting
     public static double Fuel(ItemId item)=>item==Items.LavaBucket?1000:CoalLike(item)?80:Items.TryGetBlock(item,out var block)&&block is BlockType.WoodLog or BlockType.WoodenPlanks?15:0;
 }
 
-public sealed record BlockEntityState(Point3 Cell,BlockType Block,ItemStack[] Slots,double Progress=0,double Burn=0,double BurnTotal=0);
-public sealed class BlockContainer
+public sealed record BlockEntityState(Point3 Cell,BlockType Block,ItemStack[] Slots,double Progress=0,double Burn=0,double BurnTotal=0,int Recipe=0,ItemId WorkItem=default);
+public sealed partial class BlockContainer
 {
     private readonly ItemStack[] _slots;
     private readonly Action _wake;
+    private readonly Action _processed;
     private readonly BlockContainer _first,_second;
     public Point3 Cell { get; }
     public BlockType Block { get; }
@@ -44,13 +45,13 @@ public sealed class BlockContainer
     public double Progress { get; private set; }
     public double Burn { get; private set; }
     public double BurnTotal { get; private set; }
-    public BlockContainer(Point3 cell,BlockType block,Action wake)
-    {Cell=cell;Block=block;_slots=new ItemStack[BlockEntities.SlotCount(block)];_wake=wake;}
+    public BlockContainer(Point3 cell,BlockType block,Action wake,Action processed=null)
+    {Cell=cell;Block=block;_slots=new ItemStack[BlockEntities.SlotCount(block)];_wake=wake;_processed=processed;}
     public void SetSlot(int slot,ItemStack stack)
     {
         if(_first!=null){if((uint)slot>=54)throw new ArgumentOutOfRangeException(nameof(slot));if(slot<27)_first.SetSlot(slot,stack);else _second.SetSlot(slot-27,stack);return;}
         if(Smelting.Machine(Block) && slot==0 && (stack.IsEmpty || stack.Item!=_slots[0].Item))Progress=0;
-        _slots[slot]=stack;_wake?.Invoke();
+        _slots[slot]=stack;ElectricSlotChanged(slot);_wake?.Invoke();
     }
     public bool Empty { get {for(int i=0;i<SlotCount;i++)if(!this[i].IsEmpty)return false;return true;} }
     public bool Active=>Smelting.Machine(Block) && (Burn>0 || CanSmelt && Smelting.Fuel(_slots[1].Item)>0);
@@ -58,6 +59,11 @@ public sealed class BlockContainer
         && (_slots[2].IsEmpty || _slots[2].Item==Smelting.Result(_slots[0].Item,Block) && _slots[2].Count<_slots[2].Limit);
     public void Click(int slot,InventoryInteraction interaction,bool right)
     {
+        if(AdvancedProcessing.Machine(Block))
+        {
+            if(slot>=AdvancedProcessing.Inputs(Block)){SetSlot(slot,interaction.TakeStack(_slots[slot],right));return;}
+            if(!interaction.Cursor.IsEmpty&&!AdvancedProcessing.Input(Block,interaction.Cursor.Item))return;
+        }
         if(Block==BlockType.CoalGenerator && !interaction.Cursor.IsEmpty && !Smelting.CoalLike(interaction.Cursor.Item))return;
         if(Smelting.Machine(Block))
         {
@@ -108,7 +114,7 @@ public sealed class BlockContainer
     }
     public bool Wear(Guid id)
     {if(_first!=null)return _first.Wear(id)||_second.Wear(id);for(int i=0;i<_slots.Length;i++)if(id!=Guid.Empty && _slots[i].InstanceId==id){_slots[i]=_slots[i].Wear();return true;}return false;}
-    public BlockEntityState Capture(){var stacks=new ItemStack[SlotCount];for(int i=0;i<stacks.Length;i++)stacks[i]=this[i];return new(Cell,Block,stacks,Progress,Burn,BurnTotal);}
+    public BlockEntityState Capture(){var stacks=new ItemStack[SlotCount];for(int i=0;i<stacks.Length;i++)stacks[i]=this[i];return new(Cell,Block,stacks,Progress,Burn,BurnTotal,SelectedRecipe,_workItem);}
     internal void Restore(BlockEntityState state)
     {
         if(state.Slots.Length!=SlotCount || !double.IsFinite(state.Progress) || state.Progress<0 || state.Progress>=Smelting.Seconds
@@ -122,7 +128,11 @@ public sealed class BlockContainer
         if(Block==BlockType.CoalGenerator && (state.Progress!=0 || !state.Slots[0].IsEmpty&&!Smelting.CoalLike(state.Slots[0].Item)
             || state.BurnTotal>ElectricalBalance.CoalBurnSeconds))throw new InvalidDataException("Invalid generator state.");
         if(Block is BlockType.AccessPanel or BlockType.OutputPanel && (state.Progress!=0||state.Burn!=0||state.BurnTotal!=0))throw new InvalidDataException("Panel contains timers.");
-        state.Slots.CopyTo(_slots,0);Progress=state.Progress;Burn=state.Burn;BurnTotal=state.BurnTotal;_wake?.Invoke();
+        state.Slots.CopyTo(_slots,0);Progress=state.Progress;Burn=state.Burn;BurnTotal=state.BurnTotal;
+        if(AdvancedProcessing.Machine(Block))RestoreElectric(state);
+        else if(state.Recipe!=0||state.WorkItem!=default)throw new InvalidDataException("Non-electric container has electric work metadata.");
+        if(GlassProcessing.IsVase(Block)&&(state.Progress!=0||state.Burn!=0||state.BurnTotal!=0||!_slots[0].IsEmpty&&(_slots[0].Count!=1||!Items.TryGetBlock(_slots[0].Item,out var flower)||!Blocks.Flower(flower))))throw new InvalidDataException("Invalid vase contents.");
+        _wake?.Invoke();
     }
 }
 
@@ -147,26 +157,26 @@ public sealed partial class BlockEntities(World world)
     private readonly List<Point3> _sleep=new();
     public IReadOnlyDictionary<Point3,BlockContainer> Entries=>_entries;
     public int LastProcessed { get; private set; }
-    public static bool HasState(BlockType block)=>block is BlockType.Chest or BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel || Smelting.Machine(block);
-    public static int SlotCount(BlockType block)=>block==BlockType.Chest?27:block==BlockType.CoalGenerator?1:block is BlockType.AccessPanel or BlockType.OutputPanel?0:3;
+    public static bool HasState(BlockType block)=>block is BlockType.Chest or BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel || Smelting.Machine(block) || AdvancedProcessing.Machine(block) || GlassProcessing.IsVase(block);
+    public static int SlotCount(BlockType block)=>AdvancedProcessing.Machine(block)?AdvancedProcessing.Slots(block):GlassProcessing.IsVase(block)?1:block==BlockType.Chest?27:block==BlockType.CoalGenerator?1:block is BlockType.AccessPanel or BlockType.OutputPanel?0:3;
     public BlockContainer Get(Point3 cell)
     {
         BlockType block=world.GetBlock(cell.X,cell.Y,cell.Z);if(!HasState(block))return null;
         if(_entries.TryGetValue(cell,out var entry))return entry;
         if(_entries.Count>=Maximum)throw new InvalidOperationException("Block container limit reached.");
-        entry=new(cell,block,()=>{if(Smelting.Machine(block))_active.Add(cell);if(world.IsInfinite)world.MarkStreamedDirty(Streaming.Coordinates.FloorDiv(cell.X,16),Streaming.Coordinates.FloorDiv(cell.Z,16));});_entries.Add(cell,entry);return entry;
+        entry=new(cell,block,()=>{if(Smelting.Machine(block))_active.Add(cell);if(GlassProcessing.IsVase(block))world.DirtyDetail(cell);if(world.IsInfinite)world.MarkStreamedDirty(Streaming.Coordinates.FloorDiv(cell.X,16),Streaming.Coordinates.FloorDiv(cell.Z,16));},()=>world.Sounds?.At(SoundKind.Smelt,world.Center(cell)));_entries.Add(cell,entry);if(AdvancedProcessing.Machine(block))world.Electricity.Register(entry);return entry;
     }
     internal bool CanChange(Point3 cell,BlockType next)
         => (!_entries.TryGetValue(cell,out var existing) || existing.Empty)
         && (!HasState(next) || _entries.ContainsKey(cell) || _entries.Count<Maximum);
     internal void Changed(Point3 cell,BlockType next)
     {
-        _entries.Remove(cell);_active.Remove(cell);if(HasState(next))Get(cell);
+        if(_entries.Remove(cell,out var old)&&AdvancedProcessing.Machine(old.Block))world.Electricity.Unregister(old);_active.Remove(cell);if(HasState(next))Get(cell);
     }
     public BlockContainer Detach(Point3 cell)
-    {if(!_entries.Remove(cell,out var entry))return null;_active.Remove(cell);return entry;}
+    {if(!_entries.Remove(cell,out var entry))return null;if(AdvancedProcessing.Machine(entry.Block))world.Electricity.Unregister(entry);_active.Remove(cell);return entry;}
     public void Reattach(BlockContainer entry)
-    {if(entry==null)return;_entries.Add(entry.Cell,entry);if(entry.Active)_active.Add(entry.Cell);}
+    {if(entry==null)return;_entries.Add(entry.Cell,entry);if(AdvancedProcessing.Machine(entry.Block))world.Electricity.Register(entry);if(entry.Active)_active.Add(entry.Cell);}
     public void Update(double elapsed)
     {
         LastProcessed=0;_sleep.Clear();

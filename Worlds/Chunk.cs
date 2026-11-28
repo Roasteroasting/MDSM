@@ -94,8 +94,7 @@ public sealed class Chunk
         for(int i=(int)BlockType.LavaFalling1;i<=(int)BlockType.LavaFalling7;i++)LavaCount+=counts[i];
         for(int i=(int)BlockType.Wheat1;i<=(int)BlockType.Wheat7;i++)CropCount+=counts[i];
         for(int i=(int)BlockType.Carrot1;i<=(int)BlockType.Potato7;i++)CropCount+=counts[i];
-        StructureCount=counts[(int)BlockType.FenceGate]+counts[(int)BlockType.Door]+counts[(int)BlockType.DoorUpper]+counts[(int)BlockType.Torch]+counts[(int)BlockType.Bed]+counts[(int)BlockType.BedHead];
-        for(int i=(int)BlockType.WoodenSlab;i<=(int)BlockType.Sign;i++)StructureCount+=counts[i];
+        for(int id=0;id<=MDSM.Worlds.Blocks.MaximumId;id++)if(Special((BlockType)id))StructureCount+=counts[id];
         for (int z = 0; z < Size; z++) for (int x = 0; x < Size; x++)
         {
             int y=storedHeight-1;while(y>=0 && !MDSM.Worlds.Blocks.IsSolid(GetBlock(x,y,z)))y--;

@@ -26,7 +26,10 @@ internal static class InventoryLayout
     public static Rectangle Output(Viewport v,int width,bool creative=false)=>At(v,creative,width==2?146:119,width==2?38:30,width==2?18:26,width==2?18:26);
     public static Rectangle Arrow(Viewport v,int width,bool creative=false)=>At(v,creative,width==2?128:90,width==2?40:35,width==2?16:22,14);
     public static Rectangle ContainerSlot(Viewport v,BlockType block,int slot,bool creative=false,int rows=0)
-        =>block==BlockType.CoalGenerator?At(v,creative,7,26,18,18):block==BlockType.Chest?At(v,creative,7+slot%9*18,17+slot/9*18,18,18,rows):At(v,creative,slot==2?111:55,slot==0?16:slot==1?52:30,slot==2?26:18,slot==2?26:18);
+        =>block==BlockType.ElectricFurnace?At(v,creative,slot<4?7+slot%2*18:130+(slot-4)%2*18,24+(slot%4/2)*18,18,18):
+        block==BlockType.ElectricGlassKiln?At(v,creative,slot==0?7:151,39,18,18):
+        block==BlockType.ElectricCooker?At(v,creative,slot<3?7:151,25+slot%3*18,18,18):block==BlockType.CoalGenerator?At(v,creative,7,26,18,18):block==BlockType.Chest?At(v,creative,7+slot%9*18,17+slot/9*18,18,18,rows):At(v,creative,slot==2?111:55,slot==0?16:slot==1?52:30,slot==2?26:18,slot==2?26:18);
+    internal static Rectangle ElectricRecipeButton(Viewport v,int direction)=>At(v,false,direction<0?7:157,16,12,12);
     public static Rectangle HotbarSlot(Viewport viewport, int slot)
     {
         return ClassicHudLayout.Slot(viewport,slot);
@@ -87,7 +90,7 @@ internal static class ItemIcons
     }
 }
 
-internal sealed class InventoryScreen : IDisposable
+internal sealed partial class InventoryScreen : IDisposable
 {
     private readonly SpriteBatch _sprites;
     private readonly Texture2D _pixel;
@@ -213,6 +216,12 @@ internal sealed class InventoryScreen : IDisposable
         if(before!=interaction.Inventory.Equipped(slot) || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.Equip);Message="";return;}
         if(container!=null)
         {
+            if(left&&AdvancedProcessing.Machine(container.Block)&&AdvancedProcessing.Choices(container.Block)>1)
+            for(int direction=-1;direction<=1;direction+=2)if(InventoryLayout.ElectricRecipeButton(viewport,direction).Contains(mouse.Position))
+            {
+                int choice=(container.SelectedRecipe+direction+AdvancedProcessing.Choices(container.Block))%AdvancedProcessing.Choices(container.Block);
+                Message=container.SelectRecipe(choice)?"":"FINISH CURRENT WORK FIRST.";return;
+            }
             for(int slot=0;slot<container.SlotCount;slot++)if(InventoryLayout.ContainerSlot(viewport,container.Block,slot,creative,rows).Contains(mouse.Position))
             {var before=container[slot];var cursor=interaction.Cursor;container.Click(slot,interaction,right && !left);
             if(before!=container[slot] || cursor!=interaction.Cursor)session.Sounds.Local(SoundKind.InventoryMove);Message="";return;}
@@ -333,7 +342,7 @@ internal sealed class InventoryScreen : IDisposable
             var heading=InventoryLayout.At(viewport,false,container==null&&crafting.Width==2&&crafting.Station==CraftingStation.Standard?31:7,6,140,9,rows);Text(title,heading.X,heading.Y,_menuScale,MdsmUiStyle.Ink);
             if(container==null){var caption=InventoryLayout.At(viewport,false,crafting.Width==2?90:29,crafting.Width==2?17:6,80,8);if(crafting.Width==2)Text(crafting.Station==CraftingStation.Mortar?"GRIND / MIX":"ASSEMBLE",caption.X,caption.Y,_menuScale,MdsmUiStyle.Accent);MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.Arrow(viewport,crafting.Width),MdsmUiStyle.Accent);}
             else if(Smelting.Machine(container.Block))MdsmUiStyle.Arrow(_sprites,_pixel,InventoryLayout.At(viewport,false,79,35,24,17),MdsmUiStyle.Light);
-            if(container!=null||crafting.Width==3){var captionPack=InventoryLayout.At(viewport,false,7,(rows>0?74+(rows-3)*18:73),100,8,rows);Text("INVENTORY",captionPack.X,captionPack.Y,_menuScale,MdsmUiStyle.Light);}
+            if(container!=null||crafting.Width==3){var captionPack=InventoryLayout.At(viewport,false,container?.Block==BlockType.ElectricCooker?65:7,(rows>0?74+(rows-3)*18:73),100,8,rows);Text("INVENTORY",captionPack.X,captionPack.Y,_menuScale,MdsmUiStyle.Light);}
         }
         if(!creative&&container==null)
         {
@@ -350,6 +359,7 @@ internal sealed class InventoryScreen : IDisposable
         if(container!=null)
         {
             for(int slot=0;slot<container.SlotCount;slot++)DrawSlot(container[slot],InventoryLayout.ContainerSlot(viewport,container.Block,slot,false,rows),mouse,false);
+            if(AdvancedProcessing.Machine(container.Block))DrawElectricMachine(container,viewport);
             if(container.Block is BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel)
                 DrawElectrical(session,container,viewport);
             if(Smelting.Machine(container.Block))

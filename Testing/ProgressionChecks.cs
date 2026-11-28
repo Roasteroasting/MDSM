@@ -50,7 +50,7 @@ internal static class ProgressionChecks
     }
     public static void Recipes()
     {
-        Require(CraftingRecipes.All.Length==169,"Recipe registration count wrong.");
+        Require(CraftingRecipes.All.Length==236,"Recipe registration count wrong.");
         ItemId P=Block(BlockType.WoodenPlanks),C=Block(BlockType.Cobblestone),S=Items.Stick,T=Items.String;
         void Check(int w,int h,ItemId result,int quantity,params ItemId[] cells)
         {
