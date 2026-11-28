@@ -497,3 +497,26 @@ commit and push. After that setup, the expected project URL is
 `https://roasteroasting.github.io/MDSM/` (unless a custom domain is configured).
 No game source or README changes, commits, pushes, game builds published, or
 releases were made.
+
+## 2026-11-28 · Pages artifact visibility fix
+
+The owner reported deploy-pages finding zero artifacts. Read-only inspection of
+public run 46146708580 (attempt 2) confirmed the upload step succeeded and a
+non-expired `github-pages` artifact exists. The upload/deploy-in-one-job layout
+matches the upstream artifact visibility race reported at
+https://github.com/actions/deploy-pages/issues/451. The separate Node punycode
+warning also occurs on successful deployments (upstream issue 434).
+
+Changed `.github/workflows/deploy-wiki.yml` to upload in one job and deploy in a
+second job with `needs: upload`, providing an artifact-finalization/job boundary.
+Made the matching `github-pages` artifact names explicit and scoped upload to
+contents/Pages read permissions and deployment to Pages/OIDC write permissions.
+The main/path restrictions, wiki-only artifact and manual trigger remain intact.
+No retries or arbitrary sleeps were added. A fresh workflow run after the owner
+commits/pushes this change is required to exercise the corrected layout.
+
+Validation: YAML/job dependency, artifact names, permissions, triggers and
+wiki-only publication assertions passed. `dotnet build` passed with zero
+warnings/errors, and `git diff --check` passed. The revised workflow has not
+been exercised on GitHub yet. No commits, pushes or deployment attempts were
+made by the agent, and no game source or wiki content was changed.

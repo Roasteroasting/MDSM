@@ -11,21 +11,19 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  upload:
     # Manual runs must use main too.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -39,8 +37,23 @@ jobs:
       - name: Upload wiki
         uses: actions/upload-pages-artifact@v4
         with:
+          name: github-pages
           path: Wiki
 
+  deploy:
+    # A job boundary avoids deploying before the artifact becomes discoverable.
+    needs: upload
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy wiki
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages
