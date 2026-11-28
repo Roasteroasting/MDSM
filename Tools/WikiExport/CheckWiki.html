@@ -1,0 +1,83 @@
+<!doctype html>
+<!-- Run in headless Chromium/Edge with --allow-file-access-from-files and a separate --user-data-dir. -->
+<html lang="en"><meta charset="utf-8"><title>Offline wiki checks</title>
+<script src="../../Wiki/data.js"></script>
+<pre id="results" data-status="running">Checking offline wiki...</pre><iframe id="wiki" title="Wiki test page" style="width:390px;height:900px;border:0"></iframe>
+<script>
+(async()=>{
+  const result=document.querySelector('#results'), frame=document.querySelector('#wiki');
+  const data=globalThis.MDSM_WIKI, base=new URL('../../Wiki/',location.href);
+  const blocks=new Map(data.blocks.map(b=>[b.id,b])), items=new Map(data.items.map(i=>[i.id,i]));
+  let pages=0, links=0;
+  const check=(ok,message)=>{if(!ok)throw Error(message);};
+  async function page(path) {
+    const doc=await new Promise((resolve,reject)=>{
+      frame.onload=()=>resolve(frame.contentDocument);frame.onerror=()=>reject(Error('Could not load '+path));
+      frame.src=new URL(path,base).href;
+    });
+    check(doc?.querySelector('main'),'Missing main: '+path);pages++;
+    for(const link of doc.querySelectorAll('main a[href]')) {
+      const url=new URL(link.href), id=url.searchParams.get('block'), item=url.searchParams.get('item');
+      if(id!==null)check(blocks.has(Number(id)),'Broken block link: '+link.href);
+      if(item!==null)check(items.has(Number(item)),'Broken item link: '+link.href);
+      links++;
+    }
+    return doc;
+  }
+  try {
+    check(data.processing.length===90,'Expected 85 stained/clear kiln products and five cooker recipes');
+    check(data.recipes.length===236,'Missing current crafting recipes');
+    for(const machine of data.electrical.machines)check([153,154,155].includes(machine.block),'Unknown electric machine');
+    check(data.electrical.machines.map(m=>m.watts).join(',')==='2000,2500,400','Incorrect machine ratings');
+    check(data.smelting.filter(r=>r.machines.some(m=>m.block===153&&m.seconds===2.5&&m.watts===2000)).length===7,'Electric furnace recipes missing');
+    for(const r of data.processing){
+      check(items.has(r.output)&&blocks.has(r.block),'Invalid electric product/machine');
+      check(r.ingredients.every(i=>items.has(i.id)&&i.count>0),'Invalid electric ingredients');
+    }
+    const stew=data.processing.find(r=>r.output===362);
+    check(stew?.ingredients.some(i=>i.id===343)&&stew.ingredients.length===3&&stew.seconds===4,'Stew recipe lost its reusable pot');
+    let doc=await page('index.html');
+    check(doc.querySelector('#craft-count').textContent==='236'&&doc.querySelector('#block-count').textContent==='241'&&doc.querySelector('#item-count').textContent==='105','Home counts are stale');
+    doc=await page('guide.html');check(doc.querySelectorAll('#power-rows tr').length===3,'Machine power table failed');
+    for(const id of ['interfaces','electricity','machines','glass','cooking'])check(doc.getElementById(id),'Missing guide: '+id);
+    doc=await page('recipes.html?station=cooker');
+    check(doc.querySelector('#recipe-count').textContent.includes('5 electric processing'),'Cooker filter lost recipes');
+    check(doc.querySelector('#electric-results').textContent.includes('Ceramic Pot'),'Cooker ingredients missing');
+    doc=await page('recipes.html?station=kiln&q=126');
+    check(doc.querySelector('#recipe-count').textContent.includes('5 electric processing'),'Stained kiln filtering failed');
+    check(doc.querySelector('#electric-results').textContent.includes('Blue Stained Glass'),'Stained recipe names missing');
+    doc=await page('recipes.html?station=electric');
+    check(doc.querySelector('#smelt-results').textContent.includes('2 kW')&&!doc.querySelector('#smelt-results').textContent.includes('Fuels'),'Electric smelting power/fuel separation failed');
+    check(doc.querySelector('#recipe-count').textContent.includes('90 electric processing'),'Electric filter lost recipes');
+    const query=doc.querySelector('#recipe-query');query.value='no such material';query.dispatchEvent(new frame.contentWindow.Event('input'));
+    check(!doc.querySelector('#no-recipes').hidden,'Empty search did not show its message');
+    doc=await page('recipes.html?station=bench&q=electric');
+    check(doc.querySelectorAll('.recipe').length===3,'Machine crafting filter failed');
+    doc=await page('catalog.html?q=wire');
+    check(doc.querySelectorAll('#catalog .card').length===1,'Wire has a duplicate or missing catalog entry');
+    for(const block of data.blocks) {
+      doc=await page('entry.html?block='+block.id);
+      check(doc.querySelector('h1').textContent===block.name,'Block entry failed: '+block.id);
+      if(block.glassProduct)check(!doc.querySelector('.columns .box p').textContent.includes('Ordinary mining drops nothing'),'New glass has obsolete drop notes: '+block.id);
+      if(block.id===147)check(doc.querySelector('.facts').textContent.includes('339')&&doc.querySelector('.recipe'),'Canonical wire crafting/properties failed');
+      if(block.id===154)check(doc.querySelector('.facts').textContent.includes('2.5 kW')&&doc.querySelector('details'),'Glass kiln power/color recipes failed');
+      if([85,86].includes(block.tile)&&['Peony','Violet'].includes(block.key))check(!doc.querySelector('.entry-heading .placeholder'),'Baked flower artwork still hidden');
+    }
+    for(const item of data.items.filter(i=>i.block===null)){
+      doc=await page('entry.html?item='+item.id);
+      check(doc.querySelector('h1').textContent===item.name,'Item entry failed: '+item.id);
+      if(item.id===362)check(doc.querySelector('main').textContent.includes('returns the ceramic pot'),'Stew pot-return notes missing');
+    }
+    doc=await page('index.html');const search=doc.querySelector('#site-search');search.value='power';search.dispatchEvent(new frame.contentWindow.Event('input'));
+    check(doc.querySelector('#quick-results a[href="guide.html#electricity"]'),'Global search missed wiring guide');
+    for(const width of [390,1280]){
+      frame.style.width=width+'px';
+      for(const path of ['entry.html?block=174','entry.html?block=154','recipes.html?station=cooker','guide.html']){
+        doc=await page(path);
+        check(doc.documentElement.scrollWidth<=doc.documentElement.clientWidth,`Page overflows at ${width}px: ${path} (${doc.documentElement.scrollWidth} > ${doc.documentElement.clientWidth})`);
+      }
+    }
+    result.dataset.status='passed';result.textContent=`PASS: ${pages} offline pages, ${links} item/block links, current registry counts, electric recipe filters, wire identity, all glass variants, food notes, guide/search integration and 390/1280px layouts.`;
+  }catch(error){result.dataset.status='failed';result.textContent='FAIL: '+error.stack;}
+})();
+</script></html>

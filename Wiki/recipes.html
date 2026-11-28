@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crafting and Smelting · MDSM Wiki</title>
+<title>Crafting and Processing · MDSM Wiki</title>
 <link rel="stylesheet" href="style.css">
 <script defer src="data.js"></script>
 <script defer src="notes.js"></script>
@@ -17,9 +17,9 @@
   <div class="global-search"><input id="site-search" type="search" aria-label="Search the wiki" placeholder="Search the wiki" autocomplete="off"><div id="quick-results" class="search-results" role="region" aria-label="Search results" hidden></div></div>
 </div></header>
 <main class="wrap" id="content" tabindex="-1">
-<h1>Crafting and smelting</h1><p class="intro">Search by ingredient or output, or pick a station. Shaped recipes may be shifted within a larger grid. Use the exact arrangement and leave other slots empty. The number in a slot is the amount required in that slot.</p>
-<div class="toolbar"><input type="search" id="recipe-query" placeholder="Try copper, glass, or bread" aria-label="Find ingredients and results"><label>Station <select id="recipe-station"><option value="all">All stations</option><option value="inventory">Inventory grid</option><option value="table">Crafting table</option><option value="bench">Metalworking bench</option><option value="mortar">Mortar and pestle</option><option value="smelting">Smelting and cooking</option></select></label></div>
-<p id="recipe-count" class="results" aria-live="polite"></p><div id="smelt-results" class="section"></div><div id="craft-results" class="section"></div><p id="no-recipes" hidden>No recipes match these filters.</p>
+<h1>Crafting and processing</h1><p class="intro">Search by ingredient, output or processing machine, or pick a station. Shaped recipes may be shifted within a larger grid. Use the exact arrangement and leave other slots empty. The number in a slot is the amount required in that slot. Electric recipe times assume full power; reduced power slows work proportionally.</p>
+<div class="toolbar"><input type="search" id="recipe-query" placeholder="Try copper, glass, or stew" aria-label="Find ingredients and results"><label>Station <select id="recipe-station"><option value="all">All stations</option><option value="inventory">Inventory grid</option><option value="table">Crafting table</option><option value="bench">Metalworking bench</option><option value="mortar">Mortar and pestle</option><option value="smelting">Smelting and processing</option><option value="electric">Electric machines</option><option value="kiln">Electric glass kiln</option><option value="cooker">Electric cooker</option></select></label></div>
+<p id="recipe-count" class="results" aria-live="polite"></p><div id="smelt-results" class="section"></div><div id="electric-results" class="section"></div><div id="craft-results" class="section"></div><p id="no-recipes" hidden>No recipes match these filters.</p>
 <noscript><p>The catalog, recipe patterns and item pages use JavaScript to read the offline game registry. Enable JavaScript to use those sections.</p></noscript>
 </main>
 <footer><div class="wrap">MDSM Wiki · <a href="world.html">Infinite worlds</a> · <a href="recipes.html">Recipe index</a></div></footer>

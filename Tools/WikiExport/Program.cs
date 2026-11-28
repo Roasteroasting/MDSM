@@ -45,7 +45,9 @@ var blocks = allBlocks.Select(block =>
     var mining = MiningRules.Profile(block);
     int tile = block == BlockType.Air ? -1 : d.FrontTile >= 0 ? d.FrontTile : d.TopTile >= 0 ? d.TopTile : d.SideTile;
     var tint = (Microsoft.Xna.Framework.Color)tintMethod.Invoke(null,new object[]{block})!;
-    return new {id=(int)block, key=block.ToString(), name=BlockName(block), d.Solid,d.Opaque,d.Placeable,
+    string glassProduct = block is >=BlockType.GlassSlab and <=BlockType.StainedDoubleGlassSlabBlack
+        ? ((GlassProduct)(((int)block-(int)BlockType.GlassSlab)/17)).ToString() : null;
+    return new {id=(int)block, key=Enum.IsDefined(block)?block.ToString():Name(d.Name).Replace(" ",""), name=BlockName(block), d.Solid,d.Opaque,d.Placeable, glassProduct,
         tint=tint==Microsoft.Xna.Framework.Color.White?null:$"#{tint.R:x2}{tint.G:x2}{tint.B:x2}",
         shape=d.Shape.ToString(), tile, breakable=d.MiningSeconds>=0, tool=mining.Category switch
         {MiningCategory.Mineral=>"Pickaxe",MiningCategory.Earth=>"Shovel",MiningCategory.Wood=>"Axe",_=>""},
@@ -70,9 +72,34 @@ var recipes = CraftingRecipes.All.ToArray().Select((recipe,index) => new
     cells=((CraftingIngredient[])ingredientsField.GetValue(recipe)!).Select(cell=>new {id=(int)cell.Item.Value, count=cell.Count}).ToArray()
 }).ToArray();
 var smelting = Smelting.Recipes.Select(recipe => new {input=(int)recipe.Input.Value, output=(int)recipe.Output.Value,
-    machines=allBlocks.Where(block=>Smelting.Machine(block) && Smelting.Result(recipe.Input,block)==recipe.Output)
-        .Select(block=>new {block=(int)block,seconds=Smelting.Seconds/Smelting.Speed(block)}).ToArray()
+    machines=allBlocks.Where(block=>Smelting.Machine(block) && Smelting.Result(recipe.Input,block)==recipe.Output
+        || block==BlockType.ElectricFurnace && Smelting.Result(recipe.Input,BlockType.Furnace)==recipe.Output)
+        .Select(block=>new {block=(int)block,seconds=block==BlockType.ElectricFurnace?AdvancedProcessing.FurnaceSeconds:Smelting.Seconds/Smelting.Speed(block),
+            watts=block==BlockType.ElectricFurnace?AdvancedProcessing.FurnaceWatts:0d}).ToArray()
 }).ToArray();
+var processing = new List<object>();
+foreach(var machine in new[]{BlockType.ElectricGlassKiln,BlockType.ElectricCooker})
+foreach(int choice in Enumerable.Range(0,AdvancedProcessing.Choices(machine)))
+{
+    var inputs=machine==BlockType.ElectricGlassKiln
+        ? Items.Obtainable.ToArray().Where(item=>AdvancedProcessing.Input(machine,item)).ToArray()
+        : new[]{default(ItemId)};
+    foreach(var input in inputs)
+    {
+        var recipe=AdvancedProcessing.Recipe(machine,choice,input);
+        var ingredients=new[]{(recipe.Input,recipe.Amount),(recipe.Second,1),(recipe.Vessel,1)}
+            .Where(i=>i.Item1!=default).Select(i=>new {id=(int)i.Item1.Value,count=i.Item2}).ToArray();
+        processing.Add(new {block=(int)machine,choice,name=Name(AdvancedProcessing.ProductName(machine,choice)),
+            ingredients,output=(int)recipe.Output.Value,count=recipe.Quantity,seconds=recipe.Seconds,watts=AdvancedProcessing.Watts(machine)});
+        if(!Items.IsDefined(recipe.Output)||ingredients.Any(i=>!Items.IsDefined(new((ushort)i.id))))
+            throw new InvalidOperationException("An electric recipe refers to an unknown item.");
+    }
+}
+var electrical=new {solarWatts=ElectricalBalance.SolarWatts,coalWatts=ElectricalBalance.CoalWatts,
+    coalBurnSeconds=ElectricalBalance.CoalBurnSeconds,overcastMultiplier=ElectricalBalance.OvercastMultiplier,
+    updateSeconds=ElectricalBalance.UpdateSeconds,switchMachineLimit=ElectricalBalance.SwitchMachineLimit,
+    machines=allBlocks.Where(AdvancedProcessing.Machine).Select(block=>new {block=(int)block,watts=AdvancedProcessing.Watts(block),
+        inputs=AdvancedProcessing.Inputs(block),outputs=AdvancedProcessing.Slots(block)-AdvancedProcessing.Inputs(block)}).ToArray()};
 var fuels = Items.Obtainable.ToArray().Where(item=>Smelting.Fuel(item)>0)
     .Select(item=>new {id=(int)item.Value, seconds=Smelting.Fuel(item)}).ToArray();
 var mobs = Enum.GetValues<MobSpecies>().Select(species =>
@@ -89,8 +116,8 @@ if (recipes.Any(r=>!itemIds.Contains(r.output)||r.cells.Any(c=>c.id!=0&&!itemIds
 
 var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 File.WriteAllText(Path.Combine(wiki,"data.js"), "globalThis.MDSM_WIKI = " +
-    JsonSerializer.Serialize(new {blocks,items,recipes,smelting,fuels,mobs},options) + ";\n");
+    JsonSerializer.Serialize(new {blocks,items,recipes,smelting,processing,electrical,fuels,mobs},options) + ";\n");
 foreach(var (source,target) in new[] {("Blocks/terrain.png","terrain.png"),("Items/items.png","items.png"),("UI/Panorama/0.png","world.png"),("Blocks/water.png","water.png")})
     File.Copy(Path.Combine(root,"Content",source), Path.Combine(wiki,"assets",target), true);
-Console.WriteLine($"Exported {blocks.Length} block IDs, {items.Length} inventory entries, {recipes.Length} crafting recipes and {smelting.Length} smelting recipes.");
+Console.WriteLine($"Exported {blocks.Length} block IDs, {items.Length} inventory entries, {recipes.Length} crafting recipes, {smelting.Length} smelting recipes and {processing.Count} electric processing recipes.");
 return 0;

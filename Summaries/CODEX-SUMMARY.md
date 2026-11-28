@@ -414,3 +414,49 @@ are in `bin/headless-graphics-artifacts`; logs are
 Resident machines intentionally stop outside the simulation window and resume
 when active again; no offline catch-up is introduced. No publishing, commits,
 tags or releases were performed. README.md is unchanged.
+
+## 2026-11-28 · Wiki catch-up for electrical infrastructure and machinery
+
+Updated the local `Wiki/` site for industrialization milestones 2 and 3, grounded
+cables, baked flower artwork and live interfaces. The gameplay guide now explains
+solar/coal generation, panel direction, wiring, five-machine switches, proportional
+power sharing, monitoring, fuel use, machine inventories/timings, interruptions,
+chunk/save behavior, all glass products and dyes, vase flowers, cooker recipes,
+food healing and ceramic-pot return. Homepage links and catalog descriptions point
+to the new content; obsolete "wire reserved for future use" text is removed.
+
+Extended `Tools/WikiExport/Program.cs` to export electric-furnace smelting times,
+all 85 clear/stained kiln recipes, five cooker recipes, electrical balance values,
+machine input/output sizes and glass-family metadata from the existing game APIs.
+Refreshed `Wiki/data.js` and its atlas copies: 241 block IDs, 265 inventory entries
+(105 standalone items), 236 crafting patterns, eight smelting recipes and 90
+additional electric processing recipes. Repeated export is byte-identical.
+
+Recipe browsing now filters electric machines, glass kilns and cookers, searches
+ingredients/results/machines, displays power and full-power timings, and groups
+the stained variants in expandable tables. Item and machine pages link their
+electric production/use recipes. The canonical wire item (339) now resolves its
+properties and crafting links correctly from block 147. New shaped glass has
+correct drop/interaction descriptions rather than the old no-drop glass fallback.
+Peony and violet icons use the atlas artwork instead of placeholders. Updated
+global search and guide anchors connect the new topics.
+
+For future registry/recipe changes, run
+`dotnet run --project Tools/WikiExport -- .`, then update the player-facing
+`Wiki/guide.html` and `Wiki/notes.js` descriptions as needed. The export refreshes
+`Wiki/data.js` and copies the current PNG atlases; no publication is performed.
+
+Verification: `dotnet build` and `dotnet build Tools/WikiExport/WikiExport.csproj`
+passed with zero warnings/errors. The reusable
+`Tools/WikiExport/CheckWiki.html` checker passed in headless Edge with a separate
+profile and `--allow-file-access-from-files`: 362 offline pages, 5,191 item/block
+links, all catalog entries, new recipes/filters, canonical wire identity, baked
+flower icons, new food notes, guide/search integration and 390/1280-pixel layouts.
+Static checks passed for all six wiki HTML pages and 127 local file/fragment/asset
+links. Both wiki atlas PNGs exactly match their current Content sources.
+Desktop and narrow-window screenshots were reviewed. `git diff --check` passed.
+No gameplay source changed, so the full gameplay regression suite was not rerun.
+
+Artifacts: `bin/wiki-check-dom.html`, `bin/wiki-cooker-desktop.png` and
+`bin/wiki-glass-mobile.png`. No outstanding failures. README.md is unchanged;
+no publishing, Git commits, tags or releases were performed.
