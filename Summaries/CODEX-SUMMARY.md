@@ -214,3 +214,66 @@ Verification: `dotnet build` passed with zero warnings/errors. All eight focused
 `--season-lead-graphics-test` passed on the private WSL/Xvfb display, including
 exact compiled pixel hashes and existing seasonal tint/snow-white checks.
 No outstanding issues; no publishing or Git commits performed.
+
+## 2026-11-28 · Grounded cables and live interfaces
+
+Copper wire now runs along the bottom of its voxel at 1/8-block thickness instead
+of floating at the voxel centre. Horizontal connections meet low solar-panel edges;
+connections to full-block electrical terminals rise against their faces. Vertical
+runs remain continuous. A panel with a top-connected cable draws a cable lead from
+its low plate to the next voxel boundary. That lead is targetable but does not add
+solid collision above the panel. Thin copper wire above a panel no longer counts
+as a complete sky obstruction; ordinary roofs/glass/snow retain their prior rules.
+Network topology, power allocation, item IDs and save layouts are unchanged.
+
+World meshes and targeting share the same cable boxes, with all connections and
+terminal risers fitting the existing nine-box shape budget. Meshing clips buried
+joint faces and omits caps against connected neighbors. Cable UVs sample a narrow
+band of the existing copper artwork, rotate it along each run, and retain block
+texel density rather than compressing a whole 16x16 tile onto each thin face.
+Panel sides also use appropriately cropped UVs. No atlas artwork was generated,
+redrawn, or changed.
+
+Inventory, crafting, chests, furnaces, industrial panels and other stations now
+use the ordinary fixed-step world simulation with neutral player controls.
+Day/night, weather, solar wattage, machines, fluids, farming, gravity, mobs,
+projectiles, pickups and player hazards remain live. Keyboard/mouse UI actions do
+not become movement, jumping, flight toggles, hotbar changes, mining or attacks.
+Command and sign interfaces likewise keep the world running. Streaming continues
+while interfaces are open, including main-thread chunk publication and reframing.
+Physics still waits for safe nearby terrain if streaming is not ready.
+
+The actual pause menu and its settings screens freeze simulation. Escape closes
+an open interface as before; Escape during gameplay opens the pause menu. Losing
+window focus opens the pause menu, including from inventory, and resuming restores
+that inventory with its cursor/crafting ownership intact. Death and environmental
+damage work while an interface is open. Weather presentation and game audio also
+continue in live interfaces.
+
+Autosave elapsed time advances with live simulation. A due autosave waits while
+the cursor or crafting slots contain stacks, avoiding silently clearing an active
+recipe or returning/dropping the held stack. Saving resumes when those transient
+items are returned; explicit save/exit retains existing item-return behavior.
+
+Regression coverage now exercises all cable masks, floor/solar contact, terminal
+risers, the nine-box budget, UV density, top-panel wiring, and Infinite seams.
+Scripted Game1 input covers inventory and all placed stations, changing solar
+wattage, fuel, time/weather, neutral controls, gravity, damage/death, pause/resume,
+and autosave-owned stacks. An Infinite fixture opens inventory before chunk
+publication and verifies live cross-seam access-panel monitoring afterward. The
+existing mob graphics test now expects replacement timers to advance in inventory
+and remain frozen in the pause menu. Updated world screenshots show cables beside
+panels and terminals at actual ground level in both lighting modes.
+
+Verification: `dotnet build` passed with zero warnings and errors. All 278/278
+Infinite/shared CPU regressions passed. The focused electrical checks passed again
+after the final connected-cap adjustment. All ten suites in the final private
+WSL/Xvfb `--graphics-test` run passed, including the new live-interface and streamed
+panel checks and the updated mob-timer check. The earlier graphics run exposed the
+old expectation that inventory freezes replacement timers; that regression now
+checks the requested live behavior and passes. `git diff --check` passed.
+
+Logs: `bin/wire-live-self-test.log`, `bin/wire-live-graphics-final.log`; current wire
+views and station screenshots are in `bin/headless-graphics-artifacts`.
+No outstanding failures. README.md and texture atlas pixels were not changed.
+No publishing, commits, tags or releases were performed.

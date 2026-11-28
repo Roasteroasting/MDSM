@@ -154,6 +154,7 @@ public sealed partial class World
     {
         BlockShape shape=Blocks.Get(block).Shape;
         if(collision && !Blocks.IsSolid(block))return 0;
+        if(collision&&shape==BlockShape.Solar)return ElectricalGeometry.Boxes(LocalPosition(cell),block,0,boxes);
         if(shape is BlockShape.Wire or BlockShape.Solar)return ElectricalGeometry.Boxes(this,cell,block,boxes);
         if(shape==BlockShape.Fire)return Fire.SelectionBoxes(cell,boxes);
         if(OrientedBuilding(block))return BuildingBoxes(cell,block,boxes,proposed,changedNeighbor,replacement,neighborState);

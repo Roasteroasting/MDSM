@@ -183,7 +183,7 @@ internal sealed partial class ChunkMeshBuilder
             long worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = GeometryOrigin(new(worldX,y,worldZ));
             if(definition.Shape is BlockShape.Wire or BlockShape.Solar)
-            {AppendElectrical(block,position,ElectricalGeometry.Connections(world,new(worldX,y,worldZ)));continue;}
+            {var cell=new Point3(worldX,y,worldZ);AppendElectrical(block,position,ElectricalGeometry.Connections(world,cell),raised:ElectricalGeometry.RaisedConnections(world,cell));continue;}
             if(World.OrientedBuilding(block))
             {AppendBuilding(world,new(worldX,y,worldZ),block,boxes);continue;}
             if(definition.Shape==BlockShape.Cactus){AppendCactus(position,1,world);continue;}

@@ -239,7 +239,7 @@ public sealed class ElectricalNetwork(World world)
         {
             exposed=true;
             for(int y=cell.Y+1;y<World.Height;y++)
-                if(world.GetBlock(cell.X,y,cell.Z)!=BlockType.Air){exposed=false;break;}
+                if(world.GetBlock(cell.X,y,cell.Z) is not (BlockType.Air or BlockType.CopperWire)){exposed=false;break;}
             _sky[cell]=exposed;
         }
         if(!exposed)return 0;

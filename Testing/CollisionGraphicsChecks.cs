@@ -96,12 +96,115 @@ internal static class CollisionGraphicsChecks
                         VerifyArmorEquip();
                         VerifyIndustrialStations();
                         VerifyElectricalStations();
+                        VerifyStreamedLiveInterface();
+                        VerifyLiveInterfaces();
                     }
                 }
                 base.Draw(time);
                 if (_frame > 1) { Verified = true; Exit(); }
             }
             catch (Exception e) { Failure = e; Exit(); }
+        }
+
+        private void VerifyStreamedLiveInterface()
+        {
+            var previous=Field<GameSession>("_session");var restore=previous.Capture();
+            var saves=Field<WorldSaveManager>("_saves");string id=Guid.NewGuid().ToString("N");
+            string directory=Path.Combine(saves.RootDirectory,id,"regions");
+            using(var store=new ChunkRegionStore(directory))
+                for(int z=-1;z<=1;z++)for(int x=-1;x<=1;x++)
+                {
+                    var bytes=new byte[Chunk.BlockCount];Array.Fill(bytes,(byte)BlockType.Stone,0,256);
+                    var address=new MDSM.Worlds.Streaming.ChunkAddress(x,z);
+                    store.WriteAsync(address,new MDSM.Worlds.Streaming.ChunkSnapshot(address,MDSM.Worlds.Streaming.BetaDensityGenerator.Version,bytes).Encode()).GetAwaiter().GetResult();
+                }
+            var world=World.OpenStreamed(173,directory,loaded:3,render:1,simulation:1);
+            try
+            {
+                world.SavedGameMode=GameMode.Survival;world.SavedDifficulty=Difficulty.Peaceful;world.Time.Restore(200);
+                Call("BeginWorld",id,new WorldSave(world,"Streamed live UI",new(8.5f,1,8.5f),0,0));
+                Call("SetState",GameState.Inventory);
+                var timer=System.Diagnostics.Stopwatch.StartNew();
+                bool Ready(){for(int z=-1;z<=1;z++)for(int x=-1;x<=1;x++)if(!world.IsLoaded(new(x*16,1,z*16)))return false;return true;}
+                while(!Ready())
+                {
+                    Input();if(world.ChunkLifecycle.Error is Exception error)throw error;
+                    if(timer.Elapsed.TotalSeconds>30)throw new TimeoutException("Inventory stopped streamed chunk publication");
+                    System.Threading.Thread.Sleep(1);
+                }
+                var session=Field<GameSession>("_session");
+                var panel=new Point3(14,1,8);var solar=new Point3(15,1,8);
+                world.SetBlock(panel.X,panel.Y,panel.Z,BlockType.AccessPanel);
+                world.SetBlock(solar.X,solar.Y,solar.Z,BlockType.SolarPanel);
+                world.SetBlock(16,1,8,BlockType.CopperWire);
+                if(!session.TryOpenContainer(new(panel,default,1)))throw new InvalidOperationException("Could not monitor streamed panel");
+                for(int i=0;i<20;i++)Input();double before=world.Electricity.Statistics(panel).Production;
+                for(int i=0;i<60;i++)Input();
+                if(State!=GameState.Inventory||world.Electricity.Statistics(panel).Production<=before)
+                    throw new InvalidOperationException("Streamed panel wattage froze in its interface");
+                if((ElectricalGeometry.Connections(world,new(16,1,8))&1)==0)throw new InvalidOperationException("Solar seam cable connection disappeared");
+                Console.WriteLine("PASS: Open Infinite inventory publishes streamed chunks and advances cross-seam solar monitoring with its panel open.");
+            }
+            finally{Call("BeginWorld",previous.Id,restore);}
+        }
+
+        private void VerifyLiveInterfaces()
+        {
+            void Check(bool ok,string message){if(!ok)throw new InvalidOperationException(message);}
+            var world=PigChecks.Flat();world.Time.Restore(200);world.SavedGameMode=GameMode.Survival;
+            var generator=new Point3(18,2,17);var solar=new Point3(19,2,17);var target=new Point3(20,2,17);
+            world.SetBlock(generator.X,generator.Y,generator.Z,BlockType.CoalGenerator);
+            world.Containers.Get(generator).SetSlot(0,new(Items.Coal,10));
+            world.SetBlock(solar.X,solar.Y,solar.Z,BlockType.SolarPanel);
+            world.SetBlock(19,2,18,BlockType.AccessPanel);
+            var save=new WorldSave(world,"Live interfaces",new(20.5f,1,20.5f),0,0);
+            string id=Field<WorldSaveManager>("_saves").Create(save);Call("BeginWorld",id,save);
+            var session=Field<GameSession>("_session");session.Player.Settings.Difficulty=Difficulty.Peaceful;
+            var modes=new[]{BlockType.Air,BlockType.CraftingTable,BlockType.MetalworkingBench,BlockType.Chest,
+                BlockType.Furnace,BlockType.Smoker,BlockType.BlastFurnace,BlockType.BrickKiln,
+                BlockType.AccessPanel,BlockType.OutputPanel,BlockType.CoalGenerator};
+            foreach(var block in modes)
+            {
+                world.Containers.Detach(target);world.SetBlock(target.X,target.Y,target.Z,block);
+                Input();if(block==BlockType.Air)Input(false,Keys.E);else Input(true);
+                Check(State==GameState.Inventory,"Could not open live interface "+block);
+                double clock=world.Time.Seconds,weather=world.Weather.MotionSeconds,power=world.Electricity.SolarOutput(solar);
+                Vector3 position=session.Player.Position;float yaw=session.Camera.Yaw;
+                for(int i=0;i<60;i++)Input(false,Keys.W,Keys.D,Keys.Space,Keys.LeftShift,Keys.LeftAlt,Keys.D2);
+                Check(State==GameState.Inventory&&world.Time.Seconds>clock+.98&&world.Weather.MotionSeconds>weather+.98,
+                    "World clock/weather paused in "+block);
+                Check(world.Electricity.SolarOutput(solar)>power,"Solar wattage froze in "+block);
+                Check(session.Player.Position==position&&session.Camera.Yaw==yaw&&session.Inventory.SelectedSlot==0,
+                    "Interface keys leaked into movement/camera/hotbar: "+block);
+                Check(world.Containers.Get(generator).Burn>0,"Generator did not run in "+block);
+                Input(false,Keys.Escape);Input();
+            }
+            // Autosave must not silently empty a recipe or the mouse cursor.
+            Input(false,Keys.E);session.Crafting.SetSlot(0,new(Items.Stick,2));
+            session.Inventory.SetSlot(0,new(Items.CopperWire,3));session.InventoryInteraction.Click(0,false);
+            typeof(Game1).GetField("_autosaveElapsed",Private).SetValue(this,300d);
+            for(int i=0;i<30;i++)Input();
+            Check(session.Crafting[0].Count==2&&session.InventoryInteraction.Cursor.Count==3,
+                "Live-interface autosave consumed/returned UI-owned items");
+            Call("Pause");double paused=world.Time.Seconds;
+            for(int i=0;i<30;i++)Input();
+            Check(State==GameState.Paused&&world.Time.Seconds==paused,"Pause menu did not freeze simulation");
+            Input(false,Keys.Escape);Input();
+            Check(State==GameState.Inventory&&session.Crafting[0].Count==2&&session.InventoryInteraction.Cursor.Count==3,
+                "Resuming an interface lost cursor/recipe ownership");
+            Check(session.TryReturnInterfaceItems(),"Could not return fixture recipe/cursor");Input(false,Keys.Escape);Input();
+            Input(false,Keys.Escape);paused=world.Time.Seconds;
+            for(int i=0;i<30;i++)Input();Check(world.Time.Seconds==paused,"Escape pause menu advanced time");
+            Input(false,Keys.Escape);Input();
+            // Gravity and hazards remain live; only player-directed actions stop.
+            session.Player.SetAbsolute(new(20.5,4,20.5));session.Camera.Position=session.Player.EyePosition;
+            Input(false,Keys.E);for(int i=0;i<70;i++)Input();
+            Check(session.Player.Grounded&&session.Player.Position.Y==1,"Opening inventory suspended gravity");
+            session.Player.Settings.Difficulty=Difficulty.Normal;session.Player.RestoreFraction(1);
+            session.Player.Burning.Restore(new(3,0));
+            for(int i=0;i<70&&State!=GameState.Death;i++)Input();
+            Check(State==GameState.Death&&session.Player.IsDead,"Inventory suppressed environmental death");
+            Console.WriteLine("PASS: Live inventory/all stations: time/weather/solar/fuel, neutral controls, gravity/death, autosave ownership and actual pause/resume.");
         }
 
         private void VerifyElectricalStations()
@@ -149,9 +252,15 @@ internal static class CollisionGraphicsChecks
             if(!world.Structure(target).Open)throw new InvalidOperationException("Actual RMB did not switch power off.");
             Input();Input(true);
             if(world.Structure(target).Open)throw new InvalidOperationException("Actual RMB did not switch power on.");
-            using var renderer=new WorldRenderer(GraphicsDevice,atlas,world);
+            var display=PigChecks.Flat();
+            display.SetBlock(19,1,18,BlockType.SolarPanel);display.SetBlock(18,1,18,BlockType.AccessPanel);
+            display.SetBlock(20,1,18,BlockType.CopperWire);display.SetBlock(21,1,18,BlockType.CopperWire);
+            display.SetBlock(22,1,18,BlockType.OutputPanel);display.Structures[new(22,1,18)]=new(new(22,1,18),1,false,new(0,-1,0));
+            display.SetBlock(23,1,18,BlockType.CopperWire);display.SetBlock(24,1,18,BlockType.PowerSwitch);
+            display.SetBlock(19,1,20,BlockType.SolarPanel);display.SetBlock(19,2,20,BlockType.CopperWire);
+            using var renderer=new WorldRenderer(GraphicsDevice,atlas,display);
             using var view=new RenderTarget2D(GraphicsDevice,960,540,false,SurfaceFormat.Color,DepthFormat.Depth24);
-            var camera=new Camera{Position=new(24.5f,5,22.5f)};camera.RestoreOrientation(-.7f,-.35f);
+            var camera=new Camera{Position=new(26,5,24)};camera.RestoreOrientation(-.65f,-.4f);
             foreach(bool smooth in new[]{false,true})
             {
                 GraphicsDevice.SetRenderTarget(view);GraphicsDevice.Clear(WorldRenderer.SkyColor);

@@ -109,7 +109,7 @@ internal static class ElectricalChecks
         var w=PigChecks.Flat();Point3 cell=new(20,5,20);Put(w,cell,BlockType.CopperWire);
         foreach(var d in ElectricalNetwork.Directions)Put(w,cell+d,BlockType.CopperWire);
         C(ElectricalGeometry.Connections(w,cell)==63,"Wire did not connect in six directions");
-        Span<BoundingBox> boxes=stackalloc BoundingBox[9];C(w.BlockBoxes(cell,boxes)==7&&w.BlockBoxes(cell,boxes,true)==0,"Wire target/collision geometry");
+        Span<BoundingBox> boxes=stackalloc BoundingBox[9];C(w.BlockBoxes(cell,boxes)==5&&w.BlockBoxes(cell,boxes,true)==0,"Wire target/collision geometry");
         var mesh=new ChunkMeshBuilder();mesh.BuildBlock(w,cell);C(mesh.VertexCount>36,"Connected wire mesh missing arms");
         foreach(var (block,_) in patterns){mesh.AppendInventoryItem(block);C(mesh.VertexCount>0,"Missing inventory model "+block);}
         mesh.AppendInventoryItem(BlockType.CopperWire);C(mesh.VertexCount>0,"Missing wire held model");
@@ -120,6 +120,32 @@ internal static class ElectricalChecks
         C(BlockPlacement.TryPlace(w,inventory,new Point3(31,5,30),new Player(new(40,1,40)).Bounds,true)
             &&inventory.Selected.Count==1,"Creative wire placement consumed its stack");
         C(MiningRules.Drop(BlockType.CopperWire,default,new Random(1))==Items.CopperWire,"Wire mining returned another item identity");
+        for(int mask=0;mask<64;mask++)
+        {
+            int count=ElectricalGeometry.Boxes(Vector3.Zero,BlockType.CopperWire,mask,boxes,mask);
+            C(count<=9,"Cable exceeded shared shape budget");
+            for(int i=0;i<count;i++)C(boxes[i].Min.Y>=0&&boxes[i].Max.Y<=1,"Cable left its owner voxel");
+        }
+        var flat=PigChecks.Flat();Point3 panel=new(20,1,20),cable=new(21,1,20),terminal=new(22,1,20);
+        Put(flat,panel,BlockType.SolarPanel);Put(flat,cable,BlockType.CopperWire);Put(flat,terminal,BlockType.AccessPanel);
+        int wireBoxes=flat.BlockBoxes(cable,boxes);
+        C(boxes[0].Min.Y==1&&boxes[0].Max.Y==1.125f,"Cable still floats at voxel centre");
+        C(boxes[..wireBoxes].ToArray().Any(b=>b.Min.X==21&&b.Max.Y<=1.1875f),"Cable misses low panel edge");
+        C(boxes[..wireBoxes].ToArray().Any(b=>b.Max.X==22&&b.Max.Y==1.5625f),"Full-block terminal has no cable riser");
+        mesh.BuildBlock(flat,cable);
+        for(int i=0;i<mesh.VertexCount;i+=6)
+        {
+            var a=mesh.Vertices[i];
+            foreach(int corner in new[]{i+2,i+4})
+            {
+                var vertex=mesh.Vertices[corner];double length=Vector3.Distance(a.Position,vertex.Position);
+                double expected=(Math.Max(1,Math.Round(length*16))-1)/256;
+                Near(Vector2.Distance(a.TextureCoordinate,vertex.TextureCoordinate),expected,"Cable texture density");
+            }
+        }
+        Put(flat,panel+new Point3(0,1,0),BlockType.CopperWire);
+        C(flat.BlockBoxes(panel,boxes)==2&&boxes[1].Min.Y==1.1875f&&boxes[1].Max.Y==2,"Top cable is disconnected from low panel");
+        flat.Time.Restore(300);Near(flat.Electricity.SolarOutput(panel),750,"Thin cable completely shaded solar panel");
     }
     private static void Streaming()
     {

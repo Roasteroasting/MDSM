@@ -34,6 +34,7 @@ public class Game1 : Game
     private bool _pendingJump, _settingsDirty;
     private double _settingsSaveDelay;
     private GameState _settingsReturnState = GameState.MainMenu;
+    private GameState _pauseReturnState = GameState.Playing;
     private GameSession _session;
     private TextureAtlas _atlas;
     private WorldRenderer _renderer;
@@ -138,7 +139,7 @@ public class Game1 : Game
         _session?.World.Seasons.Tick(gameTime.ElapsedGameTime.TotalSeconds);
         ProcessInput(keyboard, mouse, back, gameTime, lookDelta);
         double elapsed = gameTime.ElapsedGameTime.TotalSeconds;
-        bool playing = State == GameState.Playing;
+        bool playing = State is GameState.Playing or GameState.Inventory or GameState.Command or GameState.SignEditing;
         bool raining = _session != null && _session.World.Weather.RainAt(_session.Player.Position);
         if (playing && IsActive) _session?.World.Time.UpdateRainVisual(raining, elapsed);
         _soundtrack.Update(elapsed, _session != null, playing, raining, IsActive);
@@ -192,22 +193,17 @@ public class Game1 : Game
             else
             {
                 UpdateGameplay(keyboard, mouse, gameTime, lookDelta);
-                if (State == GameState.Playing)
-                {
-                    _autosaveElapsed += gameTime.ElapsedGameTime.TotalSeconds;
-                    if (_autosaveElapsed >= AutosaveInterval) SaveCurrentWorld();
-                }
             }
         }
         else if(State==GameState.SignEditing)
         {
+            if(!UpdateInterfaceWorld(gameTime)||State!=GameState.SignEditing){RememberInput(keyboard,mouse);return;}
             if(_signEditor.Update(keyboard,_previousKeyboard,mouse,_previousMouse,GraphicsDevice.Viewport))SetState(GameState.Playing);
         }
         else if (State == GameState.Command)
         {
-            // Commands pause simulation, but an accepted teleport still needs
-            // asynchronous terrain loading and its owner-thread commit. Do not
-            // make the player close the command bar to execute the command.
+            // Teleports still need asynchronous terrain publication before physics
+            // can resume at the destination, even while the command bar is open.
             if(_session.PendingTeleport.HasValue)
             {
                 bool ready=_session.AdvanceStreaming(out bool reframed);
@@ -219,6 +215,7 @@ public class Game1 : Game
                 }
                 else if(!_session.PendingTeleport.HasValue)_commandBar.Show(new(false,_session.StreamingNotice));
             }
+            if(!UpdateInterfaceWorld(gameTime)||State!=GameState.Command){RememberInput(keyboard,mouse);return;}
             _commandBar.Input.Update(keyboard, _previousKeyboard);
             if (Pressed(keyboard, Keys.Escape)) SetState(GameState.Playing);
             else if (Pressed(keyboard, Keys.Enter))
@@ -242,8 +239,7 @@ public class Game1 : Game
         }
         else if (State == GameState.Inventory)
         {
-            int processingSteps=_simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
-            for(int i=0;i<processingSteps;i++){_session.World.Containers.Update(SimulationClock.StepSeconds);_session.World.Electricity.Update(SimulationClock.StepSeconds);}
+            if(!UpdateInterfaceWorld(gameTime)||State!=GameState.Inventory){RememberInput(keyboard,mouse);return;}
             if (!_inventoryScreen.SearchFocused && Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
             {
                 if (_session.TryReturnInterfaceItems()) { _session.CloseInterface();SetState(GameState.Playing); }
@@ -268,7 +264,7 @@ public class Game1 : Game
         player.SetFlightEnabled(_creativeFlight.Flying);
         if (Pressed(keyboard,Keys.LeftAlt)) player.ToggleBootSprint();
         if(_creativeFlight.FlightChanged)_pendingJump=false;
-        if(world.IsInfinite){if(!_session.AdvanceStreaming(out bool reframed)){_notice=_session.StreamingNotice;_noticeSeconds=1;return;}if(reframed){_playerAudio.Reset();_audio.StopAll();}}
+        if(!PrepareWorldSimulation())return;
         camera.Look(lookDelta.X, lookDelta.Y);
         _session.Sounds.SetListener(camera.Position);
         Vector3 movement = Vector3.Zero;
@@ -303,44 +299,7 @@ public class Game1 : Game
         bool spaceHeld = keyboard.IsKeyDown(Keys.Space);
         bool repeatJump = spaceHeld && !_creativeFlight.FlightChanged;
         if(!_creativeFlight.FlightChanged)_pendingJump |= Pressed(keyboard, Keys.Space);
-        int steps = _simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
-        int fluidBudget = FluidSimulation.MaximumUpdatesPerFrame;
-        for (int i = 0; i < steps; i++)
-        {
-            const float dt = (float)SimulationClock.StepSeconds;
-            _session.Swing.Update(dt,held);
-            world.Time.Advance(dt);
-            world.Weather.Update(dt,player.Position);
-            world.Particles.Update(world,dt);
-            world.Fire.Update(dt);
-            world.Fire.UpdatePresentation(camera.Position,dt);
-            player.Update(world, movement, _pendingJump || repeatJump, dt, keyboard.IsKeyDown(Keys.LeftShift), spaceHeld,
-                _creativeFlight.FastFlight);
-            _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
-            _playerAudio.Update(player,world,dt);
-            _pendingJump = false;
-            camera.Position = player.EyePosition;
-            if (player.IsDead) { EnterDeath(); return; }
-            _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
-            world.Fluids.Update(dt,Math.Min(32,fluidBudget));
-            fluidBudget-=world.Fluids.LastProcessedCount;
-            world.LavaFlow.Update(dt,Math.Min(16,fluidBudget));
-            fluidBudget-=world.LavaFlow.LastProcessedCount;
-            world.Farming.Update(dt);
-            world.Gravity.Update(dt);
-            world.Containers.Update(dt);
-            world.Electricity.Update(dt);
-            world.Vegetation.Update(dt,_session.Items);
-            _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items,_session.Inventory.Selected.Item);
-            _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
-                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory,_session.Hostiles,player.Creative);
-            _session.Hostiles.Update(dt,player,_session.Projectiles,_session.Mobs);
-            _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear,_session.Hostiles,player);
-            _session.Items.Update(player, _session.Inventory, dt);
-            _session.Hazards.Update(_session,dt);
-            if(player.IsDead){EnterDeath();return;}
-        }
-        _fallingInterpolation = _simulationClock.Fraction;
+        if(!AdvanceWorldSimulation(gameTime,movement,repeatJump,keyboard.IsKeyDown(Keys.LeftShift),spaceHeld,_creativeFlight.FastFlight,held))return;
         string equipmentNotice=_session.TakeEquipmentNotice();
         if(equipmentNotice!=null){_notice=equipmentNotice;_noticeSeconds=3;}
         _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
@@ -402,6 +361,78 @@ public class Game1 : Game
             _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
         }
         if (EntityRaycaster.Cast(world, _session.Mobs, camera.Position, camera.Forward,hostiles:_session.Hostiles) != null) _selection = null;
+    }
+
+    private bool PrepareWorldSimulation()
+    {
+        if(!_session.World.IsInfinite)return true;
+        bool ready=_session.AdvanceStreaming(out bool reframed);
+        if(reframed){_playerAudio.Reset();_audio.StopAll();}
+        if(!ready){_notice=_session.StreamingNotice;_noticeSeconds=1;}
+        return ready;
+    }
+
+    private bool UpdateInterfaceWorld(GameTime gameTime)
+    {
+        if(!PrepareWorldSimulation())return true;
+        _pendingJump=false;
+        _session.Sounds.SetListener(_session.Camera.Position);
+        return AdvanceWorldSimulation(gameTime,Vector3.Zero,false,false,false,false,false);
+    }
+
+    // Identical fixed-step world/physics updates for gameplay and live interfaces.
+    // Interfaces supply neutral controls; their mouse/keyboard events stay in UI.
+    private bool AdvanceWorldSimulation(GameTime gameTime,Vector3 movement,bool jump,bool crouch,bool swimUp,bool fastFlight,bool held)
+    {
+        GameState simulatedState=State;
+        var world=_session.World;var player=_session.Player;var camera=_session.Camera;
+        int steps = _simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
+        int fluidBudget = FluidSimulation.MaximumUpdatesPerFrame;
+        for (int i = 0; i < steps; i++)
+        {
+            const float dt = (float)SimulationClock.StepSeconds;
+            _session.Swing.Update(dt,held);
+            world.Time.Advance(dt);
+            world.Weather.Update(dt,player.Position);
+            world.Particles.Update(world,dt);
+            world.Fire.Update(dt);
+            world.Fire.UpdatePresentation(camera.Position,dt);
+            player.Update(world, movement, _pendingJump || jump, dt, crouch, swimUp, fastFlight);
+            _session.Bobbing.Update(player,_settings.ViewBobbing,dt,world);
+            _playerAudio.Update(player,world,dt);
+            _pendingJump = false;
+            camera.Position = player.EyePosition;
+            if (player.IsDead) { EnterDeath(); return false; }
+            _selection = BlockRaycaster.Cast(world, camera.Position, camera.Forward);
+            world.Fluids.Update(dt,Math.Min(32,fluidBudget));
+            fluidBudget-=world.Fluids.LastProcessedCount;
+            world.LavaFlow.Update(dt,Math.Min(16,fluidBudget));
+            fluidBudget-=world.LavaFlow.LastProcessedCount;
+            world.Farming.Update(dt);
+            world.Gravity.Update(dt);
+            world.Containers.Update(dt);
+            world.Electricity.Update(dt);
+            world.Vegetation.Update(dt,_session.Items);
+            _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items,_session.Inventory.Selected.Item);
+            _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,
+                camera.Position, camera.Forward, _selection, held, dt,_session.Inventory,_session.Hostiles,player.Creative);
+            _session.Hostiles.Update(dt,player,_session.Projectiles,_session.Mobs);
+            _session.Projectiles.Update(dt,_session.Mobs,_session.Items,_session.ProjectileWear,_session.Hostiles,player);
+            _session.Items.Update(player, _session.Inventory, dt);
+            _session.Hazards.Update(_session,dt);
+            if(player.IsDead){EnterDeath();return false;}
+        }
+        _fallingInterpolation = _simulationClock.Fraction;
+        _autosaveElapsed+=gameTime.ElapsedGameTime.TotalSeconds;
+        if(_autosaveElapsed>=AutosaveInterval)
+        {
+            // Saving returns interface-owned stacks. Defer it while the player is
+            // arranging a recipe or holding a stack, so autosave cannot clear UI.
+            bool ready=_session.InventoryInteraction.Cursor.IsEmpty;
+            for(int i=0;i<_session.Crafting.SlotCount&&ready;i++)ready=_session.Crafting[i].IsEmpty;
+            if(ready)SaveCurrentWorld();
+        }
+        return State==simulatedState;
     }
 
     private void HandleMenuAction(MenuAction action)
@@ -505,7 +536,7 @@ public class Game1 : Game
                     else SetState(GameState.MainMenu);
                     break;
                 case MenuAction.Resume:
-                    SetState(GameState.Playing);
+                    SetState(_pauseReturnState);
                     break;
                 case MenuAction.Respawn when State == GameState.Death:
                     _session.Respawn();
@@ -682,7 +713,11 @@ public class Game1 : Game
 
     private void Pause()
     {
-        if (State is GameState.Playing or GameState.Sleeping or GameState.Command or GameState.SignEditing) SetState(GameState.Paused);
+        if (State is GameState.Playing or GameState.Inventory or GameState.Sleeping or GameState.Command or GameState.SignEditing)
+        {
+            _pauseReturnState=State==GameState.Inventory?GameState.Inventory:GameState.Playing;
+            SetState(GameState.Paused);
+        }
         else ReleaseMouse();
     }
 

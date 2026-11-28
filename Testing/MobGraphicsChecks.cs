@@ -151,9 +151,10 @@ internal static class MobGraphicsChecks
             Require(Math.Abs(Session.Mobs.PendingRespawns[0].RemainingSeconds - (delay - 1)) < 1e-6
                 && world.GetBlock(15, 1, 15) == BlockType.Sand && world.GetBlock(15, 2, 15) == BlockType.Gravel,
                 "Gameplay did not resume timers and stacked gravity through its fixed-step loop.");
-            Press(Keys.E); Require(State == GameState.Inventory, "Inventory did not open for paused timer test.");
-            double inventoryDelay = Session.Mobs.PendingRespawns[0].RemainingSeconds; Input(seconds: 60);
-            Require(Session.Mobs.PendingRespawns[0].RemainingSeconds == inventoryDelay, "Inventory advanced replacement timer.");
+            Press(Keys.E); Require(State == GameState.Inventory, "Inventory did not open for live timer test.");
+            double inventoryDelay = Session.Mobs.PendingRespawns[0].RemainingSeconds; Input(seconds: 1);
+            Require(Math.Abs(Session.Mobs.PendingRespawns[0].RemainingSeconds-(inventoryDelay-1))<1e-6, "Inventory paused replacement timer.");
+            inventoryDelay=Session.Mobs.PendingRespawns[0].RemainingSeconds;
             Press(Keys.E);
 
             void Wheel(int position, params Keys[] keys)
@@ -196,7 +197,7 @@ internal static class MobGraphicsChecks
             Input(seconds: 2);
             Require(Session.World.Gravity.Active.Count == 0 && Session.World.GetBlock(16, 1, 15) == BlockType.Gravel,
                 "Reloaded falling block failed to settle once through gameplay.");
-            Console.WriteLine("PASS: Game input loop pauses/reloads replacement timers, settles stacked sand/gravel, and scrolls down/right and up/left without menu replay.");
+            Console.WriteLine("PASS: Pause menu freezes and inventory advances replacement timers; save/reload, stacked sand/gravel, and scrolls down/right and up/left without menu replay.");
         }
 
         private void VerifyFallingGpu()
