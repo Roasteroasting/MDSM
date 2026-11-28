@@ -460,3 +460,40 @@ No gameplay source changed, so the full gameplay regression suite was not rerun.
 Artifacts: `bin/wiki-check-dom.html`, `bin/wiki-cooker-desktop.png` and
 `bin/wiki-glass-mobile.png`. No outstanding failures. README.md is unchanged;
 no publishing, Git commits, tags or releases were performed.
+
+## 2026-11-28 · GitHub Pages deployment for the static wiki
+
+Added `.github/workflows/deploy-wiki.yml`. Pushes to `main` affecting `Wiki/**`
+or the workflow itself deploy the existing `Wiki/` contents directly through
+GitHub's configure/upload/deploy Pages actions. Manual dispatch is available,
+with the deploy job restricted to `main`. The workflow has read-only repository
+contents permission, Pages/OIDC write permissions, the `github-pages` environment
+and deployment URL, and serialized deployments without canceling an active run.
+Its artifact root is `Wiki`, not the repository, so the site is served at the
+repository Pages base path without an extra `/Wiki/` directory. No game build,
+wiki export, package installation or game publishing occurs in the workflow.
+
+The current HTML navigation, CSS references, JavaScript-generated links and atlas
+URLs are already relative and work unchanged at `/MDSM/`. Kept all wiki files in
+their current directory. Extended `Tools/WikiExport/CheckWiki.html` with a `site`
+query parameter for HTTP/project-site testing, resource/subpath assertions and
+full-page navigation checks, while preserving its default offline-file mode.
+
+Verification: workflow YAML parsed and its branch/path filters, permissions,
+environment, action sequence and artifact scope passed focused assertions.
+Headless Edge passed all 362 pages and 8,087 navigation/item/block links both
+over HTTP under `/MDSM/` and as offline files, including CSS/JS/assets, search,
+processing filters, registry entries and 390/1280-pixel layouts. The HTTP fixture
+served only `Wiki/` under `/MDSM/`; domain-root assets returned 404. All 129
+static HTML/CSS references resolved successfully inside the subpath.
+`dotnet build` passed with zero warnings/errors; `git diff --check` passed.
+Reports are `bin/wiki-pages-check-dom.html` and
+`bin/wiki-pages-offline-check-dom.html`.
+
+Repository setup still requires Settings > Pages > Build and deployment > Source
+to be GitHub Actions. No remote settings were changed and no live Actions run or
+deployment was attempted: the requested files remain local for the owner to
+commit and push. After that setup, the expected project URL is
+`https://roasteroasting.github.io/MDSM/` (unless a custom domain is configured).
+No game source or README changes, commits, pushes, game builds published, or
+releases were made.

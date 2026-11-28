@@ -1,13 +1,13 @@
 <!doctype html>
-<!-- Run in headless Chromium/Edge with --allow-file-access-from-files and a separate --user-data-dir. -->
+<!-- For files, use --allow-file-access-from-files and a separate --user-data-dir.
+     For HTTP/project-site checks, pass ?site=/MDSM/ (or another site base path). -->
 <html lang="en"><meta charset="utf-8"><title>Offline wiki checks</title>
-<script src="../../Wiki/data.js"></script>
 <pre id="results" data-status="running">Checking offline wiki...</pre><iframe id="wiki" title="Wiki test page" style="width:390px;height:900px;border:0"></iframe>
 <script>
 (async()=>{
   const result=document.querySelector('#results'), frame=document.querySelector('#wiki');
-  const data=globalThis.MDSM_WIKI, base=new URL('../../Wiki/',location.href);
-  const blocks=new Map(data.blocks.map(b=>[b.id,b])), items=new Map(data.items.map(i=>[i.id,i]));
+  const base=new URL(new URLSearchParams(location.search).get('site')||'../../Wiki/',location.href);
+  let data,blocks,items;
   let pages=0, links=0;
   const check=(ok,message)=>{if(!ok)throw Error(message);};
   async function page(path) {
@@ -16,8 +16,14 @@
       frame.src=new URL(path,base).href;
     });
     check(doc?.querySelector('main'),'Missing main: '+path);pages++;
-    for(const link of doc.querySelectorAll('main a[href]')) {
+    check(doc.querySelector('link[rel="stylesheet"]').sheet,'Stylesheet did not load: '+path);
+    for(const resource of doc.querySelectorAll('script[src],link[rel="stylesheet"]')){
+      const url=new URL(resource.src||resource.href);
+      check(url.origin===base.origin&&url.pathname.startsWith(base.pathname),'Resource escaped the site subpath: '+url.href);
+    }
+    for(const link of doc.querySelectorAll('a[href]')) {
       const url=new URL(link.href), id=url.searchParams.get('block'), item=url.searchParams.get('item');
+      check(url.origin===base.origin&&url.pathname.startsWith(base.pathname),'Navigation escaped the site subpath: '+link.href);
       if(id!==null)check(blocks.has(Number(id)),'Broken block link: '+link.href);
       if(item!==null)check(items.has(Number(item)),'Broken item link: '+link.href);
       links++;
@@ -25,6 +31,15 @@
     return doc;
   }
   try {
+    await new Promise((resolve,reject)=>{
+      const script=document.createElement('script');script.src=new URL('data.js',base).href;
+      script.onload=resolve;script.onerror=()=>reject(Error('Could not load wiki data at '+script.src));document.head.append(script);
+    });
+    data=globalThis.MDSM_WIKI;blocks=new Map(data.blocks.map(b=>[b.id,b]));items=new Map(data.items.map(i=>[i.id,i]));
+    if(base.protocol!=='file:')for(const asset of ['assets/terrain.png','assets/items.png','assets/world.png','assets/water.png']){
+      const response=await fetch(new URL(asset,base));check(response.ok,'Missing HTTP asset: '+asset);
+      check((await response.arrayBuffer()).byteLength>0,'Empty HTTP asset: '+asset);
+    }
     check(data.processing.length===90,'Expected 85 stained/clear kiln products and five cooker recipes');
     check(data.recipes.length===236,'Missing current crafting recipes');
     for(const machine of data.electrical.machines)check([153,154,155].includes(machine.block),'Unknown electric machine');
@@ -77,7 +92,7 @@
         check(doc.documentElement.scrollWidth<=doc.documentElement.clientWidth,`Page overflows at ${width}px: ${path} (${doc.documentElement.scrollWidth} > ${doc.documentElement.clientWidth})`);
       }
     }
-    result.dataset.status='passed';result.textContent=`PASS: ${pages} offline pages, ${links} item/block links, current registry counts, electric recipe filters, wire identity, all glass variants, food notes, guide/search integration and 390/1280px layouts.`;
+    result.dataset.status='passed';result.textContent=`PASS: ${pages} pages under ${base.pathname}, ${links} item/block links, CSS/JS/assets, current registry counts, electric recipe filters, wire identity, all glass variants, food notes, guide/search integration and 390/1280px layouts.`;
   }catch(error){result.dataset.status='failed';result.textContent='FAIL: '+error.stack;}
 })();
 </script></html>
