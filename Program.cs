@@ -9,6 +9,8 @@ else if(args.Length==1 && args[0]=="--legacy-smoke-test")
 { System.Environment.ExitCode=MDSM.Testing.LegacySmokeChecks.Run(); }
 else if(args.Length==1 && args[0]=="--season-lead-test")
 { System.Environment.ExitCode=MDSM.Testing.SeasonLeadChecks.Run(); }
+else if(args.Length==1 && args[0]=="--electrical-test")
+{ System.Environment.ExitCode=MDSM.Testing.ElectricalChecks.Run(); }
 else if(args.Length==1 && args[0]=="--industrial-test")
 { System.Environment.ExitCode=MDSM.Testing.IndustrialChecks.Run(); }
 else if(args.Length==1 && args[0]=="--season-lead-graphics-test")

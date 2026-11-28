@@ -25,7 +25,7 @@ internal sealed class InventoryIconAtlas : IDisposable
         var terrain=new Color[256*256];var items=new Color[256*256];atlas.Texture.GetData(terrain);atlas.ItemAtlas.GetData(items);
         foreach(var item in Items.Obtainable)
         {
-            if(Items.TryGetBlock(item,out var block)&&Blocks.Get(block).Shape is not (BlockShape.Cross or BlockShape.Crop or BlockShape.Fire))
+            if(!Items.IsSprite(item)&&Items.TryGetBlock(item,out var block)&&Blocks.Get(block).Shape is not (BlockShape.Cross or BlockShape.Crop or BlockShape.Fire))
             {_models[item.Value]=true;continue;}
             Rectangle tile=atlas.ItemSource(item);var pixels=Items.IsSprite(item)?items:terrain;
             int left=16,top=16,right=-1,bottom=-1;

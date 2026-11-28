@@ -27,6 +27,7 @@ public sealed partial class World
     public FluidSimulation LavaFlow { get; }
     public FallingBlockSimulation Gravity { get; }
     public BlockEntities Containers { get; }
+    public ElectricalNetwork Electricity { get; }
     public VegetationSimulation Vegetation { get; }
     public WorldTime Time { get; } = new();
     public BlockLighting Lighting { get; }
@@ -60,6 +61,7 @@ public sealed partial class World
         Farming=new FarmingSimulation(this);
         Vegetation=new VegetationSimulation(this);
         Containers=new BlockEntities(this);
+        Electricity=new(this);
         Fluids = new FluidSimulation(this);
         LavaFlow=new FluidSimulation(this,true);
         Gravity = new FallingBlockSimulation(this);
@@ -192,6 +194,7 @@ public sealed partial class World
             && _blockChangeRoot!=changedCell && _doorPartnerEdit!=changedCell && !(_plantEdit && Blocks.DoubleGrass(previous)) && !(_bedEdit && Blocks.Bed(previous)))
             Sounds?.Block(SoundKind.Break,previous,Center(changedCell));
         Containers.Changed(new Point3(x,y,z),block);
+        Electricity.Changed(new(x,y,z),previous,block);
         Vegetation.Changed(new Point3(x,y,z),previous,block);
         DetailChanged(new Point3(x,y,z),previous,block);
         Fire.Changed(new(x,y,z),previous,block);
@@ -257,6 +260,7 @@ public sealed partial class World
         if(!TryPlaceBlock(cell,block,playerBounds,support,null))return false;
         // Default north-facing cubes and vertical logs need no saved metadata.
         if(facing!=0)Structures[cell]=new(cell,(byte)facing,false,new(0,-1,0));
+        if(ElectricalNetwork.IsBlock(block)){Electricity.Invalidate();DirtyDetail(cell);}
         return true;
     }
 

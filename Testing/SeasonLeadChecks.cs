@@ -23,6 +23,7 @@ internal static class SeasonLeadChecks
             ("Calendar boundaries, creation layout, seasonal generation and save compatibility",Seasons),
             ("Cached enclosed glass and artificial light, winter crop timing and yields",Greenhouses),
             ("Winter livestock outdoors and in enclosed barns",Livestock),
+            ("Authored seasonal atlas artwork matches original RGBA pixels",Artwork),
             ("Snow-responsive mesh tiles and original flowers",SnowAndFlowers),
             ("Spring generation and immutable streamed season metadata",StreamedSeasons),
             ("Lead crafting, movement, attachment, breakage, death and persistence",Leashes)
@@ -41,6 +42,38 @@ internal static class SeasonLeadChecks
 
     private static void Require(bool condition,string message)
     {if(!condition)throw new InvalidOperationException(message);}
+
+    // Captured from the original runtime atlas before removing Extend/Plant.
+    // Hash raw RGBA, including every transparent pixel, rather than PNG encoding.
+    private static readonly string[] ArtworkHashes={
+        "74B762E57D76C82C4EC974D2AA163EDCECADFB3534AEB0D66745FE962CEB35AC",
+        "72A649524884514F43010928B390EE6255F8C887E51594ECCB56828635508F8D",
+        "D87663A7AC5CAD982C4A280200A91ED47B1B418775226EA8E90BF824DB767AA3"};
+    private static void VerifyArtwork(int tile,byte[] rgba)
+        =>Require(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(rgba))==ArtworkHashes[tile-84],
+            $"Seasonal atlas tile {tile} differs from its original runtime pixels.");
+    private static void Artwork()
+    {
+        string root=AppContext.BaseDirectory;
+        while(!File.Exists(Path.Combine(root,"MDSM.csproj")))root=Directory.GetParent(root)?.FullName??throw new Exception("Missing source atlas.");
+        var atlas=ItemAtlasChecks.Read(Path.Combine(root,"Content/Blocks/terrain.png"));
+        for(int tile=84;tile<=86;tile++)
+        {
+            var bounds=TextureAtlas.Source(tile);var rgba=new byte[1024];
+            for(int y=0;y<16;y++)Array.Copy(atlas.Pixels,((bounds.Y+y)*atlas.Width+bounds.X)*4,rgba,y*64,64);
+            VerifyArtwork(tile,rgba);
+        }
+    }
+    private static void VerifyRuntimeArtwork(Texture2D atlas)
+    {
+        for(int tile=84;tile<=86;tile++)
+        {
+            var colors=new Color[256];atlas.GetData(0,TextureAtlas.Source(tile),colors,0,256);
+            var rgba=new byte[1024];
+            for(int i=0;i<colors.Length;i++){rgba[i*4]=colors[i].R;rgba[i*4+1]=colors[i].G;rgba[i*4+2]=colors[i].B;rgba[i*4+3]=colors[i].A;}
+            VerifyArtwork(tile,rgba);
+        }
+    }
 
     private static void Biomes()
     {
@@ -330,6 +363,7 @@ internal static class SeasonLeadChecks
         protected override void Draw(GameTime time)
         {
             using var atlas=new TextureAtlas(Content);
+            VerifyRuntimeArtwork(atlas.Texture);
             foreach(var season in new[]{Season.Spring,Season.Autumn,Season.Winter})
             {
                 var variant=atlas.Terrain(season);

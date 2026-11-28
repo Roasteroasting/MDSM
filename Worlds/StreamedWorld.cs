@@ -51,7 +51,7 @@ public sealed partial class World
         world.ChunkLifecycle.Retiring=world.Retire;
         world.ChunkLifecycle.Capturing=r=>MDSM.Persistence.StreamingJson.Encode(world.CaptureGameplay(r.Address));
         world.ChunkLifecycle.PreparingRetirement=world.PrepareRetirement;
-        world.ChunkLifecycle.Resuming=r=>world.RestoreGameplay(r.Address,MDSM.Persistence.StreamingJson.Decode<ChunkGameplay>(r.FrozenMetadata),true);
+        world.ChunkLifecycle.Resuming=r=>{world.RestoreGameplay(r.Address,MDSM.Persistence.StreamingJson.Decode<ChunkGameplay>(r.FrozenMetadata),true);world.Electricity.Publish(world._resident[r.Address]);};
         return world;
     }
     public bool IsLoaded(Point3 cell)=>!IsInfinite?Contains(cell.X,cell.Y,cell.Z):TryGetChunkAt(cell.X,cell.Z,out _);
@@ -71,6 +71,7 @@ public sealed partial class World
         Shelters.Invalidate(resident.Address);
         try{if(state!=null)RestoreGameplay(resident.Address,state,true);Fluids.InitializeChunk(chunk);LavaFlow.InitializeChunk(chunk);}
         catch{DetachGameplay(resident.Address,true);_resident.Remove(resident.Address);_slots[chunk.Slot]=null;RefreshResidents();throw;}
+        Electricity.Publish(chunk);
         Revision++;
         Lighting.Invalidate(new(chunk.OriginX,64,chunk.OriginZ));
     }

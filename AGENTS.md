@@ -33,6 +33,9 @@ MDSM (Mojang Don't Sue Me) is an original, open-source voxel survival sandbox in
 
 - Maintain the retro voxel aesthetic and match existing menus, inventory interfaces, fonts, controls, and visual conventions.
 - Use the existing rendering paths for world blocks, item sprites, 3D inventory models, and held items. Check lighting, transparency, texture atlases, and seasonal coloration where applicable.
+- Use the imagegen skill to create new block and item textures. Add block artwork to `Content/Blocks/terrain.png` and item artwork to `Content/Items/items.png`.
+- Never draw or synthesize block/item texture artwork procedurally in code; load it from the editable PNG atlases. When migrating existing generated artwork, copy its exact pixels instead of redesigning it.
+- UI remains drawn in code using the existing UI rendering paths.
 - Preserve rendering performance in dense chunks and complex terrain.
 
 ## Testing and verification

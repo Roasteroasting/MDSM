@@ -27,6 +27,7 @@ public sealed partial class World
             copy._resident.Add(new(dx,dz),chunk);
         }
         copy.RefreshResidents();
+        copy.Electricity.CopyConsumerGeometry(Electricity,new(center.OriginX,0,center.OriginZ));
         Point3 Relative(Point3 p)=>new(p.X-center.OriginX,p.Y,p.Z-center.OriginZ);
         foreach(var pair in Structures)if(Math.Abs(pair.Key.X-center.OriginX)<=32 && Math.Abs(pair.Key.Z-center.OriginZ)<=32)
         {var p=Relative(pair.Key);copy.Structures[p]=pair.Value with{Cell=p};}

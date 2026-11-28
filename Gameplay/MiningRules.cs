@@ -17,6 +17,7 @@ public static class MiningRules
         BlockType.IronOre or BlockType.CopperOre => new(MiningCategory.Mineral,3,ToolTier.Stone),
         BlockType.CopperBlock or BlockType.BrickBlock => new(MiningCategory.Mineral,2.5f,ToolTier.Wood),
         BlockType.DiamondOre => new(MiningCategory.Mineral,3,ToolTier.Iron),
+        BlockType.SolarPanel or BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel or BlockType.PowerSwitch => new(MiningCategory.Mineral,2,ToolTier.Wood),
         BlockType.Furnace => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
         BlockType.Smoker or BlockType.BlastFurnace or BlockType.BrickKiln => new(MiningCategory.Mineral,3.5f,ToolTier.Wood),
         BlockType.MetalworkingBench => new(MiningCategory.Wood,2),

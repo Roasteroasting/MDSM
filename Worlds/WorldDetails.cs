@@ -55,10 +55,16 @@ public sealed partial class World
         return Structures.TryGetValue(cell,out var state)?state:new(cell,0,false,new(0,-1,0));
     }
     internal static bool ValidPlacementOrientation(BlockType block,StructureState state)
-        => !state.Open && state.Support==new Point3(0,-1,0) && state.Facing<=(block==BlockType.WoodLog?2:3);
+        => (!state.Open || block==BlockType.PowerSwitch) && state.Support==new Point3(0,-1,0) && state.Facing<=(block==BlockType.WoodLog?2:3);
     public bool Toggle(Point3 cell)
     {
-        BlockType block=GetBlock(cell.X,cell.Y,cell.Z);if(block is not (BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper))return false;
+        BlockType block=GetBlock(cell.X,cell.Y,cell.Z);
+        if(block==BlockType.PowerSwitch)
+        {
+            var power=Structure(cell);if(!Structures.ContainsKey(cell)&&Structures.Count>=65536)return false;
+            Structures[cell]=power with{Open=!power.Open};Electricity.Invalidate();DirtyDetail(cell);return true;
+        }
+        if(block is not (BlockType.FenceGate or BlockType.Door or BlockType.DoorUpper))return false;
         var state=Structure(cell);Structures[state.Cell]=state with {Open=!state.Open};
         if(block!=BlockType.FenceGate && Seasons.Mode!=SeasonsMode.Off)
             Shelters.Invalidate(Streaming.ChunkAddress.At(state.Cell.X,state.Cell.Z));
@@ -148,6 +154,7 @@ public sealed partial class World
     {
         BlockShape shape=Blocks.Get(block).Shape;
         if(collision && !Blocks.IsSolid(block))return 0;
+        if(shape is BlockShape.Wire or BlockShape.Solar)return ElectricalGeometry.Boxes(this,cell,block,boxes);
         if(shape==BlockShape.Fire)return Fire.SelectionBoxes(cell,boxes);
         if(OrientedBuilding(block))return BuildingBoxes(cell,block,boxes,proposed,changedNeighbor,replacement,neighborState);
         if(shape==BlockShape.Pane)return PaneBoxes(new(cell.X-OriginX,cell.Y,cell.Z-OriginZ),PaneConnections(cell,changedNeighbor,replacement),boxes);

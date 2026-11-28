@@ -291,6 +291,7 @@ public static partial class WorldSerializer
             world.LavaFlow.Initialize();
             population.Validate(MobPopulationState.LivingCounts(pigs,mobs));
             world.Gravity.Restore(gravityColumns, fallingBlocks); // No global scan/rewrite of legacy terrain.
+            foreach(var chunk in world.Chunks)world.Electricity.Publish(chunk);
             return new WorldSave(world, metadata.Name, metadata.PlayerPosition, metadata.Yaw, metadata.Pitch, inventory, drops, health, pigs, mobs, population,arrows,hostiles,exactHealth);
         }
         catch (EndOfStreamException exception)

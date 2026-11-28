@@ -52,7 +52,8 @@ internal sealed partial class ChunkMeshBuilder
             for(int i=first;i<VertexCount;i++)Vertices[i].Position=origin+Vertices[i].Position*size;
             return;
         }
-        if(definition.Shape==BlockShape.Cactus)AppendCactus(origin,size,null);
+        if(definition.Shape is BlockShape.Wire or BlockShape.Solar)AppendElectrical(block,origin,3,size);
+        else if(definition.Shape==BlockShape.Cactus)AppendCactus(origin,size,null);
         else if (definition.Shape is BlockShape.Cross or BlockShape.Torch)
         {
             AddQuad(origin, origin + new Vector3(size, 0, size), origin + new Vector3(size, size, size),
@@ -181,6 +182,8 @@ internal sealed partial class ChunkMeshBuilder
 
             long worldX = chunk.OriginX + x, worldZ = chunk.OriginZ + z;
             Vector3 position = GeometryOrigin(new(worldX,y,worldZ));
+            if(definition.Shape is BlockShape.Wire or BlockShape.Solar)
+            {AppendElectrical(block,position,ElectricalGeometry.Connections(world,new(worldX,y,worldZ)));continue;}
             if(World.OrientedBuilding(block))
             {AppendBuilding(world,new(worldX,y,worldZ),block,boxes);continue;}
             if(definition.Shape==BlockShape.Cactus){AppendCactus(position,1,world);continue;}
@@ -290,6 +293,8 @@ internal sealed partial class ChunkMeshBuilder
 
                 int tile = block==BlockType.Grass && face.Normal.Y==0 &&
                     world.GetBlock(worldX,y+1,worldZ)==BlockType.Snow ? Blocks.SnowyGrassTile : Blocks.Tile(block, face.Normal);
+                if(block==BlockType.PowerSwitch && face.Normal.Z<0 && world.Structure(new(worldX,y,worldZ)).Open)tile=110;
+                if(ElectricalNetwork.IsGate(block) && face.Normal.Z>0)tile=111;
                 // Shading changes RGB only: reducing vertex alpha would discard dark leaf faces.
                 if(orientation==0)
                     AddQuad(position+face.A,position+face.B,position+face.C,position+face.D,tile,new(new Vector3(face.Shade)),false);

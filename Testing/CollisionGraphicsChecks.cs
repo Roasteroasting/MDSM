@@ -95,12 +95,72 @@ internal static class CollisionGraphicsChecks
                         VerifyHeldJump();
                         VerifyArmorEquip();
                         VerifyIndustrialStations();
+                        VerifyElectricalStations();
                     }
                 }
                 base.Draw(time);
                 if (_frame > 1) { Verified = true; Exit(); }
             }
             catch (Exception e) { Failure = e; Exit(); }
+        }
+
+        private void VerifyElectricalStations()
+        {
+            var atlas=Field<TextureAtlas>("_atlas");
+            var world=PigChecks.Flat();world.Time.Restore(300);
+            Point3 target=new(20,2,17),generator=new(19,2,17);
+            world.SetBlock(generator.X,generator.Y,generator.Z,BlockType.CoalGenerator);
+            world.Containers.Get(generator).SetSlot(0,new(Items.Charcoal,3));
+            world.SetBlock(18,2,17,BlockType.SolarPanel);
+            world.SetBlock(18,2,18,BlockType.AccessPanel);
+            world.SetBlock(21,2,17,BlockType.CopperWire);
+            world.SetBlock(22,2,17,BlockType.CopperWire);
+            world.SetBlock(22,3,17,BlockType.CopperWire);
+            world.SetBlock(22,4,17,BlockType.CopperWire);
+            world.SetBlock(23,2,17,BlockType.PowerSwitch);
+            var save=new WorldSave(world,"Electrical interaction",new(20.5f,1,20.5f),0,0);
+            string id=Field<WorldSaveManager>("_saves").Create(save);Call("BeginWorld",id,save);
+            var session=Field<GameSession>("_session");
+            using var screen=new MDSM.UI.InventoryScreen(GraphicsDevice,atlas);
+            foreach(var block in new[]{BlockType.AccessPanel,BlockType.OutputPanel,BlockType.CoalGenerator})
+            {
+                world.SetBlock(target.X,target.Y,target.Z,block);
+                if(block==BlockType.CoalGenerator)world.Containers.Get(target).SetSlot(0,new(Items.Coal,2));
+                world.Electricity.Update(.25);
+                Input();Input(true);
+                if(State!=GameState.Inventory||session.ActiveContainer?.Block!=block)
+                    throw new InvalidOperationException("Actual RMB did not open electrical interface: "+block);
+                foreach(var size in new[]{(320,240),(1280,720)})
+                {
+                    using var surface=new RenderTarget2D(GraphicsDevice,size.Item1,size.Item2,false,SurfaceFormat.Color,DepthFormat.Depth24);
+                    GraphicsDevice.SetRenderTarget(surface);GraphicsDevice.Clear(Color.Black);screen.Open();
+                    screen.Draw(session,default,GraphicsDevice.Viewport);
+                    GraphicsDevice.SetRenderTarget(null);
+                    var pixels=new Color[surface.Width*surface.Height];surface.GetData(pixels);
+                    if(pixels.Count(p=>p!=Color.Black)<surface.Width*surface.Height/5)throw new InvalidOperationException("Electrical UI was not drawn.");
+                    using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,$"electrical-{block}-{surface.Width}.png")))surface.SaveAsPng(png,surface.Width,surface.Height);
+                    GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=atlas.Texture;
+                }
+                Input(false,Keys.Escape);Input();
+                if(block==BlockType.CoalGenerator)world.Containers.Get(target).SetSlot(0,default);
+            }
+            world.SetBlock(target.X,target.Y,target.Z,BlockType.PowerSwitch);
+            Input();Input(true);
+            if(!world.Structure(target).Open)throw new InvalidOperationException("Actual RMB did not switch power off.");
+            Input();Input(true);
+            if(world.Structure(target).Open)throw new InvalidOperationException("Actual RMB did not switch power on.");
+            using var renderer=new WorldRenderer(GraphicsDevice,atlas,world);
+            using var view=new RenderTarget2D(GraphicsDevice,960,540,false,SurfaceFormat.Color,DepthFormat.Depth24);
+            var camera=new Camera{Position=new(24.5f,5,22.5f)};camera.RestoreOrientation(-.7f,-.35f);
+            foreach(bool smooth in new[]{false,true})
+            {
+                GraphicsDevice.SetRenderTarget(view);GraphicsDevice.Clear(WorldRenderer.SkyColor);
+                renderer.SmoothLighting=smooth;RenderingPerformanceChecks.Warm(renderer,camera);renderer.Draw(camera,null);
+                GraphicsDevice.SetRenderTarget(null);
+                using(var png=File.Create(Path.Combine(AppContext.BaseDirectory,$"electrical-world-{smooth}.png")))view.SaveAsPng(png,view.Width,view.Height);
+                GraphicsDevice.Textures[0]=null;GraphicsDevice.Textures[0]=atlas.Texture;
+            }
+            Console.WriteLine("PASS: Actual electrical RMB interfaces/switches, original artwork, connected wire meshes and 320/1280 UI renders.");
         }
 
         private void VerifyArmorEquip()

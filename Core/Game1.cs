@@ -243,7 +243,7 @@ public class Game1 : Game
         else if (State == GameState.Inventory)
         {
             int processingSteps=_simulationClock.Advance(gameTime.ElapsedGameTime.TotalSeconds);
-            for(int i=0;i<processingSteps;i++)_session.World.Containers.Update(SimulationClock.StepSeconds);
+            for(int i=0;i<processingSteps;i++){_session.World.Containers.Update(SimulationClock.StepSeconds);_session.World.Electricity.Update(SimulationClock.StepSeconds);}
             if (!_inventoryScreen.SearchFocused && Pressed(keyboard, Keys.E) || Pressed(keyboard, Keys.Escape))
             {
                 if (_session.TryReturnInterfaceItems()) { _session.CloseInterface();SetState(GameState.Playing); }
@@ -329,6 +329,7 @@ public class Game1 : Game
             world.Farming.Update(dt);
             world.Gravity.Update(dt);
             world.Containers.Update(dt);
+            world.Electricity.Update(dt);
             world.Vegetation.Update(dt,_session.Items);
             _session.Mobs.Update(dt, player.Position, player.Bounds, _session.Items,_session.Inventory.Selected.Item);
             _session.Combat.Update(world, _session.Mobs, _session.Items, _session.Mining,

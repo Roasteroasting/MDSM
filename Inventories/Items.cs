@@ -112,11 +112,13 @@ public static class Items
     }
     public static bool IsDefined(ItemId item) => IsSprite(item) || TryGetBlock(item, out _);
     public static ItemId FromBlock(BlockType block) => Blocks.IsPlaceable(block)
-        ? new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));
+        ? block==BlockType.CopperWire ? CopperWire : new ItemId((byte)block) : throw new ArgumentException("This block has no item.", nameof(block));
     public static bool TryGetBlock(ItemId item, out BlockType block)
     {
-        block = item.Value <= byte.MaxValue ? (BlockType)item.Value : BlockType.Air;
-        return item.Value != 0 && Blocks.IsPlaceable(block);
+        block = item==CopperWire ? BlockType.CopperWire : item.Value <= byte.MaxValue ? (BlockType)item.Value : BlockType.Air;
+        // The existing wire item (339) is canonical; its world block ID has no
+        // second inventory identity or duplicate Creative/catalog entry.
+        return item.Value != 0 && item.Value!=(byte)BlockType.CopperWire && Blocks.IsPlaceable(block);
     }
     public static string Name(ItemId item) => IsDefined(item) ? Get(item).Name : "";
 }

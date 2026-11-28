@@ -80,6 +80,7 @@ public sealed partial class World
         LiveMobs?.DetachChunk(a);LiveHostiles?.DetachChunk(a);LiveDrops?.DetachChunk(a);LiveProjectiles?.DetachChunk(a);
         if(statics)
         {
+            Electricity.Detach(a);
             foreach(var p in Structures.Keys.Where(p=>ChunkGameplay.Owns(a,p)).ToArray()){Torches.Remove(p);Structures.Remove(p);}
             foreach(var p in Signs.Keys.Where(p=>ChunkGameplay.Owns(a,p)).ToArray())Signs.Remove(p);
             foreach(var p in Containers.Entries.Keys.Where(p=>ChunkGameplay.Owns(a,p)).ToArray())Containers.Detach(p);
@@ -97,7 +98,7 @@ public sealed partial class World
         // chunk boundary changes Center. Nothing else changes this ownership
         // window, so avoid hundreds of dictionary probes on every render tick.
         if(ReferenceEquals(_simulationChunks,_residentChunks)&&_simulationCenter==ChunkLifecycle.Center)return;
-        _simulationChunks=_residentChunks;_simulationCenter=ChunkLifecycle.Center;
+        _simulationChunks=_residentChunks;_simulationCenter=ChunkLifecycle.Center;Electricity.Invalidate();
         foreach(var chunk in Chunks)
         {
             var a=new ChunkAddress(chunk.X,chunk.Z);

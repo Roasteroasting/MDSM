@@ -26,7 +26,7 @@ internal static class InventoryLayout
     public static Rectangle Output(Viewport v,int width,bool creative=false)=>At(v,creative,width==2?146:119,width==2?38:30,width==2?18:26,width==2?18:26);
     public static Rectangle Arrow(Viewport v,int width,bool creative=false)=>At(v,creative,width==2?128:90,width==2?40:35,width==2?16:22,14);
     public static Rectangle ContainerSlot(Viewport v,BlockType block,int slot,bool creative=false,int rows=0)
-        =>block==BlockType.Chest?At(v,creative,7+slot%9*18,17+slot/9*18,18,18,rows):At(v,creative,slot==2?111:55,slot==0?16:slot==1?52:30,slot==2?26:18,slot==2?26:18);
+        =>block==BlockType.CoalGenerator?At(v,creative,7,26,18,18):block==BlockType.Chest?At(v,creative,7+slot%9*18,17+slot/9*18,18,18,rows):At(v,creative,slot==2?111:55,slot==0?16:slot==1?52:30,slot==2?26:18,slot==2?26:18);
     public static Rectangle HotbarSlot(Viewport viewport, int slot)
     {
         return ClassicHudLayout.Slot(viewport,slot);
@@ -277,6 +277,31 @@ internal sealed class InventoryScreen : IDisposable
                 }
         return null;
     }
+    private void DrawElectrical(GameSession session,BlockContainer container,Viewport viewport)
+    {
+        var stats=session.World.Electricity.Statistics(container.Cell);
+        bool generator=container.Block==BlockType.CoalGenerator;
+        int x=generator?33:7;
+        void Label(string text,int y,Color color)
+        {var at=InventoryLayout.At(viewport,false,x,y,138,8);Text(text,at.X,at.Y,_menuScale,color);}
+        Label("PROD "+ElectricalBalance.Power(stats.Production),19,MdsmUiStyle.Ink);
+        Label("USED "+ElectricalBalance.Power(stats.Consumption),30,MdsmUiStyle.Ink);
+        Label("FREE "+ElectricalBalance.Power(stats.Available),41,MdsmUiStyle.Accent);
+        if(generator)
+        {
+            double reserves=container.Burn+(container[0].IsEmpty?0:container[0].Count*ElectricalBalance.CoalBurnSeconds);
+            Label($"FUEL {reserves:0} S",52,MdsmUiStyle.Ink);
+            int width=(int)(136*container.Burn/Math.Max(1,container.BurnTotal));
+            Fill(InventoryLayout.At(viewport,false,33,64,136,3),MdsmUiStyle.Inset);
+            if(width>0)Fill(InventoryLayout.At(viewport,false,33,64,width,3),Color.OrangeRed);
+        }
+        else
+        {
+            Label($"{stats.Sources} SOURCES / {stats.Outputs} OUT",52,MdsmUiStyle.Ink);
+            Label($"{stats.Consumers} LOADS / "+ElectricalBalance.Power(stats.Requested),63,MdsmUiStyle.Ink);
+        }
+    }
+
     public void Draw(GameSession session, MouseState mouse, Viewport viewport)
     {
         _hovered=default;
@@ -325,6 +350,8 @@ internal sealed class InventoryScreen : IDisposable
         if(container!=null)
         {
             for(int slot=0;slot<container.SlotCount;slot++)DrawSlot(container[slot],InventoryLayout.ContainerSlot(viewport,container.Block,slot,false,rows),mouse,false);
+            if(container.Block is BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel)
+                DrawElectrical(session,container,viewport);
             if(Smelting.Machine(container.Block))
             {
                 int progress=(int)(24*container.Progress/Smelting.Seconds);

@@ -9,7 +9,7 @@ if [[ $# -gt 1 || ! $suite =~ ^--[a-z0-9-]+-test$ ]] ||
     exit 2
 fi
 
-build_dir="$project_dir/bin/Debug/net9.0"
+build_dir=${MDSM_GRAPHICS_BUILD_DIR:-"$project_dir/bin/Debug/net9.0"}
 if [[ ! -f $build_dir/MDSM.dll || ! -f $build_dir/Content/Effects/BlockLighting.xnb ]]; then
     printf 'Run dotnet build in the Windows checkout before starting the graphics suite.\n' >&2
     exit 2

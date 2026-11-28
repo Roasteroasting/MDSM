@@ -37,6 +37,18 @@ internal static class IndustrialRecipes
         Shape(1,1,Items.CopperIngot,9,CraftingStation.Standard,copper);
         Shape(3,1,Items.CopperWire,6,CraftingStation.Metalworking,Items.CopperIngot,Items.CopperIngot,Items.CopperIngot);
 
+        ItemId iron=Items.IronIngot, wire=Items.CopperWire, glass=Items.FromBlock(BlockType.Glass);
+        Shape(3,3,Items.FromBlock(BlockType.SolarPanel),1,CraftingStation.Metalworking,
+            glass,glass,glass,Items.Dye(DyeColor.Black),Items.CopperIngot,Items.Dye(DyeColor.Black),iron,wire,iron);
+        Shape(3,3,Items.FromBlock(BlockType.CoalGenerator),1,CraftingStation.Metalworking,
+            iron,iron,iron,wire,Items.FromBlock(BlockType.Furnace),wire,iron,Items.CopperIngot,iron);
+        Shape(3,2,Items.FromBlock(BlockType.AccessPanel),1,CraftingStation.Metalworking,
+            iron,glass,iron,wire,Items.CopperIngot,wire);
+        Shape(3,2,Items.FromBlock(BlockType.OutputPanel),1,CraftingStation.Metalworking,
+            iron,wire,iron,wire,Items.CopperIngot,wire);
+        Shape(3,2,Items.FromBlock(BlockType.PowerSwitch),1,CraftingStation.Metalworking,
+            iron,Items.Stick,iron,wire,Items.CopperIngot,wire);
+
         foreach(var (block,color) in new[]
         {
             (BlockType.RedFlower,DyeColor.Red),(BlockType.YellowFlower,DyeColor.Yellow),

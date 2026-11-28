@@ -87,7 +87,7 @@ public static partial class WorldSerializer
         for(int i=0;i<containers;i++)
         {
             Point3 cell=new(reader.ReadInt32(),reader.ReadInt32(),reader.ReadInt32());BlockType block=(BlockType)reader.ReadByte();int slots=reader.ReadInt32();
-            if(!BlockEntities.HasState(block) || slots!=(block==BlockType.Chest?27:3))throw new InvalidDataException("Invalid container layout.");
+            if(!BlockEntities.HasState(block) || slots!=BlockEntities.SlotCount(block))throw new InvalidDataException("Invalid container layout.");
             var items=new ItemStack[slots];for(int j=0;j<slots;j++)items[j]=ReadStack(reader,legacyFood);
             states[i]=new(cell,block,items,reader.ReadDouble(),reader.ReadDouble(),reader.ReadDouble());
         }

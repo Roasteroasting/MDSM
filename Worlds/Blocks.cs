@@ -47,10 +47,11 @@ public enum BlockType : byte
     StainedPaneWhite=131, StainedPaneOrange=132, StainedPaneMagenta=133, StainedPaneLightBlue=134,
     StainedPaneYellow=135, StainedPaneLime=136, StainedPanePink=137, StainedPaneGray=138,
     StainedPaneLightGray=139, StainedPaneCyan=140, StainedPanePurple=141, StainedPaneBlue=142,
-    StainedPaneBrown=143, StainedPaneGreen=144, StainedPaneRed=145, StainedPaneBlack=146
+    StainedPaneBrown=143, StainedPaneGreen=144, StainedPaneRed=145, StainedPaneBlack=146,
+    CopperWire=147, SolarPanel=148, CoalGenerator=149, AccessPanel=150, OutputPanel=151, PowerSwitch=152
 }
 
-public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus }
+public enum BlockShape { None, Cube, Cross, Fluid, Farmland, Fence, Gate, Door, Torch, Crop, Pane, Bed, Slab, Stairs, Sign, Snow, Fire, Cactus, Wire, Solar }
 
 public readonly record struct BlockDefinition(string Name, bool Solid, bool Opaque,
     BlockShape Shape, int SideTile, int TopTile = -1, int BottomTile = -1, bool Placeable = true, float MiningSeconds = 2, int FrontTile = -1)
@@ -176,7 +177,7 @@ public static class Blocks
         new("DAISY",false,false,BlockShape.Cross,97,MiningSeconds:0),
         new("MARIGOLD",false,false,BlockShape.Cross,98,MiningSeconds:0)
         };
-        Array.Resize(ref original,original.Length+2*DyePalette.Count);
+        Array.Resize(ref original,original.Length+2*DyePalette.Count+6);
         for(int i=0;i<DyePalette.Count;i++)
         {
             var color=(DyeColor)i;
@@ -184,6 +185,12 @@ public static class Blocks
             original[(int)DyePalette.Glass(color)]=new(name+" STAINED GLASS",true,false,BlockShape.Cube,DyePalette.GlassTile,MiningSeconds:.45f);
             original[(int)DyePalette.Glass(color,true)]=new(name+" STAINED GLASS PANE",true,false,BlockShape.Pane,DyePalette.GlassTile,MiningSeconds:.45f);
         }
+        original[(int)BlockType.CopperWire]=new("COPPER WIRE",false,false,BlockShape.Wire,100,MiningSeconds:.2f);
+        original[(int)BlockType.SolarPanel]=new("SOLAR PANEL",true,false,BlockShape.Solar,102,101,102,MiningSeconds:2);
+        original[(int)BlockType.CoalGenerator]=new("COAL GENERATOR",true,true,BlockShape.Cube,103,104,104,MiningSeconds:4,FrontTile:105);
+        original[(int)BlockType.AccessPanel]=new("ACCESS PANEL",true,true,BlockShape.Cube,106,104,104,MiningSeconds:3,FrontTile:107);
+        original[(int)BlockType.OutputPanel]=new("OUTPUT PANEL",true,true,BlockShape.Cube,106,104,104,MiningSeconds:3,FrontTile:108);
+        original[(int)BlockType.PowerSwitch]=new("POWER SWITCH",true,true,BlockShape.Cube,106,104,104,MiningSeconds:2,FrontTile:109);
         return original;
     }
     private static readonly BlockType[] Palette =

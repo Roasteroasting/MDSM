@@ -45,7 +45,7 @@ public sealed class BlockContainer
     public double Burn { get; private set; }
     public double BurnTotal { get; private set; }
     public BlockContainer(Point3 cell,BlockType block,Action wake)
-    {Cell=cell;Block=block;_slots=new ItemStack[block==BlockType.Chest?27:3];_wake=wake;}
+    {Cell=cell;Block=block;_slots=new ItemStack[BlockEntities.SlotCount(block)];_wake=wake;}
     public void SetSlot(int slot,ItemStack stack)
     {
         if(_first!=null){if((uint)slot>=54)throw new ArgumentOutOfRangeException(nameof(slot));if(slot<27)_first.SetSlot(slot,stack);else _second.SetSlot(slot-27,stack);return;}
@@ -58,12 +58,28 @@ public sealed class BlockContainer
         && (_slots[2].IsEmpty || _slots[2].Item==Smelting.Result(_slots[0].Item,Block) && _slots[2].Count<_slots[2].Limit);
     public void Click(int slot,InventoryInteraction interaction,bool right)
     {
+        if(Block==BlockType.CoalGenerator && !interaction.Cursor.IsEmpty && !Smelting.CoalLike(interaction.Cursor.Item))return;
         if(Smelting.Machine(Block))
         {
             if(slot==2){SetSlot(2,interaction.TakeStack(_slots[2],right));return;}
             if(!interaction.Cursor.IsEmpty && (slot==0?Smelting.Result(interaction.Cursor.Item,Block).Value==0:Smelting.Fuel(interaction.Cursor.Item)<=0))return;
         }
         SetSlot(slot,interaction.ClickStack(this[slot],right));
+    }
+    internal double Generate(double elapsed)
+    {
+        if(Block!=BlockType.CoalGenerator || elapsed<=0)return 0;
+        double time=elapsed,produced=0;
+        for(int i=0;i<65 && time>1e-9;i++)
+        {
+            if(Burn<=1e-9)
+            {
+                Burn=0;if(_slots[0].IsEmpty || !Smelting.CoalLike(_slots[0].Item))break;
+                Burn=BurnTotal=ElectricalBalance.CoalBurnSeconds;_slots[0]=_slots[0].WithCount(_slots[0].Count-1);
+            }
+            double step=Math.Min(time,Burn);Burn-=step;time-=step;produced+=step;
+        }
+        return ElectricalBalance.CoalWatts*produced/elapsed;
     }
     internal void Update(double elapsed)
     {
@@ -103,6 +119,9 @@ public sealed class BlockContainer
             || (!state.Slots[1].IsEmpty && Smelting.Fuel(state.Slots[1].Item)<=0 && state.Slots[1].Item!=Items.Bucket)
             || (!state.Slots[2].IsEmpty && !Smelting.Output(state.Slots[2].Item,Block))
             || state.Progress>0 && state.Slots[0].IsEmpty))throw new InvalidDataException("Invalid furnace contents/progress.");
+        if(Block==BlockType.CoalGenerator && (state.Progress!=0 || !state.Slots[0].IsEmpty&&!Smelting.CoalLike(state.Slots[0].Item)
+            || state.BurnTotal>ElectricalBalance.CoalBurnSeconds))throw new InvalidDataException("Invalid generator state.");
+        if(Block is BlockType.AccessPanel or BlockType.OutputPanel && (state.Progress!=0||state.Burn!=0||state.BurnTotal!=0))throw new InvalidDataException("Panel contains timers.");
         state.Slots.CopyTo(_slots,0);Progress=state.Progress;Burn=state.Burn;BurnTotal=state.BurnTotal;_wake?.Invoke();
     }
 }
@@ -128,13 +147,14 @@ public sealed partial class BlockEntities(World world)
     private readonly List<Point3> _sleep=new();
     public IReadOnlyDictionary<Point3,BlockContainer> Entries=>_entries;
     public int LastProcessed { get; private set; }
-    public static bool HasState(BlockType block)=>block==BlockType.Chest || Smelting.Machine(block);
+    public static bool HasState(BlockType block)=>block is BlockType.Chest or BlockType.CoalGenerator or BlockType.AccessPanel or BlockType.OutputPanel || Smelting.Machine(block);
+    public static int SlotCount(BlockType block)=>block==BlockType.Chest?27:block==BlockType.CoalGenerator?1:block is BlockType.AccessPanel or BlockType.OutputPanel?0:3;
     public BlockContainer Get(Point3 cell)
     {
         BlockType block=world.GetBlock(cell.X,cell.Y,cell.Z);if(!HasState(block))return null;
         if(_entries.TryGetValue(cell,out var entry))return entry;
         if(_entries.Count>=Maximum)throw new InvalidOperationException("Block container limit reached.");
-        entry=new(cell,block,()=>{if(Smelting.Machine(block))_active.Add(cell);});_entries.Add(cell,entry);return entry;
+        entry=new(cell,block,()=>{if(Smelting.Machine(block))_active.Add(cell);if(world.IsInfinite)world.MarkStreamedDirty(Streaming.Coordinates.FloorDiv(cell.X,16),Streaming.Coordinates.FloorDiv(cell.Z,16));});_entries.Add(cell,entry);return entry;
     }
     internal bool CanChange(Point3 cell,BlockType next)
         => (!_entries.TryGetValue(cell,out var existing) || existing.Empty)

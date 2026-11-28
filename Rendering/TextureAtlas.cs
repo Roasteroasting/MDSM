@@ -47,7 +47,6 @@ public sealed class TextureAtlas : IDisposable
         if (Water.Width != 16 || Water.Height != 16) throw new ContentLoadException("water.png must be 16x16.");
         if (Texture.Width != AtlasSize || Texture.Height != AtlasSize)
             throw new ContentLoadException($"terrain.png must be {AtlasSize}x{AtlasSize} pixels with {TileSize}x{TileSize} tiles.");
-        SeasonalArtwork.Extend(Texture);
         Icons=new InventoryIconAtlas(this);
         Texture.Disposing+=DisposeIcons;
     }

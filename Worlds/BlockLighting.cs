@@ -73,7 +73,7 @@ public sealed class BlockLighting
         {BlockType b=(BlockType)i;costs[i]=(byte)(Blocks.IsOpaque(b)?16:b==BlockType.Leaves || Water.IsWater(b)?1:0);}return costs;
     }
     public int Emission(Point3 p,BlockType block)=>block is BlockType.Torch or BlockType.Fire || Lava.IsLava(block)?14
-        :Smelting.Machine(block) && _world.Containers.Entries.TryGetValue(p,out var entry) && entry.Burn>0?13:0;
+        :(Smelting.Machine(block)||block==BlockType.CoalGenerator) && _world.Containers.Entries.TryGetValue(p,out var entry) && entry.Burn>0?13:0;
     public byte Packed(Point3 p)
     {
         if(p.Y>=World.Height)return 0xe0;
@@ -267,7 +267,7 @@ public sealed class BlockLighting
                 BlockType block=chunk==null?(_world.IsInfinite?BlockType.Bedrock:BlockType.Air):(BlockType)chunk.Blocks[y*256+offset];
                 int index=y*Slice+column,cost=Costs[(byte)block];_cost[index]=(byte)cost;
                 sky=sky==14 && cost==0?14:Math.Max(0,sky-Math.Max(1,cost));
-                int emit=block is BlockType.Torch or BlockType.Fire || Lava.IsLava(block)?14:Smelting.Machine(block)?Emission(new(wx,y,wz),block):0;
+                int emit=block is BlockType.Torch or BlockType.Fire || Lava.IsLava(block)?14:Smelting.Machine(block)||block==BlockType.CoalGenerator?Emission(new(wx,y,wz),block):0;
                 _base[index]=(byte)((sky<<4)|emit);_light[index]=page==null?(byte)0xe0:page.At(wx,y,wz);
             }
         }
@@ -328,7 +328,7 @@ public sealed class BlockLighting
                 int cost=Costs[(byte)block],sky=_direct[column];_cost[index]=(byte)cost;
                 sky=sky==14 && cost==0?14:Math.Max(0,sky-Math.Max(1,cost));
                 _direct[column]=(byte)sky;
-                int emit=block is BlockType.Torch or BlockType.Fire || Lava.IsLava(block)?14:Smelting.Machine(block)?Emission(new(_fieldOriginX+column%Side,y,_fieldOriginZ+column/Side),block):0;
+                int emit=block is BlockType.Torch or BlockType.Fire || Lava.IsLava(block)?14:Smelting.Machine(block)||block==BlockType.CoalGenerator?Emission(new(_fieldOriginX+column%Side,y,_fieldOriginZ+column/Side),block):0;
                 _light[index]=(byte)((sky<<4)|emit);
                 if(emit>1)Enqueue(index);
             }
